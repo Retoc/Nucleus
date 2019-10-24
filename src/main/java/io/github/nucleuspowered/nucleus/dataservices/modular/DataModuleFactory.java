@@ -5,7 +5,6 @@
 package io.github.nucleuspowered.nucleus.dataservices.modular;
 
 import com.google.common.collect.Maps;
-import io.github.nucleuspowered.nucleus.modules.back.datamodules.BackUserTransientModule;
 import io.github.nucleuspowered.nucleus.modules.core.datamodules.CoreUserDataModule;
 import io.github.nucleuspowered.nucleus.modules.core.datamodules.PreferencesUserModule;
 import io.github.nucleuspowered.nucleus.modules.core.datamodules.UniqueUserCountTransientModule;
@@ -70,7 +69,6 @@ final class DataModuleFactory {
         world.put(SpawnWorldDataModule.class, x -> new SpawnWorldDataModule());
         world.put(WorldgenWorldDataModule.class, x -> new WorldgenWorldDataModule());
 
-        usert.put(BackUserTransientModule.class, x -> new BackUserTransientModule());
         usert.put(StaffChatTransientModule.class, x -> new StaffChatTransientModule());
 
         user.put(CoreUserDataModule.class, x -> new CoreUserDataModule());
