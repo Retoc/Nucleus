@@ -27,7 +27,11 @@ public class BackHandler implements NucleusBackService, ServiceBase {
 
     @Override
     public Optional<Transform<World>> getLastLocation(User user) {
-        return this.lastLocations.get(user.getUniqueId()).getLastLocation();
+        OfflineLocation location = this.lastLocations.get(user.getUniqueId());
+        if (location == null) {
+            return Optional.empty();
+        }
+        return location.getLastLocation();
     }
 
     @Override
