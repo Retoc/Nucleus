@@ -7,11 +7,14 @@ package io.github.nucleuspowered.nucleus.modules.vanish.services;
 import io.github.nucleuspowered.nucleus.Nucleus;
 import io.github.nucleuspowered.nucleus.internal.interfaces.Reloadable;
 import io.github.nucleuspowered.nucleus.internal.interfaces.ServiceBase;
-import io.github.nucleuspowered.nucleus.internal.traits.PermissionTrait;
 import io.github.nucleuspowered.nucleus.modules.vanish.VanishKeys;
-import io.github.nucleuspowered.nucleus.modules.vanish.commands.VanishCommand;
+import io.github.nucleuspowered.nucleus.modules.vanish.VanishPermissions;
 import io.github.nucleuspowered.nucleus.modules.vanish.config.VanishConfigAdapter;
+import io.github.nucleuspowered.nucleus.services.INucleusServiceCollection;
+import io.github.nucleuspowered.nucleus.services.IPermissionService;
+import io.github.nucleuspowered.nucleus.services.IStorageManager;
 import org.spongepowered.api.Sponge;
+import org.spongepowered.api.command.CommandSource;
 import org.spongepowered.api.data.key.Keys;
 import org.spongepowered.api.entity.living.player.Player;
 import org.spongepowered.api.entity.living.player.User;
@@ -25,22 +28,59 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
 
-public class VanishService implements Reloadable, PermissionTrait, ServiceBase {
+import javax.inject.Inject;
 
-    private static final String CAN_SEE_PERM = Nucleus.getNucleus().getPermissionRegistry()
-            .getPermissionsForNucleusCommand(VanishCommand.class).getPermissionWithSuffix("see");
+public class VanishService implements Reloadable, ServiceBase {
+
     private boolean isAlter = false;
     private final Map<UUID, Instant> lastVanish = new HashMap<>();
+    private final IPermissionService permissionService;
+    private final IStorageManager storageManager;
+
+    @Inject
+    public VanishService(INucleusServiceCollection serviceCollection) {
+        this.permissionService = serviceCollection.permissionService();
+        this.storageManager = serviceCollection.storageManager();
+    }
 
     @Override
-    public void onReload() {
+    public void onReload(INucleusServiceCollection serviceCollection) {
         String property = System.getProperty("nucleus.vanish.tablist.enable");
         this.isAlter = property != null && !property.isEmpty() &&
-            Nucleus.getNucleus().getInternalServiceManager().getServiceUnchecked(VanishConfigAdapter.class).getNodeOrDefault().isAlterTabList();
+                serviceCollection.getServiceUnchecked(VanishConfigAdapter.class).getNodeOrDefault().isAlterTabList();
+        if (!serviceCollection
+                .getServiceUnchecked(VanishConfigAdapter.class)
+                .getNodeOrDefault()
+                .isTryHidePlayers()) {
+            serviceCollection.playerOnlineService().reset();
+        } else {
+            serviceCollection.playerOnlineService().set(this::isOnline, this::lastSeen);
+        }
+    }
+
+    public boolean isOnline(CommandSource src, User player) {
+        if (player.isOnline()) {
+            if (isVanished(player)) {
+                return this.permissionService.hasPermission(src, VanishPermissions.VANISH_SEE);
+            }
+
+            return true;
+        }
+
+        return false;
+    }
+
+    public Optional<Instant> lastSeen(CommandSource src, User player) {
+        if (isOnline(src, player) || !player.isOnline() || !getLastVanishTime(player.getUniqueId()).isPresent()) {
+            return player.get(Keys.LAST_DATE_PLAYED);
+        } else {
+            return getLastVanishTime(player.getUniqueId());
+        }
+
     }
 
     public boolean isVanished(User player) {
-        return Nucleus.getNucleus().getStorageManager().getUserService()
+        return this.storageManager.getUserService()
                 .getOnThread(player.getUniqueId())
                 .flatMap(x -> x.get(VanishKeys.VANISH_STATUS))
                 .orElse(false);
@@ -51,7 +91,7 @@ public class VanishService implements Reloadable, PermissionTrait, ServiceBase {
     }
 
     public void vanishPlayer(User player, boolean delay) {
-        Nucleus.getNucleus().getStorageManager().getUserService()
+        this.storageManager.getUserService()
                 .getOrNewOnThread(player.getUniqueId())
                 .set(VanishKeys.VANISH_STATUS, true);
 
@@ -67,7 +107,7 @@ public class VanishService implements Reloadable, PermissionTrait, ServiceBase {
 
     private void vanishPlayerInternal(Player player) {
         vanishPlayerInternal(player,
-                Nucleus.getNucleus().getStorageManager().getUserService()
+                this.storageManager.getUserService()
                         .getOrNewOnThread(player.getUniqueId())
                         .get(VanishKeys.VANISH_STATUS)
                         .orElse(false));
@@ -80,14 +120,15 @@ public class VanishService implements Reloadable, PermissionTrait, ServiceBase {
             player.offer(Keys.VANISH_PREVENTS_TARGETING, true);
 
             if (this.isAlter) {
-                Sponge.getServer().getOnlinePlayers().stream().filter(x -> !player.equals(x) || !hasPermission(x, CAN_SEE_PERM))
+                Sponge.getServer().getOnlinePlayers().stream().filter(x -> !player.equals(x) || !this.permissionService
+                        .hasPermission(x, VanishPermissions.VANISH_SEE))
                         .forEach(x -> x.getTabList().removeEntry(player.getUniqueId()));
             }
         }
     }
 
     public void unvanishPlayer(User user) {
-        Nucleus.getNucleus().getStorageManager().getUserService()
+        this.storageManager.getUserService()
                 .getOrNew(user.getUniqueId())
                 .thenAccept(x -> x.set(VanishKeys.VANISH_STATUS, false));
         user.offer(Keys.VANISH, false);

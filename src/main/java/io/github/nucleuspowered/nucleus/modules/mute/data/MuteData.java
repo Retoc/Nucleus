@@ -90,7 +90,7 @@ public final class MuteData extends EndTimestamp implements MuteInfo {
     }
 
     @Override public Optional<UUID> getMuter() {
-        return this.muter.equals(Util.consoleFakeUUID) ? Optional.empty() : Optional.of(this.muter);
+        return this.muter.equals(Util.CONSOLE_FAKE_UUID) ? Optional.empty() : Optional.of(this.muter);
     }
 
     public UUID getMuterInternal() {

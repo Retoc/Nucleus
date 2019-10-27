@@ -4,23 +4,30 @@
  */
 package io.github.nucleuspowered.nucleus.modules.world;
 
-import io.github.nucleuspowered.nucleus.internal.permissions.PermissionResolverImpl;
-import io.github.nucleuspowered.nucleus.internal.permissions.SuggestedLevel;
-import io.github.nucleuspowered.nucleus.internal.qsml.module.ConfigurableModule;
+import io.github.nucleuspowered.nucleus.modules.world.config.WorldConfig;
 import io.github.nucleuspowered.nucleus.modules.world.config.WorldConfigAdapter;
+import io.github.nucleuspowered.nucleus.quickstart.module.ConfigurableModule;
+import io.github.nucleuspowered.nucleus.services.INucleusServiceCollection;
 import uk.co.drnaylor.quickstart.annotations.ModuleData;
+import uk.co.drnaylor.quickstart.holders.DiscoveryModuleHolder;
+
+import java.util.function.Supplier;
+
+import javax.inject.Inject;
 
 @ModuleData(id = WorldModule.ID, name = "World")
-public class WorldModule extends ConfigurableModule<WorldConfigAdapter> {
+public class WorldModule extends ConfigurableModule<WorldConfig, WorldConfigAdapter> {
 
     public static final String ID = "world";
 
-    @Override public WorldConfigAdapter createAdapter() {
-        return new WorldConfigAdapter();
+    @Inject
+    public WorldModule(Supplier<DiscoveryModuleHolder<?, ?>> moduleHolder,
+            INucleusServiceCollection collection) {
+        super(moduleHolder, collection);
     }
 
-    @Override public void setPermissionPredicates() {
-        PermissionResolverImpl.INSTANCE.registerPermissionPredicate(perm -> perm.toLowerCase().startsWith("nucleus.worlds."), SuggestedLevel.ADMIN);
+    @Override public WorldConfigAdapter createAdapter() {
+        return new WorldConfigAdapter();
     }
 
 }

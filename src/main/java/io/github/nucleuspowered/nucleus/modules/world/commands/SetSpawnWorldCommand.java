@@ -5,38 +5,41 @@
 package io.github.nucleuspowered.nucleus.modules.world.commands;
 
 import com.flowpowered.math.vector.Vector3i;
-import io.github.nucleuspowered.nucleus.Nucleus;
-import io.github.nucleuspowered.nucleus.internal.annotations.command.Permissions;
-import io.github.nucleuspowered.nucleus.internal.annotations.command.RegisterCommand;
-import io.github.nucleuspowered.nucleus.internal.command.AbstractCommand;
-import io.github.nucleuspowered.nucleus.internal.permissions.SuggestedLevel;
-import org.spongepowered.api.command.CommandResult;
+import io.github.nucleuspowered.nucleus.internal.command.ICommandContext;
+import io.github.nucleuspowered.nucleus.internal.command.ICommandExecutor;
+import io.github.nucleuspowered.nucleus.internal.command.ICommandResult;
+import io.github.nucleuspowered.nucleus.internal.command.NucleusParameters;
+import io.github.nucleuspowered.nucleus.internal.command.annotation.Command;
+import io.github.nucleuspowered.nucleus.modules.world.WorldPermissions;
+import io.github.nucleuspowered.nucleus.services.INucleusServiceCollection;
+import org.spongepowered.api.command.CommandException;
 import org.spongepowered.api.command.CommandSource;
-import org.spongepowered.api.command.args.CommandContext;
 import org.spongepowered.api.command.args.CommandElement;
 import org.spongepowered.api.command.args.GenericArguments;
-import org.spongepowered.api.event.cause.Cause;
 import org.spongepowered.api.text.Text;
 import org.spongepowered.api.util.annotation.NonnullByDefault;
 import org.spongepowered.api.world.Locatable;
 import org.spongepowered.api.world.storage.WorldProperties;
 
-@Permissions(prefix = "world", suggestedLevel = SuggestedLevel.ADMIN)
-@RegisterCommand(value = {"setspawn"}, subcommandOf = WorldCommand.class)
 @NonnullByDefault
-public class SetSpawnWorldCommand extends AbstractCommand<CommandSource> {
+@Command(
+        aliases = {"setspawn"},
+        basePermission = WorldPermissions.BASE_WORLD_SETSPAWN,
+        commandDescriptionKey = "world.setspawn",
+        parentCommand = WorldCommand.class
+)
+public class SetSpawnWorldCommand implements ICommandExecutor<CommandSource> {
 
-    private final String worldKey = "world";
     private final String xKey = "x";
     private final String yKey = "y";
     private final String zKey = "z";
 
     @Override
-    protected CommandElement[] getArguments() {
+    public CommandElement[] parameters(INucleusServiceCollection serviceCollection) {
         return new CommandElement[] {
                 GenericArguments.optional(
                         GenericArguments.seq(
-                                GenericArguments.world(Text.of(this.worldKey)),
+                                NucleusParameters.WORLD_PROPERTIES_ENABLED_ONLY,
                                 GenericArguments.integer(Text.of(this.xKey)),
                                 GenericArguments.integer(Text.of(this.yKey)),
                                 GenericArguments.integer(Text.of(this.zKey))
@@ -45,22 +48,22 @@ public class SetSpawnWorldCommand extends AbstractCommand<CommandSource> {
         };
     }
 
-    @Override
-    protected CommandResult executeCommand(CommandSource src, CommandContext args, Cause cause) throws Exception {
-        WorldProperties world = this.getWorldFromUserOrArgs(src, this.worldKey, args);
+    @Override public ICommandResult execute(ICommandContext<? extends CommandSource> context) throws CommandException {
+        WorldProperties world = context.getWorldPropertiesOrFromSelf(NucleusParameters.Keys.WORLD)
+                .orElseThrow(() -> context.createException("command.world.player"));
         Vector3i loc;
-        if (args.hasAny(this.xKey)) {
+        if (context.hasAny(this.xKey)) {
             loc = new Vector3i(
-                    args.<Integer>getOne(this.xKey).get(),
-                    args.<Integer>getOne(this.yKey).get(),
-                    args.<Integer>getOne(this.zKey).get()
+                    context.requireOne(this.xKey, Integer.class),
+                    context.requireOne(this.yKey, Integer.class),
+                    context.requireOne(this.zKey, Integer.class)
             );
         } else {
-            loc = ((Locatable) src).getLocation().getBlockPosition();
+            loc = ((Locatable) context.getCommandSource()).getLocation().getBlockPosition();
         }
 
         world.setSpawnPosition(loc);
-        src.sendMessage(Nucleus.getNucleus().getMessageProvider().getTextMessageWithFormat("command.world.setspawn.success"));
-        return CommandResult.success();
+        context.sendMessage("command.world.setspawn.success");
+        return context.successResult();
     }
 }

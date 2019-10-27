@@ -11,20 +11,29 @@ import io.github.nucleuspowered.nucleus.api.service.NucleusFreezePlayerService;
 import io.github.nucleuspowered.nucleus.internal.annotations.APIService;
 import io.github.nucleuspowered.nucleus.internal.interfaces.ServiceBase;
 import io.github.nucleuspowered.nucleus.modules.freezeplayer.FreezePlayerKeys;
-import io.github.nucleuspowered.nucleus.storage.dataobjects.modular.IUserDataObject;
+import io.github.nucleuspowered.nucleus.services.INucleusServiceCollection;
+import io.github.nucleuspowered.nucleus.services.impl.storage.dataobjects.modular.IUserDataObject;
 import io.github.nucleuspowered.storage.dataobjects.keyed.IKeyedDataObject;
 
 import java.util.UUID;
 import java.util.concurrent.TimeUnit;
 
 import javax.annotation.Nonnull;
+import javax.inject.Inject;
 
 @APIService(NucleusFreezePlayerService.class)
 public class FreezePlayerService implements ServiceBase, NucleusFreezePlayerService {
 
-    private final LoadingCache<UUID, Boolean> cache = Caffeine.newBuilder().expireAfterAccess(2, TimeUnit.MINUTES)
-            .build(uuid -> Nucleus.getNucleus().getStorageManager().getUserService().getOnThread(uuid)
-                    .flatMap(x -> x.get(FreezePlayerKeys.FREEZE_PLAYER)).orElse(false));
+    private final INucleusServiceCollection serviceCollection;
+    private final LoadingCache<UUID, Boolean> cache;
+
+    @Inject
+    public FreezePlayerService(INucleusServiceCollection serviceCollection) {
+        this.serviceCollection = serviceCollection;
+        this.cache = Caffeine.newBuilder().expireAfterAccess(2, TimeUnit.MINUTES)
+                .build(uuid -> this.serviceCollection.storageManager().getUserService().getOnThread(uuid)
+                        .flatMap(x -> x.get(FreezePlayerKeys.FREEZE_PLAYER)).orElse(false));
+    }
 
     public boolean getFromUUID(@Nonnull UUID uuid) {
         Boolean b = this.cache.get(uuid);
@@ -42,7 +51,7 @@ public class FreezePlayerService implements ServiceBase, NucleusFreezePlayerServ
 
     @Override
     public void setFrozen(UUID uuid, boolean freeze) {
-        IUserDataObject x = Nucleus.getNucleus().getStorageManager().getUserService().getOrNewOnThread(uuid);
+        IUserDataObject x = this.serviceCollection.storageManager().getUserService().getOrNewOnThread(uuid);
         try (IKeyedDataObject.Value<Boolean> v = x.getAndSet(FreezePlayerKeys.FREEZE_PLAYER)) {
             v.setValue(freeze);
             this.cache.put(uuid, freeze);

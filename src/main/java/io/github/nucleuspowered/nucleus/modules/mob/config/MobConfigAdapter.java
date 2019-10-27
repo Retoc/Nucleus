@@ -4,7 +4,7 @@
  */
 package io.github.nucleuspowered.nucleus.modules.mob.config;
 
-import io.github.nucleuspowered.nucleus.internal.qsml.NucleusConfigAdapter;
+import io.github.nucleuspowered.nucleus.quickstart.NucleusConfigAdapter;
 
 public class MobConfigAdapter extends NucleusConfigAdapter.StandardWithSimpleDefault<MobConfig> {
 

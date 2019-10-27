@@ -6,10 +6,10 @@ package io.github.nucleuspowered.nucleus.modules.afk.listeners;
 
 import io.github.nucleuspowered.nucleus.api.events.NucleusAFKEvent;
 import io.github.nucleuspowered.nucleus.internal.interfaces.ListenerBase;
-import io.github.nucleuspowered.nucleus.internal.traits.InternalServiceManagerTrait;
-import io.github.nucleuspowered.nucleus.internal.traits.PermissionTrait;
-import io.github.nucleuspowered.nucleus.modules.afk.commands.AFKCommand;
-import io.github.nucleuspowered.nucleus.modules.afk.config.AFKConfigAdapter;
+import io.github.nucleuspowered.nucleus.modules.afk.AFKPermissions;
+import io.github.nucleuspowered.nucleus.modules.afk.config.AFKConfig;
+import io.github.nucleuspowered.nucleus.services.INucleusServiceCollection;
+import io.github.nucleuspowered.nucleus.services.IPermissionService;
 import org.spongepowered.api.entity.living.player.Player;
 import org.spongepowered.api.entity.living.player.gamemode.GameModes;
 import org.spongepowered.api.event.Listener;
@@ -19,15 +19,23 @@ import org.spongepowered.api.text.Text;
 import org.spongepowered.api.text.channel.MessageChannel;
 import org.spongepowered.api.text.format.TextColors;
 
-public class AFKSpectatorListener implements ListenerBase.Conditional, InternalServiceManagerTrait, PermissionTrait {
+import javax.inject.Inject;
 
-    private final String NOTIFY = getPermissionHandlerFor(AFKCommand.class).getPermissionWithSuffix("notify");
+public class AFKSpectatorListener implements ListenerBase.Conditional {
+
+    private final IPermissionService permissionService;
+
+    @Inject
+    public AFKSpectatorListener(IPermissionService permissionService) {
+        this.permissionService = permissionService;
+    }
+
 
     @Listener
     public void onAfk(NucleusAFKEvent event, @Getter("getTargetEntity") Player player) {
         if (player.gameMode().get().equals(GameModes.SPECTATOR)) {
             if (event.getChannel() == MessageChannel.TO_ALL) {
-                event.setChannel(MessageChannel.permission(NOTIFY));
+                event.setChannel(this.permissionService.permissionMessageChannel(AFKPermissions.AFK_NOTIFY));
                 event.setMessage(Text.of(TextColors.YELLOW, "[Spectator] ", event.getMessage()));
             }
         }
@@ -41,7 +49,7 @@ public class AFKSpectatorListener implements ListenerBase.Conditional, InternalS
     }
 
     @Override
-    public boolean shouldEnable() {
-        return getServiceUnchecked(AFKConfigAdapter.class).getNodeOrDefault().isDisableInSpectatorMode();
+    public boolean shouldEnable(INucleusServiceCollection serviceCollection) {
+        return serviceCollection.moduleDataProvider().getModuleConfig(AFKConfig.class).isDisableInSpectatorMode();
     }
 }

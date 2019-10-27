@@ -5,28 +5,28 @@
 package io.github.nucleuspowered.nucleus.modules.item.commands;
 
 import com.google.common.collect.Lists;
-import io.github.nucleuspowered.nucleus.Nucleus;
 import io.github.nucleuspowered.nucleus.argumentparsers.PositiveIntegerArgument;
-import io.github.nucleuspowered.nucleus.internal.annotations.command.Permissions;
-import io.github.nucleuspowered.nucleus.internal.annotations.command.RegisterCommand;
-import io.github.nucleuspowered.nucleus.internal.command.AbstractCommand;
-import io.github.nucleuspowered.nucleus.internal.command.ReturnMessageException;
-import io.github.nucleuspowered.nucleus.internal.docgen.annotations.EssentialsEquivalent;
+import io.github.nucleuspowered.nucleus.internal.command.ICommandContext;
+import io.github.nucleuspowered.nucleus.internal.command.ICommandExecutor;
+import io.github.nucleuspowered.nucleus.internal.command.ICommandResult;
+import io.github.nucleuspowered.nucleus.internal.command.annotation.Command;
+import io.github.nucleuspowered.nucleus.internal.command.annotation.CommandModifier;
+import io.github.nucleuspowered.nucleus.internal.command.annotation.EssentialsEquivalent;
+import io.github.nucleuspowered.nucleus.internal.command.requirements.CommandModifiers;
 import io.github.nucleuspowered.nucleus.internal.interfaces.Reloadable;
-import io.github.nucleuspowered.nucleus.internal.permissions.PermissionInformation;
-import io.github.nucleuspowered.nucleus.internal.permissions.SuggestedLevel;
-import io.github.nucleuspowered.nucleus.modules.item.config.ItemConfigAdapter;
+import io.github.nucleuspowered.nucleus.modules.item.ItemPermissions;
+import io.github.nucleuspowered.nucleus.modules.item.config.ItemConfig;
 import io.github.nucleuspowered.nucleus.modules.item.config.SkullConfig;
+import io.github.nucleuspowered.nucleus.services.INucleusServiceCollection;
 import org.spongepowered.api.Sponge;
+import org.spongepowered.api.command.CommandException;
 import org.spongepowered.api.command.CommandResult;
-import org.spongepowered.api.command.args.CommandContext;
 import org.spongepowered.api.command.args.CommandElement;
 import org.spongepowered.api.command.args.GenericArguments;
 import org.spongepowered.api.data.key.Keys;
 import org.spongepowered.api.data.type.SkullTypes;
 import org.spongepowered.api.entity.living.player.Player;
 import org.spongepowered.api.entity.living.player.User;
-import org.spongepowered.api.event.cause.Cause;
 import org.spongepowered.api.item.ItemTypes;
 import org.spongepowered.api.item.inventory.Inventory;
 import org.spongepowered.api.item.inventory.ItemStack;
@@ -38,68 +38,61 @@ import org.spongepowered.api.item.inventory.type.GridInventory;
 import org.spongepowered.api.text.Text;
 import org.spongepowered.api.util.annotation.NonnullByDefault;
 
-import java.util.HashMap;
 import java.util.List;
-import java.util.Map;
 
 @NonnullByDefault
-@RegisterCommand({"skull"})
-@Permissions(supportsOthers = true)
 @EssentialsEquivalent({"skull", "playerskull", "head"})
-public class SkullCommand extends AbstractCommand<Player> implements Reloadable {
-
-    private final String limitExemptPermission = Nucleus.getNucleus().getPermissionRegistry()
-            .getPermissionsForNucleusCommand(SkullCommand.class)
-            .getPermissionWithSuffix("exempt.limit");
+@Command(
+        aliases = {"skull"},
+        basePermission = ItemPermissions.BASE_SKULL,
+        commandDescriptionKey = "skull",
+        modifiers = {
+                @CommandModifier(value = CommandModifiers.HAS_COOLDOWN, exemptPermission = ItemPermissions.EXEMPT_COOLDOWN_SKULL),
+                @CommandModifier(value = CommandModifiers.HAS_WARMUP, exemptPermission = ItemPermissions.EXEMPT_WARMUP_SKULL),
+                @CommandModifier(value = CommandModifiers.HAS_COST, exemptPermission = ItemPermissions.EXEMPT_COST_SKULL)
+        }
+)
+public class SkullCommand implements ICommandExecutor<Player>, Reloadable {
 
     private final String amountKey = "amount";
-    private final String player = "subject";
 
     private int amountLimit = Integer.MAX_VALUE;
     private boolean isUseMinecraftCommand = false;
 
-    @Override public void onReload() {
-        SkullConfig config = getServiceUnchecked(ItemConfigAdapter.class).getNodeOrDefault().getSkullConfig();
+    @Override
+    public void onReload(INucleusServiceCollection serviceCollection) {
+        SkullConfig config = serviceCollection.moduleDataProvider().getModuleConfig(ItemConfig.class).getSkullConfig();
         this.isUseMinecraftCommand = config.isUseMinecraftCommand();
         this.amountLimit = config.getSkullLimit();
     }
 
     @Override
-    public Map<String, PermissionInformation> permissionSuffixesToRegister() {
-        Map<String, PermissionInformation> m = new HashMap<>();
-        m.put("exempt.limit", PermissionInformation.getWithTranslation("permission.skull.exempt.limit", SuggestedLevel.ADMIN));
-        return m;
-    }
-
-    @Override
-    public CommandElement[] getArguments() {
+    public CommandElement[] parameters(INucleusServiceCollection serviceCollection) {
         return new CommandElement[] {
-            GenericArguments.optionalWeak(
-                requirePermissionArg(
-                    GenericArguments.onlyOne(GenericArguments.user(Text.of(this.player))), this.permissions.getPermissionWithSuffix("others"))),
-            GenericArguments.optional(new PositiveIntegerArgument(Text.of(this.amountKey)))
+                serviceCollection.commandElementSupplier().createOtherUserPermissionElement(false, ItemPermissions.OTHERS_SKULL),
+                GenericArguments.optional(new PositiveIntegerArgument(Text.of(this.amountKey)))
         };
     }
 
-    @Override
-    public CommandResult executeCommand(Player pl, CommandContext args, Cause cause) throws Exception {
-        User user = this.getUserFromArgs(User.class, pl, this.player, args);
-        int amount = args.<Integer>getOne(this.amountKey).orElse(1);
+    @Override public ICommandResult execute(ICommandContext<? extends Player> context) throws CommandException {
+        User user = context.getUserFromArgs();
+        Player player = context.getIfPlayer();
+        int amount = context.getOne(this.amountKey, Integer.class).orElse(1);
 
-        if (amount > this.amountLimit && !pl.hasPermission(this.limitExemptPermission)) {
+        if (amount > this.amountLimit && !(context.isConsoleAndBypass() || context.testPermission(ItemPermissions.SKULL_EXEMPT_LIMIT))) {
             // fail
-            throw ReturnMessageException.fromKey(pl, "command.skull.limit", this.amountLimit);
+            return context.errorResult("command.skull.limit", this.amountLimit);
         }
 
         if (this.isUseMinecraftCommand) {
             CommandResult result = Sponge.getCommandManager().process(Sponge.getServer().getConsole(),
-                String.format("minecraft:give %s skull %d 3 {SkullOwner:%s}", pl.getName(), amount, user.getName()));
+                String.format("minecraft:give %s skull %d 3 {SkullOwner:%s}", player.getName(), amount, user.getName()));
             if (result.getSuccessCount().orElse(0) > 0) {
-                sendMessageTo(pl, "command.skull.success.plural", String.valueOf(amount), user.getName());
-                return result;
+                context.sendMessage("command.skull.success.plural", String.valueOf(amount), user.getName());
+                return context.successResult();
             }
 
-            throw ReturnMessageException.fromKey(pl, "command.skull.error", user.getName());
+            return context.errorResult("command.skull.error", user.getName());
         }
 
         int fullStacks = amount / 64;
@@ -131,7 +124,7 @@ public class SkullCommand extends AbstractCommand<Player> implements Reloadable 
             int accepted = 0;
             int failed = 0;
 
-            Inventory inventoryToOfferTo = pl.getInventory()
+            Inventory inventoryToOfferTo = player.getInventory()
                     .query(
                             QueryOperationTypes.INVENTORY_TYPE.of(Hotbar.class),
                             QueryOperationTypes.INVENTORY_TYPE.of(GridInventory.class));
@@ -146,23 +139,21 @@ public class SkullCommand extends AbstractCommand<Player> implements Reloadable 
             // What was accepted?
             if (accepted > 0) {
                 if (failed > 0) {
-                    sendMessageTo(pl, "command.skull.semifull", String.valueOf(failed));
+                    context.sendMessage("command.skull.semifull", failed);
                 }
 
                 if (accepted == 1) {
-                    sendMessageTo(pl, "command.skull.success.single", user.getName());
+                    context.sendMessage("command.skull.success.single", user.getName());
                 } else {
-                    sendMessageTo(pl, "command.skull.success.plural", String.valueOf(accepted), user.getName());
+                    context.sendMessage("command.skull.success.plural", accepted, user.getName());
                 }
 
-                return CommandResult.success();
+                return context.successResult();
             }
 
-            sendMessageTo(pl, "command.skull.full", user.getName());
-            return CommandResult.empty();
+            return context.errorResult("command.skull.full", user.getName());
         } else {
-            sendMessageTo(pl, "command.skull.error", user.getName());
-            return CommandResult.empty();
+            return context.errorResult("command.skull.error", user.getName());
         }
     }
 }

@@ -4,111 +4,139 @@
  */
 package io.github.nucleuspowered.nucleus.modules.teleport.commands;
 
-import io.github.nucleuspowered.nucleus.Nucleus;
-import io.github.nucleuspowered.nucleus.internal.annotations.command.NoWarmup;
-import io.github.nucleuspowered.nucleus.internal.annotations.command.NotifyIfAFK;
-import io.github.nucleuspowered.nucleus.internal.annotations.command.Permissions;
-import io.github.nucleuspowered.nucleus.internal.annotations.command.RegisterCommand;
-import io.github.nucleuspowered.nucleus.internal.annotations.command.SetCooldownManually;
-import io.github.nucleuspowered.nucleus.internal.command.AbstractCommand;
-import io.github.nucleuspowered.nucleus.internal.command.ContinueMode;
+import io.github.nucleuspowered.nucleus.internal.command.ICommandContext;
+import io.github.nucleuspowered.nucleus.internal.command.ICommandExecutor;
+import io.github.nucleuspowered.nucleus.internal.command.ICommandResult;
 import io.github.nucleuspowered.nucleus.internal.command.NucleusParameters;
-import io.github.nucleuspowered.nucleus.internal.command.ReturnMessageException;
-import io.github.nucleuspowered.nucleus.internal.docgen.annotations.EssentialsEquivalent;
+import io.github.nucleuspowered.nucleus.internal.command.annotation.Command;
+import io.github.nucleuspowered.nucleus.internal.command.annotation.CommandModifier;
+import io.github.nucleuspowered.nucleus.internal.command.annotation.EssentialsEquivalent;
+import io.github.nucleuspowered.nucleus.internal.command.annotation.NotifyIfAFK;
+import io.github.nucleuspowered.nucleus.internal.command.requirements.CommandModifiers;
 import io.github.nucleuspowered.nucleus.internal.interfaces.Reloadable;
-import io.github.nucleuspowered.nucleus.internal.permissions.PermissionInformation;
-import io.github.nucleuspowered.nucleus.internal.permissions.SuggestedLevel;
-import io.github.nucleuspowered.nucleus.modules.teleport.config.TeleportConfigAdapter;
+import io.github.nucleuspowered.nucleus.modules.teleport.TeleportPermissions;
+import io.github.nucleuspowered.nucleus.modules.teleport.config.TeleportConfig;
 import io.github.nucleuspowered.nucleus.modules.teleport.events.RequestEvent;
 import io.github.nucleuspowered.nucleus.modules.teleport.services.PlayerTeleporterService;
-import io.github.nucleuspowered.nucleus.util.CauseStackHelper;
+import io.github.nucleuspowered.nucleus.services.INucleusServiceCollection;
 import org.spongepowered.api.Sponge;
-import org.spongepowered.api.command.CommandResult;
-import org.spongepowered.api.command.args.CommandContext;
+import org.spongepowered.api.command.CommandException;
 import org.spongepowered.api.command.args.CommandElement;
 import org.spongepowered.api.command.args.GenericArguments;
 import org.spongepowered.api.entity.living.player.Player;
-import org.spongepowered.api.event.cause.Cause;
 import org.spongepowered.api.util.annotation.NonnullByDefault;
 
-import java.util.HashMap;
-import java.util.Map;
-import java.util.UUID;
+import java.time.Duration;
+import java.util.Optional;
 import java.util.function.Consumer;
 
-/**
- * Sends a request to a subject to teleport to them, using click handlers.
- */
-@Permissions(prefix = "teleport", suggestedLevel = SuggestedLevel.USER, supportsSelectors = true)
-@NoWarmup(generateConfigEntry = true, generatePermissionDocs = true)
-@RegisterCommand({"tpa", "teleportask", "call", "tpask"})
 @NonnullByDefault
-@EssentialsEquivalent({"tpa", "call", "tpask"})
 @NotifyIfAFK(NucleusParameters.Keys.PLAYER)
-@SetCooldownManually
-public class TeleportAskCommand extends AbstractCommand<Player> implements Reloadable {
+@Command(
+        aliases = {"tpa", "teleportask", "call", "tpask"},
+        basePermission = TeleportPermissions.BASE_TPA,
+        commandDescriptionKey = "tpa",
+        modifiers =
+        {
+                @CommandModifier(
+                        value = CommandModifiers.HAS_WARMUP,
+                        exemptPermission = TeleportPermissions.EXEMPT_WARMUP_TPA,
+                        onExecute = false
+                ),
+                @CommandModifier(
+                        value = CommandModifiers.HAS_COOLDOWN,
+                        exemptPermission = TeleportPermissions.EXEMPT_COOLDOWN_TPA,
+                        onCompletion = false
+                ),
+                @CommandModifier(
+                        value = CommandModifiers.HAS_COST,
+                        exemptPermission = TeleportPermissions.EXEMPT_COST_TPA
+                )
+        }
+)
+@EssentialsEquivalent({"tpa", "call", "tpask"})
+public class TeleportAskCommand implements ICommandExecutor<Player>, Reloadable {
 
     private boolean isCooldownOnAsk = false;
-    private final PlayerTeleporterService playerTeleporterService = getServiceUnchecked(PlayerTeleporterService.class);
 
     @Override
-    public Map<String, PermissionInformation> permissionSuffixesToRegister() {
-        Map<String, PermissionInformation> m = new HashMap<>();
-        m.put("force", PermissionInformation.getWithTranslation("permission.teleport.force", SuggestedLevel.ADMIN));
-        return m;
-    }
-
-    @Override
-    public CommandElement[] getArguments() {
+    public CommandElement[] parameters(INucleusServiceCollection serviceCollection) {
         return new CommandElement[] {
-                GenericArguments.flags().permissionFlag(this.permissions.getPermissionWithSuffix("force"), "f").buildWith(NucleusParameters.ONE_PLAYER)
+                GenericArguments.flags().permissionFlag(TeleportPermissions.TELEPORT_ASK_FORCE, "f").buildWith(NucleusParameters.ONE_PLAYER)
         };
     }
 
-    @Override protected ContinueMode preProcessChecks(Player source, CommandContext args) {
-        return this.playerTeleporterService
-                .canTeleportTo(source, args.requireOne(NucleusParameters.Keys.PLAYER)) ? ContinueMode.CONTINUE : ContinueMode.STOP;
+    @Override public Optional<ICommandResult> preExecute(ICommandContext.Mutable<? extends Player> context) throws CommandException {
+        boolean canTeleport = context.getServiceCollection().getServiceUnchecked(PlayerTeleporterService.class)
+                .canTeleportTo(
+                        context.getIfPlayer(),
+                        context.requireOne(NucleusParameters.Keys.PLAYER, Player.class)
+                );
+        if (canTeleport) {
+            return Optional.empty();
+        }
+
+        return Optional.of(context.failResult());
     }
 
     @Override
-    public CommandResult executeCommand(Player src, CommandContext args, Cause cause) throws Exception {
-        Player target = args.requireOne(NucleusParameters.Keys.PLAYER);
-        if (src.equals(target)) {
-            throw ReturnMessageException.fromKey(src, "command.teleport.self");
+    public ICommandResult execute(ICommandContext<? extends Player> context) throws CommandException {
+        Player target = context.requireOne(NucleusParameters.Keys.PLAYER, Player.class);
+        if (context.is(target)) {
+            return context.errorResult("command.teleport.self");
         }
 
-        RequestEvent.CauseToPlayer event = new RequestEvent.CauseToPlayer(CauseStackHelper.createCause(src), target);
+        RequestEvent.CauseToPlayer event = new RequestEvent.CauseToPlayer(context.getCause(), target);
         if (Sponge.getEventManager().post(event)) {
-            throw new ReturnMessageException(
-                    event.getCancelMessage().orElseGet(() -> Nucleus.getNucleus().getMessageProvider().getTextMessageWithFormat("command.tpa.eventfailed")));
+            if (event.getCancelMessage().isPresent()) {
+                return context.errorResultLiteral(event.getCancelMessage().get());
+            } else {
+                return context.errorResult("command.tpa.eventfailed");
+            }
         }
 
-        Consumer<Player> cooldownSetter = a -> {};
+        Consumer<Player> cooldownSetter = player -> {};
         if (this.isCooldownOnAsk) {
-            setCooldown(src);
+            setCooldown(context);
         } else {
-            cooldownSetter = this::setCooldown;
+            cooldownSetter = player -> setCooldown(context);
         }
 
-        this.playerTeleporterService.requestTeleport(
-                src,
+        context.getServiceCollection().getServiceUnchecked(PlayerTeleporterService.class).requestTeleport(
+                context.getIfPlayer(),
                 target,
-                getCost(src, args),
-                getWarmup(src),
-                src,
+                context.getCost(),
+                context.getWarmup(),
+                context.getIfPlayer(),
                 target,
-                !args.<Boolean>getOne("f").orElse(false),
+                !context.getOne("f", boolean.class).orElse(false),
                 false,
                 false,
                 cooldownSetter,
                 "command.tpa.question"
         );
 
-        return CommandResult.success();
+        return context.successResult();
+    }
+
+    private void setCooldown(ICommandContext<? extends Player> context) {
+        try {
+            context.getServiceCollection()
+                    .cooldownService()
+                    .setCooldown(
+                            context.getCommandKey(),
+                            context.getIfPlayer(),
+                            Duration.ofSeconds(context.getCooldown())
+                    );
+        } catch (CommandException e) {
+            e.printStackTrace();
+        }
     }
 
     @Override
-    public void onReload() throws Exception {
-        this.isCooldownOnAsk = getServiceUnchecked(TeleportConfigAdapter.class).getNodeOrDefault().isCooldownOnAsk();
+    public void onReload(INucleusServiceCollection serviceCollection) {
+        this.isCooldownOnAsk = serviceCollection.moduleDataProvider()
+                .getModuleConfig(TeleportConfig.class)
+                .isCooldownOnAsk();
     }
 }

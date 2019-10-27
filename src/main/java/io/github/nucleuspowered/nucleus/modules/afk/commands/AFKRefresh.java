@@ -4,27 +4,22 @@
  */
 package io.github.nucleuspowered.nucleus.modules.afk.commands;
 
-import io.github.nucleuspowered.nucleus.Nucleus;
-import io.github.nucleuspowered.nucleus.internal.annotations.command.Permissions;
-import io.github.nucleuspowered.nucleus.internal.annotations.command.RegisterCommand;
-import io.github.nucleuspowered.nucleus.internal.command.AbstractCommand;
+import io.github.nucleuspowered.nucleus.internal.command.ICommandContext;
+import io.github.nucleuspowered.nucleus.internal.command.ICommandExecutor;
+import io.github.nucleuspowered.nucleus.internal.command.ICommandResult;
+import io.github.nucleuspowered.nucleus.internal.command.annotation.Command;
+import io.github.nucleuspowered.nucleus.modules.afk.AFKPermissions;
 import io.github.nucleuspowered.nucleus.modules.afk.services.AFKHandler;
-import org.spongepowered.api.command.CommandResult;
 import org.spongepowered.api.command.CommandSource;
-import org.spongepowered.api.command.args.CommandContext;
-import org.spongepowered.api.event.cause.Cause;
 import org.spongepowered.api.util.annotation.NonnullByDefault;
 
-@Permissions
-@RegisterCommand("afkrefresh")
+@Command(aliases = "afkrefresh", commandDescriptionKey = "afkrefresh", basePermission = AFKPermissions.BASE_AFKREFRESH)
 @NonnullByDefault
-public class AFKRefresh extends AbstractCommand<CommandSource> {
+public class AFKRefresh implements ICommandExecutor<CommandSource> {
 
-    private final AFKHandler handler = Nucleus.getNucleus().getInternalServiceManager().getServiceUnchecked(AFKHandler.class);
-
-    @Override public CommandResult executeCommand(CommandSource src, CommandContext args, Cause cause) {
-        this.handler.invalidateAfkCache();
-        src.sendMessage(Nucleus.getNucleus().getMessageProvider().getTextMessageWithFormat("command.afkrefresh.complete"));
-        return CommandResult.success();
+    @Override public ICommandResult execute(ICommandContext<? extends CommandSource> context) {
+        context.getServiceCollection().getServiceUnchecked(AFKHandler.class).invalidateAfkCache();
+        context.sendMessage("command.afkrefresh.complete");
+        return context.successResult();
     }
 }

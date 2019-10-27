@@ -5,15 +5,13 @@
 package io.github.nucleuspowered.nucleus.modules.staffchat;
 
 import com.google.common.base.Preconditions;
-import io.github.nucleuspowered.nucleus.Nucleus;
 import io.github.nucleuspowered.nucleus.api.chat.NucleusChatChannel;
-import io.github.nucleuspowered.nucleus.api.service.NucleusUserPreferenceService;
-import io.github.nucleuspowered.nucleus.internal.text.NucleusTextTemplateImpl;
-import io.github.nucleuspowered.nucleus.internal.traits.InternalServiceManagerTrait;
-import io.github.nucleuspowered.nucleus.internal.traits.PermissionTrait;
-import io.github.nucleuspowered.nucleus.internal.userprefs.UserPreferenceService;
-import io.github.nucleuspowered.nucleus.modules.staffchat.commands.StaffChatCommand;
-import io.github.nucleuspowered.nucleus.modules.staffchat.config.StaffChatConfigAdapter;
+import io.github.nucleuspowered.nucleus.internal.interfaces.Reloadable;
+import io.github.nucleuspowered.nucleus.modules.staffchat.config.StaffChatConfig;
+import io.github.nucleuspowered.nucleus.services.INucleusServiceCollection;
+import io.github.nucleuspowered.nucleus.services.IPermissionService;
+import io.github.nucleuspowered.nucleus.services.IUserPreferenceService;
+import io.github.nucleuspowered.nucleus.services.impl.texttemplatefactory.NucleusTextTemplateImpl;
 import org.spongepowered.api.Sponge;
 import org.spongepowered.api.command.CommandSource;
 import org.spongepowered.api.command.source.ProxySource;
@@ -34,14 +32,13 @@ import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
 import java.util.Set;
-import java.util.function.Predicate;
 import java.util.stream.Collectors;
 
 import javax.annotation.Nonnull;
 import javax.annotation.Nullable;
+import javax.inject.Inject;
 
-public class StaffChatMessageChannel
-        implements NucleusChatChannel.StaffChat, PermissionTrait, InternalServiceManagerTrait {
+public class StaffChatMessageChannel implements NucleusChatChannel.StaffChat, Reloadable {
 
     private static StaffChatMessageChannel INSTANCE = null;
 
@@ -52,14 +49,17 @@ public class StaffChatMessageChannel
         return INSTANCE;
     }
 
-    private final String basePerm;
+    private final IPermissionService permissionService;
+    private final IUserPreferenceService userPreferenceService;
     private NucleusTextTemplateImpl template;
     private TextColor colour;
 
-    StaffChatMessageChannel() {
-        Nucleus.getNucleus().registerReloadable(this::onReload);
-        this.onReload();
-        this.basePerm = Nucleus.getNucleus().getPermissionRegistry().getPermissionsForNucleusCommand(StaffChatCommand.class).getBase();
+    @Inject
+    StaffChatMessageChannel(INucleusServiceCollection serviceCollection) {
+        serviceCollection.reloadableService().registerReloadable(this);
+        this.permissionService = serviceCollection.permissionService();
+        this.userPreferenceService = serviceCollection.userPreferenceService();
+        this.onReload(serviceCollection);
         INSTANCE = this;
     }
 
@@ -97,8 +97,8 @@ public class StaffChatMessageChannel
     }
 
     private boolean test(Player player) {
-        if (hasPermission(player, this.basePerm)) {
-            return getServiceUnchecked(UserPreferenceService.class)
+        if (this.permissionService.hasPermission(player, StaffChatPermissions.BASE_STAFFCHAT)) {
+            return this.userPreferenceService
                     .getPreferenceFor(player, StaffChatUserPrefKeys.VIEW_STAFF_CHAT)
                     .orElse(true);
         }
@@ -106,13 +106,11 @@ public class StaffChatMessageChannel
         return false;
     }
 
-    private void onReload() {
-        Nucleus.getNucleus().getConfigAdapter(StaffChatModule.ID, StaffChatConfigAdapter.class)
-                .ifPresent(x -> {
-                    this.formatting = x.getNodeOrDefault().isIncludeStandardChatFormatting();
-                    this.template = x.getNodeOrDefault().getMessageTemplate();
-                    this.colour = x.getNodeOrDefault().getColour();
-                });
+    public void onReload(INucleusServiceCollection serviceCollection) {
+        StaffChatConfig sc = serviceCollection.moduleDataProvider().getModuleConfig(StaffChatConfig.class);
+        this.formatting = sc.isIncludeStandardChatFormatting();
+        this.template = sc.getMessageTemplate();
+        this.colour = serviceCollection.textStyleService().getColourFromString(sc.getMessageColour());
     }
 
     @NonnullByDefault

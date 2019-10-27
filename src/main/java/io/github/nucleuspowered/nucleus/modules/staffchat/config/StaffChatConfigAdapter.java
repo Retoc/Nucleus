@@ -5,7 +5,7 @@
 package io.github.nucleuspowered.nucleus.modules.staffchat.config;
 
 import com.google.common.collect.Lists;
-import io.github.nucleuspowered.nucleus.internal.qsml.NucleusConfigAdapter;
+import io.github.nucleuspowered.nucleus.quickstart.NucleusConfigAdapter;
 
 import java.util.List;
 

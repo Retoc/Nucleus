@@ -11,13 +11,13 @@ import io.github.nucleuspowered.nucleus.internal.data.EndTimestamp;
 import io.github.nucleuspowered.nucleus.internal.interfaces.ListenerBase;
 import io.github.nucleuspowered.nucleus.internal.interfaces.Reloadable;
 import io.github.nucleuspowered.nucleus.modules.message.events.InternalNucleusHelpOpEvent;
-import io.github.nucleuspowered.nucleus.modules.mute.commands.MuteCommand;
-import io.github.nucleuspowered.nucleus.modules.mute.commands.VoiceCommand;
+import io.github.nucleuspowered.nucleus.modules.mute.MutePermissions;
 import io.github.nucleuspowered.nucleus.modules.mute.config.MuteConfig;
-import io.github.nucleuspowered.nucleus.modules.mute.config.MuteConfigAdapter;
 import io.github.nucleuspowered.nucleus.modules.mute.data.MuteData;
 import io.github.nucleuspowered.nucleus.modules.mute.services.MuteHandler;
-import io.github.nucleuspowered.nucleus.util.PermissionMessageChannel;
+import io.github.nucleuspowered.nucleus.services.IMessageProviderService;
+import io.github.nucleuspowered.nucleus.services.INucleusServiceCollection;
+import io.github.nucleuspowered.nucleus.services.IPermissionService;
 import org.spongepowered.api.Sponge;
 import org.spongepowered.api.entity.living.player.Player;
 import org.spongepowered.api.event.Listener;
@@ -34,11 +34,21 @@ import org.spongepowered.api.text.serializer.TextSerializers;
 import java.util.Optional;
 import java.util.concurrent.TimeUnit;
 
+import javax.inject.Inject;
+
 public class MuteListener implements Reloadable, ListenerBase {
 
-    private final MuteHandler handler = getServiceUnchecked(MuteHandler.class);
+    private final MuteHandler handler;
+    private final IMessageProviderService messageProvider;
+    private final IPermissionService permissionService;
     private MuteConfig muteConfig = new MuteConfig();
-    private final String voicePerm = getPermissionHandlerFor(VoiceCommand.class).getPermissionWithSuffix("auto");
+
+    @Inject
+    public MuteListener(INucleusServiceCollection serviceCollection) {
+        this.handler = serviceCollection.getServiceUnchecked(MuteHandler.class);
+        this.messageProvider = serviceCollection.messageProvider();
+        this.permissionService = serviceCollection.permissionService();
+    }
 
     /**
      * At the time the subject joins, check to see if the subject is muted.
@@ -72,7 +82,8 @@ public class MuteListener implements Reloadable, ListenerBase {
         if (isMuted(player)) {
             this.handler.onMute(player);
             MessageChannel.TO_CONSOLE.send(Text.builder().append(Text.of(player.getName() + " (")).append(
-                    getMessage("standard.muted")).append(Text.of("): ")).append(event.getRawMessage()).build());
+                this.messageProvider.getMessageFor(Sponge.getServer().getConsole(), "standard.muted"))
+                    .append(Text.of("): ")).append(event.getRawMessage()).build());
             cancel = true;
         }
 
@@ -89,7 +100,8 @@ public class MuteListener implements Reloadable, ListenerBase {
                         Text.join(TextSerializers.FORMATTING_CODE.deserialize(m), event.getFormatter().getHeader().toText()));
                 }
 
-                new PermissionMessageChannel(MuteCommand.getMutedChatPermission()).send(player, event.getMessage(), ChatTypes.SYSTEM);
+                this.permissionService.permissionMessageChannel(MutePermissions.MUTE_SEEMUTEDCHAT)
+                    .send(player, event.getMessage(), ChatTypes.SYSTEM);
             }
 
             event.setCancelled(true);
@@ -130,7 +142,7 @@ public class MuteListener implements Reloadable, ListenerBase {
     }
 
     private boolean cancelOnGlobalMute(Player player, boolean isCancelled) {
-        if (isCancelled || !this.handler.isGlobalMuteEnabled() || hasPermission(player, this.voicePerm)) {
+        if (isCancelled || !this.handler.isGlobalMuteEnabled() || this.permissionService.hasPermission(player, MutePermissions.VOICE_AUTO)) {
             return false;
         }
 
@@ -138,13 +150,13 @@ public class MuteListener implements Reloadable, ListenerBase {
             return false;
         }
 
-        player.sendMessage(Nucleus.getNucleus().getMessageProvider().getTextMessageWithFormat("globalmute.novoice"));
+        this.messageProvider.sendMessageTo(player, "globalmute.novoice");
         return true;
     }
 
     @Override
-    public void onReload() {
-        this.muteConfig = getServiceUnchecked(MuteConfigAdapter.class).getNodeOrDefault();
+    public void onReload(INucleusServiceCollection serviceCollection) {
+        this.muteConfig = serviceCollection.moduleDataProvider().getModuleConfig(MuteConfig.class);
     }
 
     private boolean isMuted(Player player) {

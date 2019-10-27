@@ -5,18 +5,20 @@
 package io.github.nucleuspowered.nucleus.modules.core.commands;
 
 import com.google.common.collect.Lists;
-import io.github.nucleuspowered.nucleus.Nucleus;
 import io.github.nucleuspowered.nucleus.Util;
-import io.github.nucleuspowered.nucleus.internal.annotations.command.NoHelpSubcommand;
-import io.github.nucleuspowered.nucleus.internal.annotations.command.NoModifiers;
-import io.github.nucleuspowered.nucleus.internal.annotations.command.Permissions;
-import io.github.nucleuspowered.nucleus.internal.annotations.command.RegisterCommand;
-import io.github.nucleuspowered.nucleus.internal.command.AbstractCommand;
-import io.github.nucleuspowered.nucleus.internal.messages.MessageProvider;
+import io.github.nucleuspowered.nucleus.internal.command.ICommandContext;
+import io.github.nucleuspowered.nucleus.internal.command.ICommandExecutor;
+import io.github.nucleuspowered.nucleus.internal.command.ICommandResult;
+import io.github.nucleuspowered.nucleus.internal.command.annotation.Command;
+import io.github.nucleuspowered.nucleus.internal.command.control.CommandControl;
+import io.github.nucleuspowered.nucleus.modules.core.CorePermissions;
+import io.github.nucleuspowered.nucleus.services.IMessageProviderService;
+import io.github.nucleuspowered.nucleus.services.INucleusServiceCollection;
+import org.checkerframework.checker.nullness.qual.NonNull;
 import org.spongepowered.api.Sponge;
 import org.spongepowered.api.command.CommandCallable;
+import org.spongepowered.api.command.CommandException;
 import org.spongepowered.api.command.CommandMapping;
-import org.spongepowered.api.command.CommandResult;
 import org.spongepowered.api.command.CommandSource;
 import org.spongepowered.api.command.args.ArgumentParseException;
 import org.spongepowered.api.command.args.ChildCommandElementExecutor;
@@ -25,7 +27,7 @@ import org.spongepowered.api.command.args.CommandContext;
 import org.spongepowered.api.command.args.CommandElement;
 import org.spongepowered.api.command.spec.CommandExecutor;
 import org.spongepowered.api.command.spec.CommandSpec;
-import org.spongepowered.api.event.cause.Cause;
+import org.spongepowered.api.entity.living.player.Player;
 import org.spongepowered.api.text.Text;
 
 import java.lang.reflect.Field;
@@ -34,132 +36,155 @@ import java.util.stream.Collectors;
 
 import javax.annotation.Nullable;
 
-@NoModifiers
-@Permissions
-@NoHelpSubcommand
-@RegisterCommand("commandinfo")
-public class CommandInfoCommand extends AbstractCommand<CommandSource> {
+@Command(
+        aliases = "commandinfo",
+        basePermission = CorePermissions.BASE_COMMANDINFO,
+        commandDescriptionKey = "commandinfo",
+        hasHelpCommand = false
+)
+public class CommandInfoCommand implements ICommandExecutor<CommandSource> {
 
     private final String commandKey = "command";
 
     @Override
-    protected CommandElement[] getArguments() {
+    public CommandElement[] parameters(INucleusServiceCollection serviceCollection) {
         return new CommandElement[] {
-                new CommandChoicesArgument()
+                new CommandChoicesArgument(serviceCollection.messageProvider())
         };
     }
 
     @Override
-    protected CommandResult executeCommand(CommandSource src, CommandContext args, Cause cause) throws Exception {
+    public ICommandResult execute(ICommandContext<? extends CommandSource> context) throws CommandException {
         // we have the command, get the mapping
-        CommandMapping mapping = args.<CommandMapping>getOne(this.commandKey).get();
+        CommandMapping mapping = context.requireOne(this.commandKey, CommandMapping.class);
 
-        MessageProvider provider = Nucleus.getNucleus().getMessageProvider();
-        Text header = provider.getTextMessageWithFormat("command.commandinfo.title", mapping.getPrimaryAlias());
+        CommandSource source = context.getCommandSourceUnchecked();
+        IMessageProviderService provider = context.getServiceCollection().messageProvider();
+        Text header = provider.getMessageFor(source, "command.commandinfo.title", mapping.getPrimaryAlias());
 
         List<Text> content = Lists.newArrayList();
 
         // Owner
-        content.add(provider.getTextMessageWithFormat("command.commandinfo.owner", Sponge.getCommandManager().getOwner(mapping)
+        content.add(provider.getMessageFor(source, "command.commandinfo.owner", Sponge.getCommandManager().getOwner(mapping)
                 .map(x -> x.getName() + " (" + x.getId() + ")")
-                .orElseGet(() -> provider.getMessageWithFormat("standard.unknown"))));
-        content.add(provider.getTextMessageWithFormat("command.commandinfo.aliases", String.join(", ", mapping.getAllAliases())));
+                .orElseGet(() -> provider.getMessageString(source, "standard.unknown"))));
+        content.add(provider.getMessageFor(source,"command.commandinfo.aliases", String.join(", ", mapping.getAllAliases())));
 
-        if (mapping.getCallable() instanceof AbstractCommand) {
-            nucleusCommand(content, src, provider, (AbstractCommand<? extends CommandSource>) mapping.getCallable());
+        if (mapping.getCallable() instanceof CommandControl) {
+            nucleusCommand(content, context, provider, (CommandControl) mapping.getCallable());
         } else if (mapping.getCallable() instanceof CommandSpec) {
-            specCommand(content, src, provider, mapping.getPrimaryAlias(), (CommandSpec) mapping.getCallable());
+            specCommand(content, context, provider, mapping.getPrimaryAlias(), (CommandSpec) mapping.getCallable());
         } else {
-            lowCommand(content, src, provider, mapping.getPrimaryAlias(), mapping.getCallable());
+            lowCommand(content, context, provider, mapping.getPrimaryAlias(), mapping.getCallable());
         }
 
-        Util.getPaginationBuilder(src)
+        Util.getPaginationBuilder(context.is(Player.class))
                 .title(header)
                 .contents(content)
-                .sendTo(src);
-        return CommandResult.success();
+                .sendTo(context.getCommandSource());
+        return context.successResult();
     }
 
-    private void nucleusCommand(List<Text> content, CommandSource source, MessageProvider provider,
-            AbstractCommand<? extends CommandSource> abstractCommand) {
-        content.add(provider.getTextMessageWithFormat("command.commandinfo.type", provider.getMessageWithFormat("command.commandinfo.nucleus")));
+    private void nucleusCommand(
+            List<Text> content,
+            ICommandContext<? extends CommandSource> context,
+            IMessageProviderService provider,
+            CommandControl abstractCommand) throws CommandException{
+        CommandSource source = context.getCommandSource();
+        content.add(provider.getMessageFor(source, "command.commandinfo.type", "loc:command.commandinfo.nucleus"));
         content.add(Text.EMPTY);
-        List<Text> text = abstractCommand.getUsageText(source);
+        Text text = abstractCommand.getUsageText(source, abstractCommand.getCommandKey().replace('.', ' '));
         if (text.isEmpty()) {
-            content.add(provider.getTextMessageWithFormat("command.commandinfo.noinfo"));
+            content.add(provider.getMessageFor(source, "command.commandinfo.noinfo"));
         } else {
-            content.addAll(abstractCommand.getUsageText(source));
+            content.add(text);
         }
     }
 
-    private void specCommand(List<Text> content, CommandSource source, MessageProvider provider, String alias, CommandSpec spec) {
-        content.add(provider.getTextMessageWithFormat("command.commandinfo.type", provider.getMessageWithFormat("command.commandinfo.spec")));
+    private void specCommand(List<Text> content,
+            ICommandContext<? extends CommandSource> context,
+            IMessageProviderService provider,
+            String alias,
+            CommandSpec spec) throws CommandException{ //List<Text> content, CommandSource source, MessageProvider provider, String
+                                                                     // alias, CommandSpec spec) {
+        CommandSource src = context.getCommandSource();
+        content.add(provider.getMessageFor(src, "command.commandinfo.type", "loc:command.commandinfo.spec"));
         CommandExecutor executor = spec.getExecutor();
         if (executor instanceof ChildCommandElementExecutor) {
             try {
-                content.add(provider.getTextMessageWithFormat("command.commandinfo.haschildren"));
+                content.add(provider.getMessageFor(src, "command.commandinfo.haschildren"));
                 Field field = ChildCommandElementExecutor.class.getDeclaredField("fallbackExecutor");
                 field.setAccessible(true);
-                content.add(provider.getTextMessageWithFormat("command.commandinfo.execclass", field.get(executor).getClass().getName()));
+                content.add(provider.getMessageFor(src, "command.commandinfo.execclass", field.get(executor).getClass().getName()));
             } catch (NoSuchFieldException | IllegalAccessException e) {
-                content.add(provider.getTextMessageWithFormat("command.commandinfo.execclass", provider.getMessageWithFormat("standard.unknown")));
+                content.add(provider.getMessageFor(src, "command.commandinfo.execclass", "loc:standard.unknown"));
             }
         }
 
         content.add(Text.EMPTY);
-        content.add(provider.getTextMessageWithFormat("command.commandinfo.description"));
+        content.add(provider.getMessageFor(src, "command.commandinfo.description"));
 
-        spec.getShortDescription(source).ifPresent(x -> {
-            content.add(provider.getTextMessageWithFormat("command.commandinfo.shortdescription"));
+        spec.getShortDescription(src).ifPresent(x -> {
+            content.add(provider.getMessageFor(src, "command.commandinfo.shortdescription"));
             content.add(x);
             content.add(Text.EMPTY);
         });
-        spec.getExtendedDescription(source).ifPresent(x -> {
-            content.add(provider.getTextMessageWithFormat("command.commandinfo.description"));
+        spec.getExtendedDescription(src).ifPresent(x -> {
+            content.add(provider.getMessageFor(src, "command.commandinfo.description"));
             content.add(x);
             content.add(Text.EMPTY);
         });
 
-        content.add(provider.getTextMessageWithTextFormat("command.commandinfo.usage"));
-        content.add(Text.of("/", alias, " ", spec.getUsage(source)));
+        content.add(provider.getMessageFor(src, "command.commandinfo.usage"));
+        content.add(Text.of("/", alias, " ", spec.getUsage(src)));
     }
 
-    private void lowCommand(List<Text> content, CommandSource source, MessageProvider provider, String alias, CommandCallable callable) {
-        content.add(provider.getTextMessageWithFormat("command.commandinfo.type", provider.getMessageWithFormat("command.commandinfo.callable")));
+    private void lowCommand(
+            List<Text> content,
+            ICommandContext<? extends CommandSource> context,
+            IMessageProviderService provider,
+            String alias,
+            CommandCallable callable) throws CommandException {
+        CommandSource src = context.getCommandSource();
+        content.add(provider.getMessageFor(src, "command.commandinfo.type", "loc:command.commandinfo.callable"));
         content.add(Text.EMPTY);
 
-        callable.getShortDescription(source).ifPresent(x -> {
-            content.add(provider.getTextMessageWithFormat("command.commandinfo.shortdescription"));
+        callable.getShortDescription(src).ifPresent(x -> {
+            content.add(provider.getMessageFor(src, "command.commandinfo.shortdescription"));
             content.add(x);
             content.add(Text.EMPTY);
         });
-        callable.getHelp(source).ifPresent(x -> {
-            content.add(provider.getTextMessageWithFormat("command.commandinfo.description"));
+        callable.getHelp(src).ifPresent(x -> {
+            content.add(provider.getMessageFor(src, "command.commandinfo.description"));
             content.add(x);
             content.add(Text.EMPTY);
         });
 
-        content.add(provider.getTextMessageWithTextFormat("command.commandinfo.usage"));
-        content.add(Text.of("/", alias, " ", callable.getUsage(source)));
+        content.add(provider.getMessageFor(src, "command.commandinfo.usage"));
+        content.add(Text.of("/", alias, " ", callable.getUsage(src)));
     }
 
     private class CommandChoicesArgument extends CommandElement {
 
-        protected CommandChoicesArgument() {
+        private final IMessageProviderService messageProviderService;
+
+        CommandChoicesArgument(IMessageProviderService messageProviderService) {
             super(Text.of(CommandInfoCommand.this.commandKey));
+            this.messageProviderService = messageProviderService;
         }
 
         @Nullable
         @Override
-        protected Object parseValue(CommandSource source, CommandArgs args) throws ArgumentParseException {
+        protected Object parseValue(@NonNull CommandSource source, CommandArgs args) throws ArgumentParseException {
             String next = args.next();
             return Sponge.getCommandManager().get(next).orElseThrow(() -> args.createError(
-                    Nucleus.getNucleus().getMessageProvider().getTextMessageWithFormat("command.commandinfo.nocommand", next)
+                    this.messageProviderService.getMessageFor(source, "command.commandinfo.nocommand", next)
             ));
         }
 
         @Override
-        public List<String> complete(CommandSource src, CommandArgs args, CommandContext context) {
+        @NonNull
+        public List<String> complete(@NonNull CommandSource src, @NonNull CommandArgs args, @NonNull CommandContext context) {
             try {
                 final String s = args.peek().toLowerCase();
                 return Sponge.getCommandManager().getAliases().stream().filter(x -> x.toLowerCase().startsWith(s)).collect(Collectors.toList());

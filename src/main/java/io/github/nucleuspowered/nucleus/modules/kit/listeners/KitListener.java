@@ -13,7 +13,9 @@ import io.github.nucleuspowered.nucleus.internal.interfaces.ListenerBase;
 import io.github.nucleuspowered.nucleus.modules.core.events.UserDataLoadedEvent;
 import io.github.nucleuspowered.nucleus.modules.kit.KitKeys;
 import io.github.nucleuspowered.nucleus.modules.kit.services.KitHandler;
-import io.github.nucleuspowered.nucleus.storage.dataobjects.modular.IUserDataObject;
+import io.github.nucleuspowered.nucleus.services.IMessageProviderService;
+import io.github.nucleuspowered.nucleus.services.INucleusServiceCollection;
+import io.github.nucleuspowered.nucleus.services.impl.storage.dataobjects.modular.IUserDataObject;
 import org.spongepowered.api.entity.living.player.Player;
 import org.spongepowered.api.event.Listener;
 import org.spongepowered.api.event.filter.Getter;
@@ -26,10 +28,19 @@ import java.time.Instant;
 import java.util.HashMap;
 import java.util.Map;
 
+import javax.inject.Inject;
+
 public class KitListener implements ListenerBase {
 
-    private final KitHandler handler = getServiceUnchecked(KitHandler.class);
+    private final KitHandler handler;
+    private final IMessageProviderService messageProviderService;
     private final KitDataService gds = Nucleus.getNucleus().getKitDataService();
+
+    @Inject
+    public KitListener(INucleusServiceCollection serviceCollection) {
+        this.handler = serviceCollection.getServiceUnchecked(KitHandler.class);
+        this.messageProviderService = serviceCollection.messageProvider();
+    }
 
     // For migration of the kit data.
     @SuppressWarnings("deprecation")
@@ -38,7 +49,7 @@ public class KitListener implements ListenerBase {
         IUserDataObject dataObject = event.getDataObject();
         if (dataObject.has(KitKeys.LEGACY_KIT_LAST_USED_TIME)) {
             // migration time. We know this isn't null
-            Map<String, Long> data = dataObject.getNullable(KitKeys.LEGACY_KIT_LAST_USED_TIME);
+            Map<String, Long> data = dataObject.get(KitKeys.LEGACY_KIT_LAST_USED_TIME).orElseGet(HashMap::new);
             Map<String, Instant> newData = dataObject.get(KitKeys.REDEEMED_KITS).orElseGet(HashMap::new);
             data.forEach((key, value) -> newData.putIfAbsent(key.toLowerCase(), Instant.ofEpochSecond(value)));
             dataObject.remove(KitKeys.LEGACY_KIT_LAST_USED_TIME);
@@ -69,15 +80,12 @@ public class KitListener implements ListenerBase {
 
                 if (event instanceof InteractInventoryEvent.Close) {
                     gds.save();
-                    player.sendMessage(Nucleus.getNucleus().getMessageProvider().getTextMessageWithFormat("command.kit.edit.success", x.getFirst().getName()));
+                    this.messageProviderService.sendMessageTo(player, "command.kit.edit.success", x.getFirst().getName());
                     handler.removeKitInventoryFromListener(inventory);
                 }
             } catch (Exception e) {
-                if (Nucleus.getNucleus().isDebugMode()) {
-                    e.printStackTrace();
-                }
-
-                player.sendMessage(Nucleus.getNucleus().getMessageProvider().getTextMessageWithFormat("command.kit.edit.error", x.getFirst().getName()));
+                e.printStackTrace();
+                this.messageProviderService.sendMessageTo(player, "command.kit.edit.error", x.getFirst().getName());
             }
         });
 

@@ -7,10 +7,19 @@ package io.github.nucleuspowered.nucleus.modules.afk.listeners;
 import io.github.nucleuspowered.nucleus.Util;
 import io.github.nucleuspowered.nucleus.internal.interfaces.ListenerBase;
 import io.github.nucleuspowered.nucleus.modules.afk.config.AFKConfig;
+import io.github.nucleuspowered.nucleus.modules.afk.services.AFKHandler;
+import io.github.nucleuspowered.nucleus.services.INucleusServiceCollection;
 import org.spongepowered.api.event.Listener;
 import org.spongepowered.api.event.message.MessageChannelEvent;
 
+import javax.inject.Inject;
+
 public class AFKChatListener extends AbstractAFKListener implements ListenerBase.Conditional {
+
+    @Inject
+    public AFKChatListener(INucleusServiceCollection serviceCollection) {
+        super(serviceCollection.getServiceUnchecked(AFKHandler.class));
+    }
 
     @Listener
     public void onPlayerChat(final MessageChannelEvent.Chat event) {
@@ -18,7 +27,9 @@ public class AFKChatListener extends AbstractAFKListener implements ListenerBase
     }
 
     @Override
-    public boolean shouldEnable() {
-        return getTriggerConfigEntry(AFKConfig.Triggers::isOnChat);
+    public boolean shouldEnable(INucleusServiceCollection serviceCollection) {
+        return serviceCollection.moduleDataProvider().getModuleConfig(AFKConfig.class)
+                .getTriggers()
+                .isOnChat();
     }
 }

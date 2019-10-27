@@ -29,14 +29,13 @@ public class ChangeNicknameEventPre extends AbstractEvent implements NucleusChan
         this.target = target;
     }
 
-    @Override
-    public Optional<Text> getPreviousNickname() {
-        return Optional.ofNullable(this.previousNickname);
+    @Override public User getUser() {
+        return this.target;
     }
 
     @Override
-    public Text getNewNickname() {
-        return getNickname().orElseGet(() -> Text.of(this.target.getName()));
+    public Optional<Text> getPreviousNickname() {
+        return Optional.ofNullable(this.previousNickname);
     }
 
     @Override public Optional<Text> getNickname() {
@@ -58,8 +57,4 @@ public class ChangeNicknameEventPre extends AbstractEvent implements NucleusChan
         return this.cause;
     }
 
-    @Override
-    public User getTargetUser() {
-        return this.target;
-    }
 }

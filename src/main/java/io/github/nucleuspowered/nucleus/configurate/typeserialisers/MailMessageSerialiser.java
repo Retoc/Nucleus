@@ -41,7 +41,7 @@ public class MailMessageSerialiser implements TypeSerializer<MailMessage> {
     @Override
     public void serialize(@NonNull TypeToken<?> type, @Nullable MailMessage obj, @NonNull ConfigurationNode value) {
         if (obj != null) {
-            value.getNode("uuid").setValue(obj.getSender().map(Identifiable::getUniqueId).orElse(Util.consoleFakeUUID));
+            value.getNode("uuid").setValue(obj.getSender().map(Identifiable::getUniqueId).orElse(Util.CONSOLE_FAKE_UUID));
             value.getNode("date").setValue(obj.getDate().toEpochMilli());
             value.getNode("message").setValue(obj.getMessage());
         }

@@ -5,8 +5,8 @@
 package io.github.nucleuspowered.nucleus.modules.sign;
 
 import io.github.nucleuspowered.nucleus.annotationprocessor.RegisterPermissions;
-import io.github.nucleuspowered.nucleus.internal.permissions.PermissionMetadata;
-import io.github.nucleuspowered.nucleus.internal.permissions.SuggestedLevel;
+import io.github.nucleuspowered.nucleus.services.impl.permission.PermissionMetadata;
+import io.github.nucleuspowered.nucleus.services.impl.permission.SuggestedLevel;
 
 @RegisterPermissions
 public class SignPermissions {
@@ -15,6 +15,6 @@ public class SignPermissions {
     }
 
     @PermissionMetadata(descriptionKey = "permission.sign.formatting", level = SuggestedLevel.ADMIN)
-    public static final String SIGN_FORMATTING = "sign.formatting";
+    public static final String SIGN_FORMATTING = "nucleus.sign.formatting";
 
 }

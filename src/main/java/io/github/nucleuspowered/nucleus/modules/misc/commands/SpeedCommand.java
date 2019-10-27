@@ -4,19 +4,19 @@
  */
 package io.github.nucleuspowered.nucleus.modules.misc.commands;
 
-import com.google.common.collect.Maps;
-import io.github.nucleuspowered.nucleus.Nucleus;
-import io.github.nucleuspowered.nucleus.internal.annotations.command.Permissions;
-import io.github.nucleuspowered.nucleus.internal.annotations.command.RegisterCommand;
-import io.github.nucleuspowered.nucleus.internal.command.AbstractCommand;
-import io.github.nucleuspowered.nucleus.internal.docgen.annotations.EssentialsEquivalent;
+import io.github.nucleuspowered.nucleus.internal.command.ICommandContext;
+import io.github.nucleuspowered.nucleus.internal.command.ICommandExecutor;
+import io.github.nucleuspowered.nucleus.internal.command.ICommandResult;
+import io.github.nucleuspowered.nucleus.internal.command.annotation.Command;
+import io.github.nucleuspowered.nucleus.internal.command.annotation.CommandModifier;
+import io.github.nucleuspowered.nucleus.internal.command.annotation.EssentialsEquivalent;
+import io.github.nucleuspowered.nucleus.internal.command.requirements.CommandModifiers;
 import io.github.nucleuspowered.nucleus.internal.interfaces.Reloadable;
-import io.github.nucleuspowered.nucleus.internal.permissions.PermissionInformation;
-import io.github.nucleuspowered.nucleus.internal.permissions.SuggestedLevel;
-import io.github.nucleuspowered.nucleus.modules.misc.config.MiscConfigAdapter;
-import org.spongepowered.api.command.CommandResult;
+import io.github.nucleuspowered.nucleus.modules.misc.MiscPermissions;
+import io.github.nucleuspowered.nucleus.modules.misc.config.MiscConfig;
+import io.github.nucleuspowered.nucleus.services.INucleusServiceCollection;
+import org.spongepowered.api.command.CommandException;
 import org.spongepowered.api.command.CommandSource;
-import org.spongepowered.api.command.args.CommandContext;
 import org.spongepowered.api.command.args.CommandElement;
 import org.spongepowered.api.command.args.GenericArguments;
 import org.spongepowered.api.data.DataTransactionResult;
@@ -32,11 +32,19 @@ import java.util.HashMap;
 import java.util.Map;
 
 @NonnullByDefault
-@RegisterCommand("speed")
-@Permissions(supportsOthers = true)
 @EssentialsEquivalent(value = {"speed", "flyspeed", "walkspeed", "fspeed", "wspeed"}, isExact = false,
     notes = "This command either uses your current state or a specified argument to determine whether to alter fly or walk speed.")
-public class SpeedCommand extends AbstractCommand.SimpleTargetOtherPlayer implements Reloadable {
+@Command(
+        aliases = "speed",
+        basePermission = MiscPermissions.BASE_SPEED,
+        commandDescriptionKey = "speed",
+        modifiers = {
+            @CommandModifier(value = CommandModifiers.HAS_WARMUP, exemptPermission = MiscPermissions.EXEMPT_WARMUP_SPEED),
+            @CommandModifier(value = CommandModifiers.HAS_COOLDOWN, exemptPermission = MiscPermissions.EXEMPT_COOLDOWN_SPEED),
+            @CommandModifier(value = CommandModifiers.HAS_COST, exemptPermission = MiscPermissions.EXEMPT_COST_SPEED)
+        }
+)
+public class SpeedCommand implements ICommandExecutor<CommandSource>, Reloadable { //extends AbstractCommand.SimpleTargetOtherPlayer
 
     private final String speedKey = "speed";
     private final String resetKey = "reset";
@@ -50,18 +58,8 @@ public class SpeedCommand extends AbstractCommand.SimpleTargetOtherPlayer implem
     public static final int multiplier = 20;
     private int maxSpeed = 5;
 
-    @Override public void onReload() {
-        this.maxSpeed = getServiceUnchecked(MiscConfigAdapter.class).getNodeOrDefault().getMaxSpeed();
-    }
-
     @Override
-    protected Map<String, PermissionInformation> permissionSuffixesToRegister() {
-        Map<String, PermissionInformation> mspi = Maps.newHashMap();
-        mspi.put("exempt.max", PermissionInformation.getWithTranslation("permission.speed.exempt.max", SuggestedLevel.OWNER));
-        return mspi;
-    }
-
-    @Override public CommandElement[] additionalArguments() {
+    public CommandElement[] parameters(INucleusServiceCollection serviceCollection) {
         Map<String, SpeedType> keysMap = new HashMap<>();
         keysMap.put("fly", SpeedType.FLYING);
         keysMap.put("flying", SpeedType.FLYING);
@@ -71,22 +69,24 @@ public class SpeedCommand extends AbstractCommand.SimpleTargetOtherPlayer implem
         keysMap.put("w", SpeedType.WALKING);
 
         return new CommandElement[] {
-            GenericArguments.optionalWeak(GenericArguments.onlyOne(GenericArguments.choices(Text.of(this.typeKey), keysMap, true))),
-            GenericArguments.optional(
-                    GenericArguments.firstParsing(
-                        GenericArguments.integer(Text.of(this.speedKey)),
-                        GenericArguments.literal(Text.of(this.resetKey), this.resetKey)
-                    )
+                serviceCollection.commandElementSupplier().createOtherUserPermissionElement(true, MiscPermissions.OTHERS_SPEED),
+                GenericArguments.optionalWeak(GenericArguments.onlyOne(GenericArguments.choices(Text.of(this.typeKey), keysMap, true))),
+                GenericArguments.optional(
+                        GenericArguments.firstParsing(
+                            GenericArguments.integer(Text.of(this.speedKey)),
+                            GenericArguments.literal(Text.of(this.resetKey), this.resetKey)
+                        )
             )
         };
     }
 
     @Override
-    public CommandResult executeWithPlayer(CommandSource src, Player pl, CommandContext args, boolean isSelf) {
-        SpeedType key = args.<SpeedType>getOne(this.typeKey)
+    public ICommandResult execute(ICommandContext<? extends CommandSource> context) throws CommandException {
+        Player pl = context.getPlayerFromArgs();
+        SpeedType key = context.getOne(this.typeKey, SpeedType.class)
                 .orElseGet(() -> pl.get(Keys.IS_FLYING).orElse(false) ? SpeedType.FLYING : SpeedType.WALKING);
-        Integer speed = args.<Integer>getOne(this.speedKey).orElseGet(() -> {
-            if (args.hasAny(this.resetKey)) {
+        Integer speed = context.getOne(this.speedKey, Integer.class).orElseGet(() -> {
+            if (context.hasAny(this.resetKey)) {
                 return key == SpeedType.WALKING ? 2 : 1;
             }
 
@@ -94,50 +94,49 @@ public class SpeedCommand extends AbstractCommand.SimpleTargetOtherPlayer implem
         });
 
         if (speed == null) {
-            Text t = Text.builder().append(Nucleus.getNucleus().getMessageProvider().getTextMessageWithFormat("command.speed.walk")).append(Text.of(" "))
+            Text t = Text.builder().append(context.getMessage("command.speed.walk")).append(Text.of(" "))
                     .append(Text.of(TextColors.YELLOW, Math.round(pl.get(Keys.WALKING_SPEED).orElse(0.1d) * 20)))
-                    .append(Text.builder().append(Text.of(TextColors.GREEN, ", ")).append(
-                            Nucleus.getNucleus().getMessageProvider().getTextMessageWithFormat("command.speed.flying"))
-                            .build())
+                    .append(Text.builder().append(Text.of(TextColors.GREEN, ", "))
+                            .append(context.getMessage("command.speed.flying")).build())
                     .append(Text.of(" ")).append(Text.of(TextColors.YELLOW, Math.round(pl.get(Keys.FLYING_SPEED).orElse(0.05d) * 20)))
                     .append(Text.of(TextColors.GREEN, ".")).build();
 
-            src.sendMessage(t);
+            context.sendMessageText(t);
 
             // Don't trigger cooldowns
-            return CommandResult.empty();
+            return context.failResult();
         }
 
         if (speed < 0) {
-            src.sendMessage(Nucleus.getNucleus().getMessageProvider().getTextMessageWithFormat("command.speed.negative"));
-            return CommandResult.empty();
+            return context.errorResult("command.speed.negative");
         }
 
-        if (!this.permissions.testSuffix(src, "exempt.max", src, true) && this.maxSpeed < speed) {
-            src.sendMessage(Nucleus.getNucleus().getMessageProvider().getTextMessageWithFormat("command.speed.max", String.valueOf(this.maxSpeed)));
-            return CommandResult.empty();
+        if (!context.isConsoleAndBypass() && !context.testPermission(MiscPermissions.SPEED_EXEMPT_MAX) && this.maxSpeed < speed) {
+            return context.errorResult("command.speed.max", String.valueOf(this.maxSpeed));
         }
 
         DataTransactionResult dtr = pl.offer(key.speedKey, (double) speed / (double) multiplier);
 
         if (dtr.isSuccessful()) {
-            src.sendMessage(Nucleus.getNucleus().getMessageProvider().getTextMessageWithFormat("command.speed.success.base", key.name, String.valueOf(speed)));
+            context.sendMessage("command.speed.success.base", key.name, String.valueOf(speed));
 
-            if (!isSelf) {
-                src.sendMessages(
-                        Nucleus.getNucleus().getMessageProvider().getTextMessageWithFormat("command.speed.success.other", pl.getName(), key.name, String.valueOf(speed)));
+            if (!context.is(pl)) {
+                context.sendMessage("command.speed.success.other", pl.getName(), key.name, String.valueOf(speed));
             }
 
-            return CommandResult.success();
+            return context.successResult();
         }
 
-        src.sendMessage(Nucleus.getNucleus().getMessageProvider().getTextMessageWithFormat("command.speed.fail", key.name));
-        return CommandResult.empty();
+        return context.errorResult("command.speed.fail", key.name);
+    }
+
+    @Override public void onReload(INucleusServiceCollection serviceCollection) {
+        this.maxSpeed = serviceCollection.moduleDataProvider().getModuleConfig(MiscConfig.class).getMaxSpeed();
     }
 
     private enum SpeedType {
-        WALKING(Keys.WALKING_SPEED, Nucleus.getNucleus().getMessageProvider().getMessageWithFormat("standard.walking")),
-        FLYING(Keys.FLYING_SPEED, Nucleus.getNucleus().getMessageProvider().getMessageWithFormat("standard.flying"));
+        WALKING(Keys.WALKING_SPEED, "loc:standard.walking"),
+        FLYING(Keys.FLYING_SPEED, "loc:standard.flying");
 
         final Key<Value<Double>> speedKey;
         final String name;

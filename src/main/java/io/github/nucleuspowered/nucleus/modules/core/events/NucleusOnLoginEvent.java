@@ -5,7 +5,7 @@
 package io.github.nucleuspowered.nucleus.modules.core.events;
 
 import com.google.common.base.Preconditions;
-import io.github.nucleuspowered.nucleus.storage.dataobjects.modular.IUserDataObject;
+import io.github.nucleuspowered.nucleus.services.impl.storage.dataobjects.modular.IUserDataObject;
 import org.spongepowered.api.entity.Transform;
 import org.spongepowered.api.entity.living.player.User;
 import org.spongepowered.api.event.cause.Cause;

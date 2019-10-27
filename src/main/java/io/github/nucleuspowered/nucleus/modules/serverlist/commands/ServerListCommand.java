@@ -5,40 +5,34 @@
 package io.github.nucleuspowered.nucleus.modules.serverlist.commands;
 
 import com.google.common.collect.Lists;
-import io.github.nucleuspowered.nucleus.Nucleus;
 import io.github.nucleuspowered.nucleus.Util;
-import io.github.nucleuspowered.nucleus.internal.annotations.RunAsync;
-import io.github.nucleuspowered.nucleus.internal.annotations.command.NoModifiers;
-import io.github.nucleuspowered.nucleus.internal.annotations.command.RegisterCommand;
-import io.github.nucleuspowered.nucleus.internal.command.AbstractCommand;
-import io.github.nucleuspowered.nucleus.internal.command.ReturnMessageException;
+import io.github.nucleuspowered.nucleus.internal.command.ICommandContext;
+import io.github.nucleuspowered.nucleus.internal.command.ICommandExecutor;
+import io.github.nucleuspowered.nucleus.internal.command.ICommandResult;
+import io.github.nucleuspowered.nucleus.internal.command.annotation.Command;
 import io.github.nucleuspowered.nucleus.internal.interfaces.Reloadable;
-import io.github.nucleuspowered.nucleus.internal.messages.MessageProvider;
-import io.github.nucleuspowered.nucleus.internal.text.NucleusTextTemplateImpl;
+import io.github.nucleuspowered.nucleus.modules.serverlist.ServerListPermissions;
 import io.github.nucleuspowered.nucleus.modules.serverlist.config.ServerListConfig;
-import io.github.nucleuspowered.nucleus.modules.serverlist.config.ServerListConfigAdapter;
 import io.github.nucleuspowered.nucleus.modules.serverlist.services.ServerListService;
-import org.spongepowered.api.command.CommandResult;
+import io.github.nucleuspowered.nucleus.services.INucleusServiceCollection;
+import io.github.nucleuspowered.nucleus.services.impl.texttemplatefactory.NucleusTextTemplateImpl;
+import org.spongepowered.api.command.CommandException;
 import org.spongepowered.api.command.CommandSource;
-import org.spongepowered.api.command.args.CommandContext;
 import org.spongepowered.api.command.args.CommandElement;
 import org.spongepowered.api.command.args.GenericArguments;
-import org.spongepowered.api.event.cause.Cause;
 import org.spongepowered.api.text.Text;
 import org.spongepowered.api.text.action.TextActions;
 import org.spongepowered.api.util.annotation.NonnullByDefault;
 
 import java.util.List;
 
-@NoModifiers
-@RunAsync
 @NonnullByDefault
-@RegisterCommand(value = {"serverlist", "sl"})
-public class ServerListCommand extends AbstractCommand<CommandSource> implements Reloadable {
+@Command(aliases = {"serverlist", "sl"}, basePermission = ServerListPermissions.BASE_SERVERLIST, commandDescriptionKey = "serverlist", async = true)
+public class ServerListCommand implements ICommandExecutor<CommandSource>, Reloadable {
 
     private ServerListConfig slc = new ServerListConfig();
 
-    @Override public CommandElement[] getArguments() {
+    @Override public CommandElement[] parameters(INucleusServiceCollection serviceCollection) {
         return new CommandElement[] {
                 GenericArguments.flags()
                     .flag("m", "-messages")
@@ -47,68 +41,64 @@ public class ServerListCommand extends AbstractCommand<CommandSource> implements
         };
     }
 
-    @Override protected CommandResult executeCommand(CommandSource src, CommandContext args, Cause cause) throws Exception {
+    @Override public ICommandResult execute(ICommandContext<? extends CommandSource> context) throws CommandException {
         // Display current information
-        if (args.hasAny("m")) {
-            onMessage(src, this.slc.getMessages(), "command.serverlist.head.messages");
-            return CommandResult.success();
-        } else if (args.hasAny("w")) {
-            onMessage(src, this.slc.getWhitelist(), "command.serverlist.head.whitelist");
-            return CommandResult.success();
+        if (context.hasAny("m")) {
+            onMessage(context, this.slc.getMessages(), "command.serverlist.head.messages");
+            return context.successResult();
+        } else if (context.hasAny("w")) {
+            onMessage(context, this.slc.getWhitelist(), "command.serverlist.head.whitelist");
+            return  context.successResult();
         }
 
-        MessageProvider messageProvider = Nucleus.getNucleus().getMessageProvider();
-
         if (this.slc.isModifyServerList()) {
-            src.sendMessage(messageProvider.getTextMessageWithFormat("command.serverlist.modify.true"));
+            context.sendMessage("command.serverlist.modify.true");
             if (!this.slc.getMessages().isEmpty()) {
-                src.sendMessage(
-                    messageProvider.getTextMessageWithFormat("command.serverlist.messages.click")
+                context.sendMessageText(context.getMessage("command.serverlist.messages.click")
                         .toBuilder().onClick(TextActions.runCommand("/nucleus:serverlist -m")).toText());
             }
 
             if (!this.slc.getWhitelist().isEmpty()) {
-                src.sendMessage(
-                    messageProvider.getTextMessageWithFormat("command.serverlist.whitelistmessages.click")
+                context.sendMessageText(context.getMessage("command.serverlist.whitelistmessages.click")
                         .toBuilder().onClick(TextActions.runCommand("/nucleus:serverlist -w")).toText());
             }
         } else if (this.slc.getModifyServerList() == ServerListConfig.ServerListSelection.WHITELIST) {
-            src.sendMessage(messageProvider.getTextMessageWithFormat("command.serverlist.modify.whitelist"));
+            context.sendMessage("command.serverlist.modify.whitelist");
 
             if (!this.slc.getWhitelist().isEmpty()) {
-                src.sendMessage(
-                        messageProvider.getTextMessageWithFormat("command.serverlist.whitelistmessages.click")
+                context.sendMessageText(context.getMessage("command.serverlist.whitelistmessages.click")
                                 .toBuilder().onClick(TextActions.runCommand("/nucleus:serverlist -w")).toText());
             }
         } else {
-            src.sendMessage(messageProvider.getTextMessageWithFormat("command.serverlist.modify.false"));
+            context.sendMessage("command.serverlist.modify.false");
         }
 
-        ServerListService ss = getServiceUnchecked(ServerListService.class);
+        ServerListService ss = context.getServiceCollection().getServiceUnchecked(ServerListService.class);
         ss.getMessage().ifPresent(
                 t -> {
-                    src.sendMessage(Util.SPACE);
-                    src.sendMessage(messageProvider.getTextMessageWithFormat("command.serverlist.tempheader"));
-                    src.sendMessage(t);
-                    src.sendMessage(messageProvider.getTextMessageWithFormat("command.serverlist.message.expiry",
-                            Util.getTimeToNow(ss.getExpiry().get())));
+                    context.sendMessageText(Util.SPACE);
+                    context.sendMessage("command.serverlist.tempheader");
+                    context.sendMessageText(t);
+                    context.sendMessage("command.serverlist.message.expiry",
+                            context.getTimeToNowString(ss.getExpiry().get()));
                 }
             );
 
         if (this.slc.isHidePlayerCount()) {
-            src.sendMessage(messageProvider.getTextMessageWithFormat("command.serverlist.hideplayers"));
+            context.sendMessage("command.serverlist.hideplayers");
         } else if (this.slc.isHideVanishedPlayers()) {
-            src.sendMessage(messageProvider.getTextMessageWithFormat("command.serverlist.hidevanished"));
+            context.sendMessage("command.serverlist.hidevanished");
         }
 
-        return CommandResult.success();
+        return context.successResult();
     }
 
-    private void onMessage(CommandSource source, List<NucleusTextTemplateImpl> messages, String key) throws Exception {
+    private void onMessage(ICommandContext<? extends CommandSource> context, List<NucleusTextTemplateImpl> messages, String key) throws CommandException {
         if (messages.isEmpty()) {
-            throw ReturnMessageException.fromKey("command.serverlist.nomessages");
+            throw context.createException("command.serverlist.nomessages");
         }
 
+        CommandSource source = context.getCommandSource();
         List<Text> m = Lists.newArrayList();
         messages.stream().map(x -> x.getForCommandSource(source)).forEach(x -> {
             if (!m.isEmpty()) {
@@ -118,11 +108,10 @@ public class ServerListCommand extends AbstractCommand<CommandSource> implements
             m.add(x);
         });
 
-        Util.getPaginationBuilder(source).contents(m)
-                .title(Nucleus.getNucleus().getMessageProvider().getTextMessageWithFormat(key)).sendTo(source);
+        Util.getPaginationBuilder(source).contents(m).title(context.getMessage(key)).sendTo(source);
     }
 
-    @Override public void onReload() {
-        this.slc = getServiceUnchecked(ServerListConfigAdapter.class).getNodeOrDefault();
+    @Override public void onReload(INucleusServiceCollection serviceCollection) {
+        this.slc = serviceCollection.moduleDataProvider().getModuleConfig(ServerListConfig.class);
     }
 }

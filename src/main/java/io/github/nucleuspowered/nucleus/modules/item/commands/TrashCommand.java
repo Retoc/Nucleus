@@ -5,33 +5,42 @@
 package io.github.nucleuspowered.nucleus.modules.item.commands;
 
 import io.github.nucleuspowered.nucleus.Nucleus;
-import io.github.nucleuspowered.nucleus.internal.annotations.command.Permissions;
-import io.github.nucleuspowered.nucleus.internal.annotations.command.RegisterCommand;
-import io.github.nucleuspowered.nucleus.internal.command.AbstractCommand;
-import io.github.nucleuspowered.nucleus.internal.command.ReturnMessageException;
-import io.github.nucleuspowered.nucleus.internal.permissions.SuggestedLevel;
-import org.spongepowered.api.command.CommandResult;
-import org.spongepowered.api.command.args.CommandContext;
+import io.github.nucleuspowered.nucleus.internal.command.ICommandContext;
+import io.github.nucleuspowered.nucleus.internal.command.ICommandExecutor;
+import io.github.nucleuspowered.nucleus.internal.command.ICommandResult;
+import io.github.nucleuspowered.nucleus.internal.command.annotation.Command;
+import io.github.nucleuspowered.nucleus.internal.command.annotation.CommandModifier;
+import io.github.nucleuspowered.nucleus.internal.command.requirements.CommandModifiers;
+import io.github.nucleuspowered.nucleus.modules.item.ItemPermissions;
+import org.spongepowered.api.command.CommandException;
 import org.spongepowered.api.entity.living.player.Player;
-import org.spongepowered.api.event.cause.Cause;
 import org.spongepowered.api.item.inventory.Inventory;
 import org.spongepowered.api.item.inventory.InventoryArchetypes;
 import org.spongepowered.api.item.inventory.property.InventoryTitle;
 import org.spongepowered.api.util.annotation.NonnullByDefault;
 
-@RegisterCommand("trash")
-@Permissions(suggestedLevel = SuggestedLevel.USER)
 @NonnullByDefault
-public class TrashCommand extends AbstractCommand<Player> {
+@Command(
+        aliases = {"trash"},
+        basePermission = ItemPermissions.BASE_TRASH,
+        commandDescriptionKey = "trash",
+        modifiers = {
+                @CommandModifier(value = CommandModifiers.HAS_COOLDOWN, exemptPermission = ItemPermissions.EXEMPT_COOLDOWN_TRASH),
+                @CommandModifier(value = CommandModifiers.HAS_WARMUP, exemptPermission = ItemPermissions.EXEMPT_WARMUP_TRASH),
+                @CommandModifier(value = CommandModifiers.HAS_COST, exemptPermission = ItemPermissions.EXEMPT_COST_TRASH)
+        }
+)
+public class TrashCommand implements ICommandExecutor<Player> {
 
     @Override
-    protected CommandResult executeCommand(Player src, CommandContext args, Cause cause) throws Exception {
+    public ICommandResult execute(ICommandContext<? extends Player> context) throws CommandException {
+        Player src = context.getIfPlayer();
         if (src.openInventory(Inventory.builder().of(InventoryArchetypes.DOUBLE_CHEST)
-                .property(InventoryTitle.PROPERTY_NAME, new InventoryTitle(Nucleus.getNucleus().getMessageProvider().getTextMessageWithFormat("command.trash.title")))
+                .property(InventoryTitle.PROPERTY_NAME, new InventoryTitle(context.getMessage("command.trash.title")))
                 .build(Nucleus.getNucleus())).isPresent()) {
-            return CommandResult.success();
+            return context.successResult();
         }
 
-        throw ReturnMessageException.fromKey("command.trash.error");
+        return context.errorResult("command.trash.error");
     }
 }

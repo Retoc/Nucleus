@@ -4,63 +4,63 @@
  */
 package io.github.nucleuspowered.nucleus.modules.admin.commands;
 
-import io.github.nucleuspowered.nucleus.Nucleus;
 import io.github.nucleuspowered.nucleus.api.text.NucleusTextTemplate;
-import io.github.nucleuspowered.nucleus.internal.annotations.RunAsync;
-import io.github.nucleuspowered.nucleus.internal.annotations.command.NoModifiers;
-import io.github.nucleuspowered.nucleus.internal.annotations.command.Permissions;
-import io.github.nucleuspowered.nucleus.internal.annotations.command.RegisterCommand;
-import io.github.nucleuspowered.nucleus.internal.command.AbstractCommand;
+import io.github.nucleuspowered.nucleus.internal.command.ICommandContext;
+import io.github.nucleuspowered.nucleus.internal.command.ICommandExecutor;
+import io.github.nucleuspowered.nucleus.internal.command.ICommandResult;
 import io.github.nucleuspowered.nucleus.internal.command.NucleusParameters;
-import io.github.nucleuspowered.nucleus.internal.docgen.annotations.EssentialsEquivalent;
+import io.github.nucleuspowered.nucleus.internal.command.annotation.Command;
+import io.github.nucleuspowered.nucleus.internal.command.annotation.EssentialsEquivalent;
 import io.github.nucleuspowered.nucleus.internal.interfaces.Reloadable;
-import io.github.nucleuspowered.nucleus.internal.text.NucleusTextTemplateFactory;
-import io.github.nucleuspowered.nucleus.internal.text.NucleusTextTemplateMessageSender;
-import io.github.nucleuspowered.nucleus.modules.admin.AdminModule;
+import io.github.nucleuspowered.nucleus.modules.admin.AdminPermissions;
 import io.github.nucleuspowered.nucleus.modules.admin.config.AdminConfig;
-import io.github.nucleuspowered.nucleus.modules.admin.config.AdminConfigAdapter;
 import io.github.nucleuspowered.nucleus.modules.admin.config.BroadcastConfig;
-import org.spongepowered.api.command.CommandResult;
+import io.github.nucleuspowered.nucleus.services.INucleusServiceCollection;
+import io.github.nucleuspowered.nucleus.services.impl.texttemplatefactory.NucleusTextTemplateMessageSender;
+import org.spongepowered.api.command.CommandException;
 import org.spongepowered.api.command.CommandSource;
-import org.spongepowered.api.command.args.CommandContext;
 import org.spongepowered.api.command.args.CommandElement;
-import org.spongepowered.api.event.cause.Cause;
 import org.spongepowered.api.text.Text;
+import org.spongepowered.api.util.TypeTokens;
 import org.spongepowered.api.util.annotation.NonnullByDefault;
 
-@RunAsync
-@NoModifiers
-@Permissions
-@RegisterCommand({ "broadcast", "bcast", "bc" })
+@Command(aliases = {"broadcast", "bcast", "bc"}, basePermission = AdminPermissions.BASE_BROADCAST, commandDescriptionKey = "broadcast")
 @EssentialsEquivalent({"broadcast", "bcast"})
 @NonnullByDefault
-public class BroadcastCommand extends AbstractCommand<CommandSource> implements Reloadable {
+public class BroadcastCommand implements ICommandExecutor<CommandSource>, Reloadable {
     private BroadcastConfig bc = new BroadcastConfig();
 
     @Override
-    public CommandElement[] getArguments() {
+    public CommandElement[] parameters(INucleusServiceCollection serviceCollection) {
         return new CommandElement[] {
                 NucleusParameters.MESSAGE
         };
     }
 
     @Override
-    public CommandResult executeCommand(CommandSource src, CommandContext args, Cause cause) {
-        String m = args.requireOne(NucleusParameters.Keys.MESSAGE);
+    public ICommandResult execute(ICommandContext<? extends CommandSource> context) throws CommandException {
+        String m = context.requireOne(NucleusParameters.Keys.MESSAGE, TypeTokens.STRING_TOKEN);
 
-        Text p = this.bc.getPrefix().getForCommandSource(src);
-        Text s = this.bc.getSuffix().getForCommandSource(src);
+        Text p = this.bc.getPrefix().getForCommandSource(context.getCommandSource());
+        Text s = this.bc.getSuffix().getForCommandSource(context.getCommandSource());
 
         NucleusTextTemplate textTemplate =
-                NucleusTextTemplateFactory.createFromAmpersandString(m, p, s);
+                context.getServiceCollection().textTemplateFactory()
+                        .createFromAmpersandString(m, p, s);
 
-        new NucleusTextTemplateMessageSender(textTemplate, src).send(cause);
-        return CommandResult.success();
+        new NucleusTextTemplateMessageSender(
+                context.getServiceCollection().textTemplateFactory(),
+                textTemplate,
+                context.getServiceCollection().messageTokenService(),
+                context.getCommandSource()
+        ).send(context.getCause());
+        return context.successResult();
     }
 
-    @Override public void onReload() {
-        this.bc = Nucleus.getNucleus()
-            .getConfigValue(AdminModule.ID, AdminConfigAdapter.class, AdminConfig::getBroadcastMessage)
-            .orElseGet(BroadcastConfig::new);
+    @Override public void onReload(INucleusServiceCollection serviceCollection) {
+        this.bc = serviceCollection
+                .moduleDataProvider()
+                .getModuleConfig(AdminConfig.class)
+                .getBroadcastMessage();
     }
 }

@@ -37,7 +37,7 @@ public class NoteData implements Note {
     }
 
     @Override public Optional<UUID> getNoter() {
-        return this.noter.equals(Util.consoleFakeUUID) ? Optional.empty() : Optional.of(this.noter);
+        return this.noter.equals(Util.CONSOLE_FAKE_UUID) ? Optional.empty() : Optional.of(this.noter);
     }
 
     public UUID getNoterInternal() {

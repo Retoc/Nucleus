@@ -4,13 +4,14 @@
  */
 package io.github.nucleuspowered.nucleus.modules.jail.listeners;
 
-import io.github.nucleuspowered.nucleus.Nucleus;
 import io.github.nucleuspowered.nucleus.api.EventContexts;
-import io.github.nucleuspowered.nucleus.internal.CommandPermissionHandler;
 import io.github.nucleuspowered.nucleus.internal.interfaces.ListenerBase;
-import io.github.nucleuspowered.nucleus.modules.jail.commands.JailCommand;
-import io.github.nucleuspowered.nucleus.modules.jail.config.JailConfigAdapter;
+import io.github.nucleuspowered.nucleus.modules.jail.JailPermissions;
+import io.github.nucleuspowered.nucleus.modules.jail.config.JailConfig;
 import io.github.nucleuspowered.nucleus.modules.jail.services.JailHandler;
+import io.github.nucleuspowered.nucleus.services.IMessageProviderService;
+import io.github.nucleuspowered.nucleus.services.INucleusServiceCollection;
+import io.github.nucleuspowered.nucleus.services.IPermissionService;
 import org.spongepowered.api.command.CommandSource;
 import org.spongepowered.api.entity.living.player.Player;
 import org.spongepowered.api.event.Listener;
@@ -24,17 +25,15 @@ import javax.inject.Inject;
 
 public class InterceptTeleportListener implements ListenerBase.Conditional {
 
-    private final JailHandler handler = Nucleus.getNucleus().getInternalServiceManager().getServiceUnchecked(JailHandler.class);
-    private final String notify;
-    private final String teleport;
-    private final String teleportto;
+    private final JailHandler handler;
+    private final IPermissionService permissionService;
+    private final IMessageProviderService messageProvider;
 
     @Inject
-    public InterceptTeleportListener() {
-        CommandPermissionHandler cph = Nucleus.getNucleus().getPermissionRegistry().getPermissionsForNucleusCommand(JailCommand.class);
-        this.notify = cph.getPermissionWithSuffix("notify");
-        this.teleport = cph.getPermissionWithSuffix("teleportjailed");
-        this.teleportto = cph.getPermissionWithSuffix("teleporttojailed");
+    public InterceptTeleportListener(INucleusServiceCollection serviceCollection) {
+        this.handler = serviceCollection.getServiceUnchecked(JailHandler.class);
+        this.permissionService = serviceCollection.permissionService();
+        this.messageProvider = serviceCollection.messageProvider();
     }
 
     @Listener(order = Order.LAST)
@@ -43,20 +42,19 @@ public class InterceptTeleportListener implements ListenerBase.Conditional {
         if (!context.get(EventContexts.BYPASS_JAILING_RESTRICTION).orElse(false) &&
                 context.get(EventContexts.IS_JAILING_ACTION).orElse(false)) {
             if (this.handler.isPlayerJailed(player)) {
-                if (!hasPermission(cause, this.teleport)) {
+                if (!this.permissionService.hasPermission(cause, JailPermissions.JAIL_TELEPORTJAILED)) {
                     event.setCancelled(true);
-                    sendMessageTo(cause, "jail.abouttoteleporttarget.isjailed", player.getName());
-                } else if (!hasPermission(cause, this.teleportto)) {
+                    this.messageProvider.sendMessageTo(cause, "jail.abouttoteleporttarget.isjailed", player.getName());
+                } else if (!this.permissionService.hasPermission(cause, JailPermissions.JAIL_TELEPORTTOJAILED)) {
                     event.setCancelled(true);
-                    sendMessageTo(cause,"jail.abouttoteleportcause.targetisjailed", player.getName());
+                    this.messageProvider.sendMessageTo(cause,"jail.abouttoteleportcause.targetisjailed", player.getName());
                 }
             }
         }
     }
 
     @Override
-    public boolean shouldEnable() {
-        return Nucleus.getNucleus().getInternalServiceManager().getServiceUnchecked(JailConfigAdapter.class)
-                .getNodeOrDefault().aggressivelyDisableTeleportsForJailed();
+    public boolean shouldEnable(INucleusServiceCollection serviceCollection) {
+        return serviceCollection.moduleDataProvider().getModuleConfig(JailConfig.class).aggressivelyDisableTeleportsForJailed();
     }
 }

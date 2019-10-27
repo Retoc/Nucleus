@@ -4,11 +4,8 @@
  */
 package io.github.nucleuspowered.nucleus.modules.afk.listeners;
 
-import io.github.nucleuspowered.nucleus.Nucleus;
 import io.github.nucleuspowered.nucleus.internal.interfaces.ListenerBase;
-import io.github.nucleuspowered.nucleus.modules.afk.AFKModule;
 import io.github.nucleuspowered.nucleus.modules.afk.config.AFKConfig;
-import io.github.nucleuspowered.nucleus.modules.afk.config.AFKConfigAdapter;
 import io.github.nucleuspowered.nucleus.modules.afk.services.AFKHandler;
 import org.spongepowered.api.entity.living.player.Player;
 
@@ -16,13 +13,17 @@ import java.util.function.Predicate;
 
 abstract class AbstractAFKListener implements ListenerBase {
 
-    private final AFKHandler handler = Nucleus.getNucleus().getInternalServiceManager().getServiceUnchecked(AFKHandler.class);
+    private final AFKHandler handler;
+
+    protected AbstractAFKListener(AFKHandler handler) {
+        this.handler = handler;
+    }
 
     final void update(Player player) {
         this.handler.stageUserActivityUpdate(player);
     }
 
-    final boolean getTriggerConfigEntry(Predicate<AFKConfig.Triggers> triggersPredicate) {
-        return Nucleus.getNucleus().getConfigValue(AFKModule.ID, AFKConfigAdapter.class, x -> triggersPredicate.test(x.getTriggers())).orElse(false);
+    final boolean getTriggerConfigEntry(AFKConfig config, Predicate<AFKConfig.Triggers> triggersPredicate) {
+        return triggersPredicate.test(config.getTriggers());
     }
 }

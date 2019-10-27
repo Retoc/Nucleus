@@ -4,11 +4,9 @@
  */
 package io.github.nucleuspowered.nucleus.modules.teleport;
 
-import io.github.nucleuspowered.nucleus.Nucleus;
-import io.github.nucleuspowered.nucleus.internal.userprefs.NucleusKeysProvider;
-import io.github.nucleuspowered.nucleus.internal.userprefs.PreferenceKeyImpl;
-import io.github.nucleuspowered.nucleus.internal.userprefs.UserPrefKeys;
-import io.github.nucleuspowered.nucleus.modules.teleport.commands.TeleportToggleCommand;
+import io.github.nucleuspowered.nucleus.services.impl.userprefs.NucleusKeysProvider;
+import io.github.nucleuspowered.nucleus.services.impl.userprefs.PreferenceKeyImpl;
+import io.github.nucleuspowered.nucleus.services.impl.userprefs.UserPrefKeys;
 
 public class TeleportUserPrefKeys implements UserPrefKeys {
 
@@ -16,7 +14,7 @@ public class TeleportUserPrefKeys implements UserPrefKeys {
     public static final PreferenceKeyImpl<Boolean> TELEPORT_TARGETABLE = new PreferenceKeyImpl.BooleanKey(
             NucleusKeysProvider.TELEPORT_TARGETABLE_KEY,
             true,
-            Nucleus.getNucleus().getPermissionRegistry().getPermissionsForNucleusCommand(TeleportToggleCommand.class).getBase(),
+            TeleportPermissions.BASE_TPTOGGLE,
             "userpref.teleporttarget"
     );
 }

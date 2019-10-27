@@ -4,57 +4,66 @@
  */
 package io.github.nucleuspowered.nucleus.modules.item.commands.itemname;
 
-import io.github.nucleuspowered.nucleus.Nucleus;
-import io.github.nucleuspowered.nucleus.internal.annotations.command.Permissions;
-import io.github.nucleuspowered.nucleus.internal.annotations.command.RegisterCommand;
-import io.github.nucleuspowered.nucleus.internal.command.AbstractCommand;
-import io.github.nucleuspowered.nucleus.internal.command.ReturnMessageException;
-import io.github.nucleuspowered.nucleus.internal.messages.MessageProvider;
-import org.spongepowered.api.command.CommandResult;
-import org.spongepowered.api.command.args.CommandContext;
+import io.github.nucleuspowered.nucleus.internal.command.ICommandContext;
+import io.github.nucleuspowered.nucleus.internal.command.ICommandExecutor;
+import io.github.nucleuspowered.nucleus.internal.command.ICommandResult;
+import io.github.nucleuspowered.nucleus.internal.command.annotation.Command;
+import io.github.nucleuspowered.nucleus.internal.command.annotation.CommandModifier;
+import io.github.nucleuspowered.nucleus.internal.command.requirements.CommandModifiers;
+import io.github.nucleuspowered.nucleus.modules.item.ItemPermissions;
+import io.github.nucleuspowered.nucleus.services.INucleusServiceCollection;
+import org.spongepowered.api.command.CommandException;
 import org.spongepowered.api.command.args.CommandElement;
 import org.spongepowered.api.command.args.GenericArguments;
 import org.spongepowered.api.data.key.Keys;
 import org.spongepowered.api.data.type.HandTypes;
 import org.spongepowered.api.entity.living.player.Player;
-import org.spongepowered.api.event.cause.Cause;
 import org.spongepowered.api.item.inventory.ItemStack;
 import org.spongepowered.api.text.Text;
 import org.spongepowered.api.text.serializer.TextSerializers;
 import org.spongepowered.api.util.annotation.NonnullByDefault;
 
-@Permissions(prefix = "itemname")
 @NonnullByDefault
-@RegisterCommand(value = "set", subcommandOf = ItemNameCommand.class, rootAliasRegister = { "setitemname", "renameitem" })
-public class ItemNameSetCommand extends AbstractCommand<Player> {
+@Command(
+        aliases = { "set", "#setitemname", "#renameitem" },
+        basePermission = ItemPermissions.BASE_ITEMNAME_SET,
+        commandDescriptionKey = "itemname.set",
+        parentCommand = ItemNameCommand.class,
+        modifiers = {
+                @CommandModifier(value = CommandModifiers.HAS_COOLDOWN, exemptPermission = ItemPermissions.EXEMPT_COOLDOWN_ITEMNAME_SET),
+                @CommandModifier(value = CommandModifiers.HAS_WARMUP, exemptPermission = ItemPermissions.EXEMPT_WARMUP_ITEMNAME_SET),
+                @CommandModifier(value = CommandModifiers.HAS_COST, exemptPermission = ItemPermissions.EXEMPT_COST_ITEMNAME_SET)
+        }
+)
+public class ItemNameSetCommand implements ICommandExecutor<Player> {
 
     private final String nameKey = "name";
 
     @Override
-    public CommandElement[] getArguments() {
+    public CommandElement[] parameters(INucleusServiceCollection serviceCollection) {
         return new CommandElement[] {
                 GenericArguments.remainingJoinedStrings(Text.of(this.nameKey))
         };
     }
 
     @Override
-    public CommandResult executeCommand(Player src, CommandContext args, Cause cause) throws Exception {
-        MessageProvider provider = Nucleus.getNucleus().getMessageProvider();
+    public ICommandResult execute(ICommandContext<? extends Player> context) throws CommandException {
+        Player src = context.getIfPlayer();
         if (!src.getItemInHand(HandTypes.MAIN_HAND).isPresent()) {
-            throw ReturnMessageException.fromKey("command.itemname.set.noitem");
+            return context.errorResult("command.itemname.set.noitem");
         }
 
         ItemStack stack = src.getItemInHand(HandTypes.MAIN_HAND).get();
-        Text name = TextSerializers.FORMATTING_CODE.deserialize(args.<String>getOne(this.nameKey).get());
+        Text name = TextSerializers.FORMATTING_CODE.deserialize(context.requireOne(this.nameKey, String.class));
 
         if (stack.offer(Keys.DISPLAY_NAME, name).isSuccessful()) {
             src.setItemInHand(HandTypes.MAIN_HAND, stack);
 
-            src.sendMessage(provider.getTextMessageWithFormat("command.itemname.set.success"));
-            return CommandResult.success();
+            context.sendMessage("command.itemname.set.success");
+            return context.successResult();
         }
 
-        throw ReturnMessageException.fromKey("command.itemname.set.fail");
+        return context.errorResult("command.itemname.set.fail");
     }
 
 }

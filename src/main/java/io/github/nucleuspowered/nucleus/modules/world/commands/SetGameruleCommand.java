@@ -4,49 +4,50 @@
  */
 package io.github.nucleuspowered.nucleus.modules.world.commands;
 
-import io.github.nucleuspowered.nucleus.Nucleus;
-import io.github.nucleuspowered.nucleus.internal.annotations.command.NoModifiers;
-import io.github.nucleuspowered.nucleus.internal.annotations.command.Permissions;
-import io.github.nucleuspowered.nucleus.internal.annotations.command.RegisterCommand;
-import io.github.nucleuspowered.nucleus.internal.command.AbstractCommand;
-import io.github.nucleuspowered.nucleus.internal.permissions.SuggestedLevel;
-import org.spongepowered.api.command.CommandResult;
+import io.github.nucleuspowered.nucleus.internal.command.ICommandContext;
+import io.github.nucleuspowered.nucleus.internal.command.ICommandExecutor;
+import io.github.nucleuspowered.nucleus.internal.command.ICommandResult;
+import io.github.nucleuspowered.nucleus.internal.command.NucleusParameters;
+import io.github.nucleuspowered.nucleus.internal.command.annotation.Command;
+import io.github.nucleuspowered.nucleus.modules.world.WorldPermissions;
+import io.github.nucleuspowered.nucleus.services.INucleusServiceCollection;
+import org.spongepowered.api.command.CommandException;
 import org.spongepowered.api.command.CommandSource;
-import org.spongepowered.api.command.args.CommandContext;
 import org.spongepowered.api.command.args.CommandElement;
 import org.spongepowered.api.command.args.GenericArguments;
-import org.spongepowered.api.event.cause.Cause;
 import org.spongepowered.api.text.Text;
 import org.spongepowered.api.util.annotation.NonnullByDefault;
 import org.spongepowered.api.world.storage.WorldProperties;
 
-@NoModifiers
 @NonnullByDefault
-@Permissions(prefix = "world.gamerule", suggestedLevel = SuggestedLevel.ADMIN)
-@RegisterCommand(value = { "set" }, subcommandOf = GameruleCommand.class)
-public class SetGameruleCommand extends AbstractCommand<CommandSource> {
+@Command(
+        aliases = {"set"},
+        basePermission = WorldPermissions.BASE_WORLD_GAMERULE_SET,
+        commandDescriptionKey = "world.gamerule.set",
+        parentCommand = GameruleCommand.class
+)
+public class SetGameruleCommand implements ICommandExecutor<CommandSource> {
 
-    private static final String worldKey = "world";
     private static final String gameRuleKey = "gamerule";
     private static final String valueKey = "value";
 
-    @Override public CommandElement[] getArguments() {
+    @Override public CommandElement[] parameters(INucleusServiceCollection serviceCollection) {
         return new CommandElement[] {
-            GenericArguments.optionalWeak(GenericArguments.onlyOne(GenericArguments.world(Text.of(worldKey)))),
-            GenericArguments.string(Text.of(gameRuleKey)),
-            GenericArguments.string(Text.of(valueKey))
+                NucleusParameters.OPTIONAL_WORLD_PROPERTIES_ENABLED_ONLY,
+                GenericArguments.string(Text.of(gameRuleKey)),
+                GenericArguments.string(Text.of(valueKey))
         };
     }
 
-    @Override public CommandResult executeCommand(CommandSource src, CommandContext args, Cause cause) throws Exception {
-        WorldProperties worldProperties = getWorldFromUserOrArgs(src, worldKey, args);
-        String gameRule = args.<String>getOne(gameRuleKey).get();
-        String value = args.<String>getOne(valueKey).get();
+    @Override public ICommandResult execute(ICommandContext<? extends CommandSource> context) throws CommandException {
+        WorldProperties worldProperties = context.getWorldPropertiesOrFromSelf(NucleusParameters.Keys.WORLD)
+                .orElseThrow(() -> context.createException("command.world.player"));
+        String gameRule = context.requireOne(gameRuleKey, String.class);
+        String value = context.requireOne(valueKey, String.class);
 
         worldProperties.setGameRule(gameRule, value);
 
-        src.sendMessage(
-                Nucleus.getNucleus().getMessageProvider().getTextMessageWithFormat("command.world.gamerule.set.success", gameRule, value, worldProperties.getWorldName()));
-        return CommandResult.success();
+        context.sendMessage("command.world.gamerule.set.success", gameRule, value, worldProperties.getWorldName());
+        return context.successResult();
     }
 }

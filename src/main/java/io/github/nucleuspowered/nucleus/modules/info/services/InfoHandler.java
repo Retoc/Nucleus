@@ -8,11 +8,14 @@ import com.google.common.collect.ImmutableSet;
 import com.google.common.collect.Maps;
 import io.github.nucleuspowered.nucleus.Nucleus;
 import io.github.nucleuspowered.nucleus.NucleusPlugin;
-import io.github.nucleuspowered.nucleus.internal.TextFileController;
 import io.github.nucleuspowered.nucleus.internal.interfaces.Reloadable;
+import io.github.nucleuspowered.nucleus.io.TextFileController;
+import io.github.nucleuspowered.nucleus.internal.interfaces.SimpleReloadable;
 import io.github.nucleuspowered.nucleus.internal.interfaces.ServiceBase;
+import io.github.nucleuspowered.nucleus.services.INucleusServiceCollection;
 import org.spongepowered.api.Sponge;
 import org.spongepowered.api.asset.AssetManager;
+import org.spongepowered.api.plugin.PluginContainer;
 
 import java.io.IOException;
 import java.nio.file.Files;
@@ -28,7 +31,6 @@ import java.util.stream.Stream;
 public class InfoHandler implements Reloadable, ServiceBase {
 
     private final Map<String, TextFileController> infoFiles = Maps.newHashMap();
-    private final Nucleus plugin = Nucleus.getNucleus();
     private final Pattern validFile = Pattern.compile("[a-zA-Z0-9_.\\-]+\\.txt", Pattern.CASE_INSENSITIVE);
 
     public Set<String> getInfoSections() {
@@ -49,17 +51,25 @@ public class InfoHandler implements Reloadable, ServiceBase {
     }
 
     @Override
-    public void onReload() throws Exception {
+    public void onReload(INucleusServiceCollection serviceCollection) {
         // Get the config directory, check to see if "info/" exists.
         Path infoDir = Nucleus.getNucleus().getConfigDirPath().resolve("info");
         if (!Files.exists(infoDir)) {
-            Files.createDirectories(infoDir);
-            AssetManager am = Sponge.getAssetManager();
+            try {
+                Files.createDirectories(infoDir);
 
-            // They exist.
-            am.getAsset(Nucleus.getNucleus(), "info.txt").get().copyToFile(infoDir.resolve("info.txt"));
-            am.getAsset(Nucleus.getNucleus(), "colors.txt").get().copyToFile(infoDir.resolve("colors.txt"));
-            am.getAsset(Nucleus.getNucleus(), "links.txt").get().copyToFile(infoDir.resolve("links.txt"));
+                AssetManager am = Sponge.getAssetManager();
+
+                PluginContainer pluginContainer = serviceCollection.pluginContainer();
+
+                // They exist.
+                am.getAsset(pluginContainer, "info.txt").get().copyToFile(infoDir.resolve("info.txt"));
+                am.getAsset(pluginContainer, "colors.txt").get().copyToFile(infoDir.resolve("colors.txt"));
+                am.getAsset(pluginContainer, "links.txt").get().copyToFile(infoDir.resolve("links.txt"));
+            } catch (IOException e) {
+                e.printStackTrace();
+                return;
+            }
         } else if (!Files.isDirectory(infoDir)) {
             throw new IllegalStateException("The file " + infoDir.toAbsolutePath().toString() + " should be a directory.");
         }
@@ -69,6 +79,9 @@ public class InfoHandler implements Reloadable, ServiceBase {
         try (Stream<Path> sp = Files.list(infoDir)) {
             files = sp.filter(Files::isRegularFile)
               .filter(x -> this.validFile.matcher(x.getFileName().toString()).matches()).collect(Collectors.toList());
+        } catch (Exception ex) {
+            ex.printStackTrace();
+            return;
         }
 
         // Collect them and put the resultant controllers into a temporary map.
@@ -78,13 +91,14 @@ public class InfoHandler implements Reloadable, ServiceBase {
                 String name = x.getFileName().toString();
                 name = name.substring(0, name.length() - 4);
                 if (mst.keySet().stream().anyMatch(name::equalsIgnoreCase)) {
-                    Nucleus.getNucleus().getLogger().warn(NucleusPlugin.getNucleus().getMessageProvider().getMessageWithFormat("info.load.duplicate", x.getFileName().toString()));
+                    serviceCollection.logger().warn(
+                            serviceCollection.messageProvider().getMessageString("info.load.duplicate", x.getFileName().toString()));
 
                     // This is a function, so return is appropriate, not break.
                     return;
                 }
 
-                mst.put(name, new TextFileController(x, true));
+                mst.put(name, new TextFileController(serviceCollection.textTemplateFactory(), x, true));
             } catch (IOException e) {
                 e.printStackTrace();
             }

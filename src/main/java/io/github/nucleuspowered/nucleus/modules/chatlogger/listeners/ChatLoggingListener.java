@@ -7,7 +7,9 @@ package io.github.nucleuspowered.nucleus.modules.chatlogger.listeners;
 import io.github.nucleuspowered.nucleus.Nucleus;
 import io.github.nucleuspowered.nucleus.Util;
 import io.github.nucleuspowered.nucleus.modules.chatlogger.ChatLoggerModule;
+import io.github.nucleuspowered.nucleus.modules.chatlogger.config.ChatLoggingConfig;
 import io.github.nucleuspowered.nucleus.modules.chatlogger.config.ChatLoggingConfigAdapter;
+import io.github.nucleuspowered.nucleus.services.INucleusServiceCollection;
 import org.spongepowered.api.command.CommandSource;
 import org.spongepowered.api.event.Event;
 import org.spongepowered.api.event.Listener;
@@ -17,7 +19,14 @@ import org.spongepowered.api.event.message.MessageChannelEvent;
 
 import java.util.Optional;
 
+import javax.inject.Inject;
+
 public class ChatLoggingListener extends AbstractLoggerListener {
+
+    @Inject
+    ChatLoggingListener(INucleusServiceCollection serviceCollection) {
+        super(serviceCollection);
+    }
 
     @Listener(order = Order.LAST)
     public void onCommand(MessageChannelEvent.Chat event) {
@@ -40,13 +49,13 @@ public class ChatLoggingListener extends AbstractLoggerListener {
     }
 
     private void log(String s, CommandSource source) {
-        String message = Nucleus.getNucleus().getMessageProvider().getMessageWithFormat("chatlog.chat", source.getName(), s);
+        String message = this.messageProviderService.getMessageString("chatlog.chat", source.getName(), s);
         this.handler.queueEntry(message);
     }
 
-    @Override public boolean shouldEnable() {
-        return Nucleus.getNucleus().getConfigValue(ChatLoggerModule.ID, ChatLoggingConfigAdapter.class, x -> x.isEnableLog() && x.isLogChat())
-                .orElse(false);
+    @Override public boolean shouldEnable(INucleusServiceCollection serviceCollection) {
+        ChatLoggingConfig config = getConfig(serviceCollection);
+        return config.isEnableLog() && config.isLogChat();
     }
 
     private Optional<CommandSource> getSource(Event event) {

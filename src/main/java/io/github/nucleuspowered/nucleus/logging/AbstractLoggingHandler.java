@@ -6,8 +6,9 @@ package io.github.nucleuspowered.nucleus.logging;
 
 import com.google.common.base.Preconditions;
 import com.google.common.collect.Lists;
-import io.github.nucleuspowered.nucleus.Nucleus;
-import io.github.nucleuspowered.nucleus.NucleusPlugin;
+import io.github.nucleuspowered.nucleus.internal.interfaces.Reloadable;
+import io.github.nucleuspowered.nucleus.services.IMessageProviderService;
+import org.slf4j.Logger;
 import org.spongepowered.api.GameState;
 import org.spongepowered.api.Sponge;
 
@@ -22,21 +23,29 @@ import java.util.Locale;
 
 import javax.inject.Inject;
 
-public abstract class AbstractLoggingHandler {
+public abstract class AbstractLoggingHandler implements Reloadable {
 
-    private static final DateTimeFormatter formatter = DateTimeFormatter.ofLocalizedDateTime(FormatStyle.SHORT)
-        .withLocale(Locale.getDefault()).withZone(ZoneId.systemDefault());
+    private static final DateTimeFormatter formatter = DateTimeFormatter
+            .ofLocalizedDateTime(FormatStyle.SHORT)
+            .withLocale(Locale.getDefault())
+            .withZone(ZoneId.systemDefault());
+    private final IMessageProviderService messageProviderService;
+    private final Logger slogger;
     protected DateRotatableFileLogger logger;
     private final List<String> queueEntry = Lists.newArrayList();
     private final String directoryName;
     private final String filePrefix;
     private final Object locking = new Object();
-    private final Nucleus plugin = Nucleus.getNucleus();
 
     @Inject
-    public AbstractLoggingHandler(String directoryName, String filePrefix) {
+    public AbstractLoggingHandler(String directoryName,
+            String filePrefix,
+            IMessageProviderService messageProviderService,
+            Logger logger) {
         this.directoryName = directoryName;
         this.filePrefix = filePrefix;
+        this.messageProviderService = messageProviderService;
+        this.slogger = logger;
     }
 
     public void queueEntry(String s) {
@@ -46,8 +55,6 @@ public abstract class AbstractLoggingHandler {
             }
         }
     }
-
-    public abstract void onReload() throws Exception;
 
     public void onServerShutdown() throws IOException {
         Preconditions.checkState(Sponge.getGame().getState().equals(GameState.SERVER_STOPPED));
@@ -79,11 +86,8 @@ public abstract class AbstractLoggingHandler {
                 try {
                     createLogger();
                 } catch (IOException e) {
-                    this.plugin.getLogger().warn(NucleusPlugin.getNucleus().getMessageProvider().getMessageWithFormat("commandlog.couldnotwrite"));
-                    if (this.plugin.isDebugMode()) {
-                        e.printStackTrace();
-                    }
-
+                    this.slogger.warn(this.messageProviderService.getMessageString("commandlog.couldnotwrite"));
+                    e.printStackTrace();
                     return;
                 }
             } else {
@@ -94,10 +98,8 @@ public abstract class AbstractLoggingHandler {
         try {
             writeEntry(l);
         } catch (IOException e) {
-            this.plugin.getLogger().warn(NucleusPlugin.getNucleus().getMessageProvider().getMessageWithFormat("commandlog.couldnotwrite"));
-            if (this.plugin.isDebugMode()) {
-                e.printStackTrace();
-            }
+            this.slogger.warn(this.messageProviderService.getMessageString("commandlog.couldnotwrite"));
+            e.printStackTrace();
         }
     }
 

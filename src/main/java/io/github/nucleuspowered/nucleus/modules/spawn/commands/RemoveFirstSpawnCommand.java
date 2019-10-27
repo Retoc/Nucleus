@@ -4,35 +4,33 @@
  */
 package io.github.nucleuspowered.nucleus.modules.spawn.commands;
 
-import io.github.nucleuspowered.nucleus.Nucleus;
-import io.github.nucleuspowered.nucleus.internal.annotations.RunAsync;
-import io.github.nucleuspowered.nucleus.internal.annotations.command.NoModifiers;
-import io.github.nucleuspowered.nucleus.internal.annotations.command.Permissions;
-import io.github.nucleuspowered.nucleus.internal.annotations.command.RegisterCommand;
-import io.github.nucleuspowered.nucleus.internal.command.AbstractCommand;
+import io.github.nucleuspowered.nucleus.internal.command.ICommandContext;
+import io.github.nucleuspowered.nucleus.internal.command.ICommandExecutor;
+import io.github.nucleuspowered.nucleus.internal.command.ICommandResult;
+import io.github.nucleuspowered.nucleus.internal.command.annotation.Command;
 import io.github.nucleuspowered.nucleus.modules.spawn.SpawnKeys;
-import org.spongepowered.api.command.CommandResult;
+import io.github.nucleuspowered.nucleus.modules.spawn.SpawnPermissions;
+import org.spongepowered.api.command.CommandException;
 import org.spongepowered.api.command.CommandSource;
-import org.spongepowered.api.command.args.CommandContext;
-import org.spongepowered.api.event.cause.Cause;
 import org.spongepowered.api.util.annotation.NonnullByDefault;
 
-/**
- * plugin.firstspawn.remove.base
- */
-@RegisterCommand(value = {"del", "rm"}, subcommandOf = SetFirstSpawnCommand.class)
-@Permissions(prefix = "firstspawn", mainOverride = "remove")
-@NoModifiers
-@RunAsync
 @NonnullByDefault
-public class RemoveFirstSpawnCommand extends AbstractCommand<CommandSource> {
+@Command(
+        aliases = { "del", "rm" },
+        basePermission = SpawnPermissions.BASE_SETFIRSTSPAWN_DEL,
+        commandDescriptionKey = "setfirstspawn.del",
+        async = true,
+        parentCommand = SetFirstSpawnCommand.class
+)
+public class RemoveFirstSpawnCommand implements ICommandExecutor<CommandSource> {
 
-    @Override
-    public CommandResult executeCommand(CommandSource src, CommandContext args, Cause cause) {
-        Nucleus.getNucleus().getStorageManager().getGeneralService()
+    @Override public ICommandResult execute(ICommandContext<? extends CommandSource> context) throws CommandException {
+        context.getServiceCollection().storageManager()
+                .getGeneralService()
                 .getOrNewOnThread()
                 .remove(SpawnKeys.FIRST_SPAWN_LOCATION);
-        src.sendMessage(Nucleus.getNucleus().getMessageProvider().getTextMessageWithFormat("command.setfirstspawn.remove"));
-        return CommandResult.success();
+        context.sendMessage("command.setfirstspawn.remove");
+        return context.successResult();
     }
+
 }

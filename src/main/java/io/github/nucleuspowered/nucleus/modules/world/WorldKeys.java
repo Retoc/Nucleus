@@ -5,7 +5,7 @@
 package io.github.nucleuspowered.nucleus.modules.world;
 
 import com.google.common.reflect.TypeToken;
-import io.github.nucleuspowered.nucleus.storage.dataobjects.modular.IWorldDataObject;
+import io.github.nucleuspowered.nucleus.services.impl.storage.dataobjects.modular.IWorldDataObject;
 import io.github.nucleuspowered.storage.dataobjects.keyed.DataKey;
 
 public class WorldKeys {

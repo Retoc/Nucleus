@@ -4,12 +4,10 @@
  */
 package io.github.nucleuspowered.nucleus.modules.chat.listeners;
 
-import io.github.nucleuspowered.nucleus.Nucleus;
 import io.github.nucleuspowered.nucleus.Util;
 import io.github.nucleuspowered.nucleus.internal.interfaces.ListenerBase;
-import io.github.nucleuspowered.nucleus.modules.chat.ChatModule;
 import io.github.nucleuspowered.nucleus.modules.chat.config.ChatConfig;
-import io.github.nucleuspowered.nucleus.modules.chat.config.ChatConfigAdapter;
+import io.github.nucleuspowered.nucleus.services.INucleusServiceCollection;
 import org.spongepowered.api.entity.living.player.Player;
 import org.spongepowered.api.event.Listener;
 import org.spongepowered.api.event.Order;
@@ -43,8 +41,8 @@ public class BodyFixChatListener implements ListenerBase.Conditional, ListenerBa
         }
     }
 
-    @Override public boolean shouldEnable() {
-        return Nucleus.getNucleus().getConfigValue(ChatModule.ID, ChatConfigAdapter.class, ChatConfig::isCheckBody).orElse(false);
+    @Override public boolean shouldEnable(INucleusServiceCollection serviceCollection) {
+        return serviceCollection.moduleDataProvider().getModuleConfig(ChatConfig.class).isCheckBody();
     }
 
 }

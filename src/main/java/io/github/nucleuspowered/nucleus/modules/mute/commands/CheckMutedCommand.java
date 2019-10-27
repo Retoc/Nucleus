@@ -4,18 +4,14 @@
  */
 package io.github.nucleuspowered.nucleus.modules.mute.commands;
 
-import io.github.nucleuspowered.nucleus.Nucleus;
 import io.github.nucleuspowered.nucleus.Util;
-import io.github.nucleuspowered.nucleus.internal.annotations.RunAsync;
-import io.github.nucleuspowered.nucleus.internal.annotations.command.NoModifiers;
-import io.github.nucleuspowered.nucleus.internal.annotations.command.Permissions;
-import io.github.nucleuspowered.nucleus.internal.annotations.command.RegisterCommand;
-import io.github.nucleuspowered.nucleus.internal.command.AbstractCommand;
-import io.github.nucleuspowered.nucleus.internal.messages.MessageProvider;
-import org.spongepowered.api.command.CommandResult;
+import io.github.nucleuspowered.nucleus.internal.command.ICommandContext;
+import io.github.nucleuspowered.nucleus.internal.command.ICommandExecutor;
+import io.github.nucleuspowered.nucleus.internal.command.ICommandResult;
+import io.github.nucleuspowered.nucleus.internal.command.annotation.Command;
+import io.github.nucleuspowered.nucleus.modules.mute.MutePermissions;
+import org.spongepowered.api.command.CommandException;
 import org.spongepowered.api.command.CommandSource;
-import org.spongepowered.api.command.args.CommandContext;
-import org.spongepowered.api.event.cause.Cause;
 import org.spongepowered.api.text.Text;
 import org.spongepowered.api.text.action.TextActions;
 import org.spongepowered.api.util.annotation.NonnullByDefault;
@@ -24,34 +20,30 @@ import java.util.List;
 import java.util.UUID;
 import java.util.stream.Collectors;
 
-@Permissions
-@RunAsync
-@NoModifiers
 @NonnullByDefault
-@RegisterCommand("checkmuted")
-public class CheckMutedCommand extends AbstractCommand<CommandSource> {
+@Command(aliases = "checkmuted", basePermission = MutePermissions.BASE_CHECKMUTED, commandDescriptionKey = "checkmuted", async = true)
+public class CheckMutedCommand implements ICommandExecutor<CommandSource> {
 
-    @Override
-    protected CommandResult executeCommand(CommandSource src, CommandContext args, Cause cause) {
+    @Override public ICommandResult execute(ICommandContext<? extends CommandSource> context) throws CommandException {
+
         // Using the cache, tell us who is jailed.
-        MessageProvider provider = Nucleus.getNucleus().getMessageProvider();
-        List<UUID> usersInMute = Nucleus.getNucleus().getUserCacheService().getMuted();
+        List<UUID> usersInMute = context.getServiceCollection().userCacheService().getMuted();
 
         if (usersInMute.isEmpty()) {
-            src.sendMessage(provider.getTextMessageWithFormat("command.checkmuted.none"));
-            return CommandResult.success();
+            context.sendMessage("command.checkmuted.none");
+            return context.successResult();
         }
 
         // Get the users in this jail, or all jails
-        Util.getPaginationBuilder(src)
-            .title(provider.getTextMessageWithFormat("command.checkmuted.header"))
+        Util.getPaginationBuilder(context.getCommandSource())
+            .title(context.getMessage("command.checkmuted.header"))
             .contents(usersInMute.stream().map(x -> {
-                Text name = Nucleus.getNucleus().getNameUtil().getName(x).orElseGet(() -> Text.of("unknown: ", x.toString()));
+                Text name = context.getServiceCollection().playerDisplayNameService().getDisplayName(x);
                 return name.toBuilder()
-                    .onHover(TextActions.showText(provider.getTextMessageWithFormat("command.checkmuted.hover")))
+                    .onHover(TextActions.showText(context.getMessage("command.checkmuted.hover")))
                     .onClick(TextActions.runCommand("/nucleus:checkmute " + x.toString()))
                     .build();
-            }).collect(Collectors.toList())).sendTo(src);
-        return CommandResult.success();
+            }).collect(Collectors.toList())).sendTo(context.getCommandSource());
+        return context.successResult();
     }
 }

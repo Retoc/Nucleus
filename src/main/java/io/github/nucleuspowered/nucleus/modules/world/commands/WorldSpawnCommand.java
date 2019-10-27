@@ -4,32 +4,35 @@
  */
 package io.github.nucleuspowered.nucleus.modules.world.commands;
 
-import io.github.nucleuspowered.nucleus.Nucleus;
-import io.github.nucleuspowered.nucleus.internal.annotations.command.Permissions;
-import io.github.nucleuspowered.nucleus.internal.annotations.command.RegisterCommand;
-import io.github.nucleuspowered.nucleus.internal.command.AbstractCommand;
-import io.github.nucleuspowered.nucleus.internal.permissions.SuggestedLevel;
-import io.github.nucleuspowered.nucleus.modules.core.services.SafeTeleportService;
-import org.spongepowered.api.command.CommandResult;
-import org.spongepowered.api.command.args.CommandContext;
+import io.github.nucleuspowered.nucleus.internal.command.ICommandContext;
+import io.github.nucleuspowered.nucleus.internal.command.ICommandExecutor;
+import io.github.nucleuspowered.nucleus.internal.command.ICommandResult;
+import io.github.nucleuspowered.nucleus.internal.command.annotation.Command;
+import io.github.nucleuspowered.nucleus.internal.command.annotation.CommandModifier;
+import io.github.nucleuspowered.nucleus.internal.command.requirements.CommandModifiers;
+import io.github.nucleuspowered.nucleus.modules.world.WorldPermissions;
+import org.spongepowered.api.command.CommandException;
 import org.spongepowered.api.entity.living.player.Player;
-import org.spongepowered.api.event.cause.Cause;
 import org.spongepowered.api.util.annotation.NonnullByDefault;
 
-/**
- * Teleports you to the world spawn.
- *
- * Command Usage: /world spawn Permission: nucleus.world.spawn.base
- */
-@Permissions(prefix = "world", suggestedLevel = SuggestedLevel.ADMIN)
-@RegisterCommand(value = {"spawn"}, subcommandOf = WorldCommand.class)
 @NonnullByDefault
-public class WorldSpawnCommand extends AbstractCommand<Player> {
+@Command(
+        aliases = {"spawn"},
+        basePermission = WorldPermissions.BASE_WORLD_SPAWN,
+        commandDescriptionKey = "world.spawn",
+        parentCommand = WorldCommand.class,
+        modifiers = {
+                @CommandModifier(value = CommandModifiers.HAS_COOLDOWN, exemptPermission = WorldPermissions.EXEMPT_COOLDOWN_WORLD_SPAWN),
+                @CommandModifier(value = CommandModifiers.HAS_WARMUP, exemptPermission = WorldPermissions.EXEMPT_WARMUP_WORLD_SPAWN),
+                @CommandModifier(value = CommandModifiers.HAS_COST, exemptPermission = WorldPermissions.EXEMPT_COST_WORLD_SPAWN)
+        }
+)
+public class WorldSpawnCommand implements ICommandExecutor<Player> {
 
-    @Override
-    public CommandResult executeCommand(Player pl, CommandContext args, Cause cause) {
-        SafeTeleportService.setLocation(pl, pl.getWorld().getSpawnLocation());
-        pl.sendMessage(Nucleus.getNucleus().getMessageProvider().getTextMessageWithFormat("command.world.spawn.success"));
-        return CommandResult.success();
+    @Override public ICommandResult execute(ICommandContext<? extends Player> context) throws CommandException {
+        context.getServiceCollection().teleportService()
+                .setLocation(context.getIfPlayer(), context.getIfPlayer().getWorld().getSpawnLocation());
+        context.sendMessage("command.world.spawn.success");
+        return context.successResult();
     }
 }

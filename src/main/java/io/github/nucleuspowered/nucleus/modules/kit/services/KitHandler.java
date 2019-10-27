@@ -15,29 +15,24 @@ import io.github.nucleuspowered.nucleus.api.exceptions.KitRedeemException;
 import io.github.nucleuspowered.nucleus.api.nucleusdata.Kit;
 import io.github.nucleuspowered.nucleus.api.service.NucleusKitService;
 import io.github.nucleuspowered.nucleus.dataservices.KitDataService;
-import io.github.nucleuspowered.nucleus.internal.CommandPermissionHandler;
-import io.github.nucleuspowered.nucleus.internal.PermissionRegistry;
 import io.github.nucleuspowered.nucleus.internal.annotations.APIService;
 import io.github.nucleuspowered.nucleus.internal.interfaces.Reloadable;
 import io.github.nucleuspowered.nucleus.internal.interfaces.ServiceBase;
-import io.github.nucleuspowered.nucleus.internal.text.NucleusTextTemplateFactory;
-import io.github.nucleuspowered.nucleus.internal.traits.InternalServiceManagerTrait;
-import io.github.nucleuspowered.nucleus.internal.traits.MessageProviderTrait;
-import io.github.nucleuspowered.nucleus.internal.traits.PermissionTrait;
 import io.github.nucleuspowered.nucleus.modules.kit.KitKeys;
-import io.github.nucleuspowered.nucleus.modules.kit.commands.kit.KitCommand;
+import io.github.nucleuspowered.nucleus.modules.kit.KitPermissions;
 import io.github.nucleuspowered.nucleus.modules.kit.config.KitConfig;
-import io.github.nucleuspowered.nucleus.modules.kit.config.KitConfigAdapter;
 import io.github.nucleuspowered.nucleus.modules.kit.events.KitEvent;
 import io.github.nucleuspowered.nucleus.modules.kit.misc.KitRedeemResult;
 import io.github.nucleuspowered.nucleus.modules.kit.misc.SingleKit;
-import io.github.nucleuspowered.nucleus.storage.dataobjects.modular.IUserDataObject;
+import io.github.nucleuspowered.nucleus.modules.kit.parameters.KitParameter;
+import io.github.nucleuspowered.nucleus.services.INucleusServiceCollection;
+import io.github.nucleuspowered.nucleus.services.impl.storage.dataobjects.modular.IUserDataObject;
 import org.spongepowered.api.Sponge;
+import org.spongepowered.api.command.args.CommandElement;
 import org.spongepowered.api.command.source.ConsoleSource;
 import org.spongepowered.api.data.key.Keys;
 import org.spongepowered.api.entity.living.player.Player;
 import org.spongepowered.api.event.CauseStackManager;
-import org.spongepowered.api.event.cause.Cause;
 import org.spongepowered.api.item.ItemTypes;
 import org.spongepowered.api.item.inventory.Container;
 import org.spongepowered.api.item.inventory.Inventory;
@@ -63,29 +58,49 @@ import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 
 import javax.annotation.Nullable;
+import javax.inject.Inject;
 
 @APIService(NucleusKitService.class)
-public class KitHandler implements NucleusKitService, Reloadable, InternalServiceManagerTrait, MessageProviderTrait, PermissionTrait, ServiceBase {
+public class KitHandler implements NucleusKitService, Reloadable, ServiceBase {
 
     private static final InventoryTransactionResult EMPTY_ITR =
             InventoryTransactionResult.builder().type(InventoryTransactionResult.Type.SUCCESS).build();
 
     private static final Pattern inventory = Pattern.compile("\\{\\{.+?}}");
-
-    public static String getPermissionForKit(String kitName) {
-        return PermissionRegistry.PERMISSIONS_PREFIX + "kits." + kitName.toLowerCase();
-    }
+    private final INucleusServiceCollection serviceCollection;
 
     private boolean isProcessTokens = false;
     private boolean isMustGetAll = false;
 
-    private final CommandPermissionHandler cph = Nucleus.getNucleus()
-            .getPermissionRegistry().getPermissionsForNucleusCommand(KitCommand.class);
-
     private final List<Container> viewers = Lists.newArrayList();
     private final Map<Container, Tuple<Kit, Inventory>> inventoryKitMap = Maps.newHashMap();
 
+    private final KitParameter noPerm;
+    private final KitParameter perm;
+
+    // Needs to be redone
     private final KitDataService store = Nucleus.getNucleus().getKitDataService();
+
+    @Inject
+    public KitHandler(INucleusServiceCollection serviceCollection) {
+        this.serviceCollection = serviceCollection;
+        this.noPerm = new KitParameter(
+                this,
+                serviceCollection.messageProvider(),
+                serviceCollection.permissionService(),
+                false
+        );
+        this.perm = new KitParameter(
+                this,
+                serviceCollection.messageProvider(),
+                serviceCollection.permissionService(),
+                true
+        );
+    }
+
+    public CommandElement createKitElement(boolean permissionCheck) {
+        return permissionCheck ? this.perm : this.noPerm;
+    }
 
     public boolean exists(String name, boolean includeHidden) {
         return this.store.getKitNames(includeHidden).stream().anyMatch(x -> x.equalsIgnoreCase(name));
@@ -131,7 +146,8 @@ public class KitHandler implements NucleusKitService, Reloadable, InternalServic
             boolean checkCooldown,
             boolean isMustGetAll,
             boolean isFirstJoin) throws KitRedeemException {
-        IUserDataObject dataObject = Nucleus.getNucleus().getStorageManager()
+        IUserDataObject dataObject = this.serviceCollection
+                .storageManager()
                 .getUserService()
                 .getOrNewOnThread(player.getUniqueId());
 
@@ -217,7 +233,7 @@ public class KitHandler implements NucleusKitService, Reloadable, InternalServic
                 if (checkCooldown) {
                     redeemed.put(kit.getName().toLowerCase(), now);
                     dataObject.set(KitKeys.REDEEMED_KITS, redeemed);
-                    Nucleus.getNucleus().getStorageManager().getUserService().save(player.getUniqueId(), dataObject);
+                    this.serviceCollection.storageManager().getUserService().save(player.getUniqueId(), dataObject);
                 }
 
                 Sponge.getEventManager().post(new KitEvent.PostRedeem(frame.getCurrentCause(), timeOfLastUse, kit, player, original,
@@ -250,7 +266,7 @@ public class KitHandler implements NucleusKitService, Reloadable, InternalServic
 
     public boolean checkOneTime(Kit kit, Player player) {
         // if it's one time only and the user does not have an exemption...
-        return !kit.isOneTime() || hasPermission(player, this.cph.getPermissionWithSuffix("exempt.onetime"));
+        return !kit.isOneTime() || this.serviceCollection.permissionService().hasPermission(player, KitPermissions.KIT_EXEMPT_ONETIME);
     }
 
     public Optional<Duration> checkCooldown(Kit kit, Player player, Instant timeOfLastUse) {
@@ -261,7 +277,8 @@ public class KitHandler implements NucleusKitService, Reloadable, InternalServic
 
             // If we have a cooldown for the kit, and we don't have permission to
             // bypass it...
-            if (!this.cph.testCooldownExempt(player) && kit.getCooldown().map(Duration::getSeconds).orElse(0L) > 0) {
+            if (!this.serviceCollection.permissionService().hasPermission(player, KitPermissions.KIT_EXEMPT_COOLDOWN)
+                    && kit.getCooldown().map(Duration::getSeconds).orElse(0L) > 0) {
 
                 // ...and we haven't reached the cooldown point yet...
                 Instant timeForNextUse = timeOfLastUse.plus(kit.getCooldown().get());
@@ -307,9 +324,10 @@ public class KitHandler implements NucleusKitService, Reloadable, InternalServic
 
     @Override
     public void renameKit(final String kitName, final String newKitName) throws IllegalArgumentException {
-        Kit targetKit = getKit(kitName).orElseThrow(() -> new IllegalArgumentException(getMessageString("kit.noexists", kitName)));
+        Kit targetKit = getKit(kitName).orElseThrow(() -> new IllegalArgumentException(
+                this.serviceCollection.messageProvider().getMessageString("kit.noexists", kitName)));
         if (Util.getKeyIgnoreCase(getKitNames(), newKitName).isPresent()) {
-            throw new IllegalArgumentException(getMessageString("kit.cannotrename", kitName, newKitName));
+            throw new IllegalArgumentException(this.serviceCollection.messageProvider().getMessageString("kit.cannotrename", kitName, newKitName));
         }
 
         saveKitInternal(newKitName, targetKit);
@@ -366,7 +384,8 @@ public class KitHandler implements NucleusKitService, Reloadable, InternalServic
             x.get(Keys.DISPLAY_NAME).ifPresent(text -> {
                 if (m.reset(text.toPlain()).find()) {
                     x.offer(Keys.DISPLAY_NAME,
-                            NucleusTextTemplateFactory.createFromAmpersandString(TextSerializers.FORMATTING_CODE.serialize(text))
+                            this.serviceCollection.textTemplateFactory()
+                                    .createFromAmpersandString(TextSerializers.FORMATTING_CODE.serialize(text))
                                     .getForCommandSource(player, null, null));
                 }
             });
@@ -375,7 +394,8 @@ public class KitHandler implements NucleusKitService, Reloadable, InternalServic
                 if (text.stream().map(Text::toPlain).anyMatch(y -> m.reset(y).find())) {
                     x.offer(Keys.ITEM_LORE,
                             text.stream().map(y ->
-                                    NucleusTextTemplateFactory.createFromAmpersandString(TextSerializers.FORMATTING_CODE.serialize(y))
+                                    this.serviceCollection.textTemplateFactory()
+                                            .createFromAmpersandString(TextSerializers.FORMATTING_CODE.serialize(y))
                                             .getForCommandSource(player, null, null)).collect(Collectors.toList()));
                 }
             });
@@ -427,8 +447,8 @@ public class KitHandler implements NucleusKitService, Reloadable, InternalServic
     }
 
     @Override
-    public void onReload() {
-        KitConfig kitConfig = this.getServiceUnchecked(KitConfigAdapter.class).getNodeOrDefault();
+    public void onReload(INucleusServiceCollection serviceCollection) {
+        KitConfig kitConfig = serviceCollection.moduleDataProvider().getModuleConfig(KitConfig.class);
         this.isMustGetAll = kitConfig.isMustGetAll();
         this.isProcessTokens = kitConfig.isProcessTokens();
     }

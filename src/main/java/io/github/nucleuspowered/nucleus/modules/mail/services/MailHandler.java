@@ -6,17 +6,18 @@ package io.github.nucleuspowered.nucleus.modules.mail.services;
 
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.Lists;
-import io.github.nucleuspowered.nucleus.Nucleus;
 import io.github.nucleuspowered.nucleus.Util;
 import io.github.nucleuspowered.nucleus.api.nucleusdata.MailMessage;
 import io.github.nucleuspowered.nucleus.api.service.NucleusMailService;
 import io.github.nucleuspowered.nucleus.internal.annotations.APIService;
 import io.github.nucleuspowered.nucleus.internal.interfaces.ServiceBase;
-import io.github.nucleuspowered.nucleus.internal.messages.MessageProvider;
 import io.github.nucleuspowered.nucleus.modules.mail.MailKeys;
 import io.github.nucleuspowered.nucleus.modules.mail.data.MailData;
 import io.github.nucleuspowered.nucleus.modules.mail.events.InternalNucleusMailEvent;
-import io.github.nucleuspowered.nucleus.storage.dataobjects.modular.IUserDataObject;
+import io.github.nucleuspowered.nucleus.services.IMessageProviderService;
+import io.github.nucleuspowered.nucleus.services.INucleusServiceCollection;
+import io.github.nucleuspowered.nucleus.services.IStorageManager;
+import io.github.nucleuspowered.nucleus.services.impl.storage.dataobjects.modular.IUserDataObject;
 import org.spongepowered.api.Sponge;
 import org.spongepowered.api.entity.living.player.User;
 import org.spongepowered.api.text.Text;
@@ -29,9 +30,18 @@ import java.util.Objects;
 import java.util.function.Predicate;
 
 import javax.annotation.Nullable;
+import javax.inject.Inject;
 
+@SuppressWarnings("UnstableApiUsage")
 @APIService(NucleusMailService.class)
 public class MailHandler implements NucleusMailService, ServiceBase {
+
+    private final INucleusServiceCollection serviceCollection;
+
+    @Inject
+    public MailHandler(INucleusServiceCollection serviceCollection) {
+        this.serviceCollection = serviceCollection;
+    }
 
     @Override
     public final List<MailMessage> getMail(User player, MailFilter... filters) {
@@ -39,7 +49,7 @@ public class MailHandler implements NucleusMailService, ServiceBase {
     }
 
     public final List<MailMessage> getMailInternal(User player, MailFilter... filters) {
-        List<MailMessage> data = Nucleus.getNucleus().getStorageManager().getUserService()
+        List<MailMessage> data = this.serviceCollection.storageManager().getUserService()
                 .getOrNewOnThread(player.getUniqueId())
                 .getNullable(MailKeys.MAIL_DATA);
         if (data == null || data.isEmpty()) {
@@ -56,7 +66,7 @@ public class MailHandler implements NucleusMailService, ServiceBase {
 
     @Override
     public boolean removeMail(User player, MailMessage mailData) {
-        IUserDataObject dataObject = Nucleus.getNucleus().getStorageManager().getUserService().getOrNewOnThread(player.getUniqueId());
+        IUserDataObject dataObject = this.serviceCollection.storageManager().getUserService().getOrNewOnThread(player.getUniqueId());
         List<MailMessage> data = dataObject.get(MailKeys.MAIL_DATA).orElseGet(ArrayList::new);
         boolean result = data.removeIf(x ->
                 mailData.getDate().equals(x.getDate()) &&
@@ -65,7 +75,7 @@ public class MailHandler implements NucleusMailService, ServiceBase {
 
         if (result) {
             dataObject.set(MailKeys.MAIL_DATA, data);
-            Nucleus.getNucleus().getStorageManager().getUserService().save(player.getUniqueId(), dataObject);
+            this.serviceCollection.storageManager().getUserService().save(player.getUniqueId(), dataObject);
         }
 
         return result;
@@ -73,30 +83,33 @@ public class MailHandler implements NucleusMailService, ServiceBase {
 
     @Override
     public void sendMail(@Nullable User playerFrom, User playerTo, String message) {
-        IUserDataObject dataObject = Nucleus.getNucleus().getStorageManager().getUserService().getOrNewOnThread(playerTo.getUniqueId());
+        IUserDataObject dataObject = this.serviceCollection.storageManager().getUserService().getOrNewOnThread(playerTo.getUniqueId());
 
-        MessageProvider provider = Nucleus.getNucleus().getMessageProvider();
         // Message is about to be sent. Send the event out. If canceled, then
         // that's that.
+        IMessageProviderService messageProvider = this.serviceCollection.messageProvider();
         if (Sponge.getEventManager().post(new InternalNucleusMailEvent(playerFrom, playerTo, message))) {
             if (playerFrom == null) {
-                Sponge.getServer().getConsole().sendMessage(provider.getTextMessageWithFormat("message.cancel"));
+                messageProvider.sendMessageTo(
+                        Sponge.getServer().getConsole(),
+                        "message.cancel");
             } else {
                 playerFrom.getPlayer()
-                        .ifPresent(x -> x.sendMessage(provider.getTextMessageWithFormat("message.cancel")));
+                        .ifPresent(x -> messageProvider.sendMessageTo(x, "message.cancel"));
             }
             return;
         }
 
         List<MailMessage> messages = dataObject.get(MailKeys.MAIL_DATA).orElseGet(ArrayList::new);
-        MailData md = new MailData(playerFrom == null ? Util.consoleFakeUUID : playerFrom.getUniqueId(), Instant.now(), message);
+        MailData md = new MailData(playerFrom == null ? Util.CONSOLE_FAKE_UUID : playerFrom.getUniqueId(), Instant.now(), message);
         messages.add(md);
         dataObject.set(MailKeys.MAIL_DATA, messages);
-        Nucleus.getNucleus().getStorageManager().getUserService().save(playerTo.getUniqueId(), dataObject);
+        this.serviceCollection.storageManager().getUserService().save(playerTo.getUniqueId(), dataObject);
 
-        Text from = playerFrom == null ? Text.of(Sponge.getServer().getConsole().getName()) : Nucleus.getNucleus().getNameUtil().getName(playerFrom);
+        Text from = playerFrom == null ? Text.of(Sponge.getServer().getConsole().getName()) :
+                this.serviceCollection.playerDisplayNameService().getDisplayName(playerFrom);
         playerTo.getPlayer().ifPresent(x ->
-                x.sendMessage(Text.builder().append(provider.getTextMessageWithFormat("mail.youvegotmail")).append(Text.of(" ", from)).build()));
+                x.sendMessage(Text.builder().append(messageProvider.getMessageFor(x, "mail.youvegotmail")).append(Text.of(" ", from)).build()));
     }
 
     @Override
@@ -106,10 +119,11 @@ public class MailHandler implements NucleusMailService, ServiceBase {
 
     @Override
     public boolean clearUserMail(User player) {
-        IUserDataObject dataObject = Nucleus.getNucleus().getStorageManager().getUserService().getOrNewOnThread(player.getUniqueId());
+        IStorageManager storageManager = this.serviceCollection.storageManager();
+        IUserDataObject dataObject = storageManager.getUserService().getOrNewOnThread(player.getUniqueId());
         if (dataObject.getNullable(MailKeys.MAIL_DATA) != null) {
             dataObject.remove(MailKeys.MAIL_DATA);
-            Nucleus.getNucleus().getStorageManager().getUserService().save(player.getUniqueId(), dataObject);
+            storageManager.getUserService().save(player.getUniqueId(), dataObject);
             return true;
         }
 

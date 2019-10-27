@@ -6,16 +6,29 @@ package io.github.nucleuspowered.nucleus.modules.deathmessage;
 
 import static io.github.nucleuspowered.nucleus.modules.deathmessage.DeathMessageModule.ID;
 
-import io.github.nucleuspowered.nucleus.internal.qsml.module.ConfigurableModule;
+import io.github.nucleuspowered.nucleus.modules.deathmessage.config.DeathMessageConfig;
+import io.github.nucleuspowered.nucleus.quickstart.module.ConfigurableModule;
 import io.github.nucleuspowered.nucleus.modules.deathmessage.config.DeathMessageConfigAdapter;
+import io.github.nucleuspowered.nucleus.services.INucleusServiceCollection;
 import uk.co.drnaylor.quickstart.annotations.ModuleData;
+import uk.co.drnaylor.quickstart.holders.DiscoveryModuleHolder;
+
+import java.util.function.Supplier;
+
+import javax.inject.Inject;
 
 @ModuleData(id = ID, name = "Death Messages")
-public class DeathMessageModule extends ConfigurableModule<DeathMessageConfigAdapter> {
+public class DeathMessageModule extends ConfigurableModule<DeathMessageConfig, DeathMessageConfigAdapter> {
 
     public static final String ID = "death-message";
 
-    @Override public DeathMessageConfigAdapter createAdapter() {
+    @Inject
+    public DeathMessageModule(Supplier<DiscoveryModuleHolder<?, ?>> moduleHolder, INucleusServiceCollection collection) {
+        super(moduleHolder, collection);
+    }
+
+    @Override
+    public DeathMessageConfigAdapter createAdapter() {
         return new DeathMessageConfigAdapter();
     }
 }

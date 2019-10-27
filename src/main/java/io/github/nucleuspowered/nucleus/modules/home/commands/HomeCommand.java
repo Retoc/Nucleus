@@ -4,139 +4,132 @@
  */
 package io.github.nucleuspowered.nucleus.modules.home.commands;
 
-import io.github.nucleuspowered.nucleus.Nucleus;
 import io.github.nucleuspowered.nucleus.api.nucleusdata.Home;
 import io.github.nucleuspowered.nucleus.api.service.NucleusHomeService;
 import io.github.nucleuspowered.nucleus.api.teleport.TeleportResult;
-import io.github.nucleuspowered.nucleus.argumentparsers.HomeArgument;
-import io.github.nucleuspowered.nucleus.internal.annotations.command.Permissions;
-import io.github.nucleuspowered.nucleus.internal.annotations.command.RegisterCommand;
-import io.github.nucleuspowered.nucleus.internal.command.AbstractCommand;
-import io.github.nucleuspowered.nucleus.internal.command.ReturnMessageException;
-import io.github.nucleuspowered.nucleus.internal.docgen.annotations.EssentialsEquivalent;
+import io.github.nucleuspowered.nucleus.internal.command.ICommandContext;
+import io.github.nucleuspowered.nucleus.internal.command.ICommandExecutor;
+import io.github.nucleuspowered.nucleus.internal.command.ICommandResult;
+import io.github.nucleuspowered.nucleus.internal.command.annotation.Command;
+import io.github.nucleuspowered.nucleus.internal.command.annotation.CommandModifier;
+import io.github.nucleuspowered.nucleus.internal.command.annotation.EssentialsEquivalent;
+import io.github.nucleuspowered.nucleus.internal.command.requirements.CommandModifiers;
 import io.github.nucleuspowered.nucleus.internal.interfaces.Reloadable;
-import io.github.nucleuspowered.nucleus.internal.permissions.PermissionInformation;
-import io.github.nucleuspowered.nucleus.internal.permissions.SuggestedLevel;
+import io.github.nucleuspowered.nucleus.modules.home.HomePermissions;
 import io.github.nucleuspowered.nucleus.modules.home.config.HomeConfig;
-import io.github.nucleuspowered.nucleus.modules.home.config.HomeConfigAdapter;
 import io.github.nucleuspowered.nucleus.modules.home.events.UseHomeEvent;
+import io.github.nucleuspowered.nucleus.modules.home.parameters.HomeArgument;
 import io.github.nucleuspowered.nucleus.modules.home.services.HomeService;
+import io.github.nucleuspowered.nucleus.services.INucleusServiceCollection;
 import org.spongepowered.api.Sponge;
-import org.spongepowered.api.command.CommandResult;
-import org.spongepowered.api.command.args.CommandContext;
+import org.spongepowered.api.command.CommandException;
 import org.spongepowered.api.command.args.CommandElement;
 import org.spongepowered.api.command.args.GenericArguments;
 import org.spongepowered.api.entity.living.player.Player;
 import org.spongepowered.api.event.CauseStackManager;
-import org.spongepowered.api.event.cause.Cause;
 import org.spongepowered.api.text.Text;
 import org.spongepowered.api.util.annotation.NonnullByDefault;
 import org.spongepowered.api.world.Location;
 import org.spongepowered.api.world.World;
 
-import java.util.HashMap;
-import java.util.Map;
 import java.util.Optional;
 
-@Permissions(suggestedLevel = SuggestedLevel.USER)
-@RegisterCommand("home")
 @EssentialsEquivalent(value = {"home", "homes"}, notes = "'/homes' will list homes, '/home' will teleport like Essentials did.")
+@Command(
+        aliases = {"home"},
+        basePermission = HomePermissions.BASE_HOME,
+        commandDescriptionKey = "home",
+        parentCommand = HomeCommand.class,
+        modifiers = {
+                @CommandModifier(value = CommandModifiers.HAS_COOLDOWN, exemptPermission = HomePermissions.EXEMPT_COOLDOWN_HOME),
+                @CommandModifier(value = CommandModifiers.HAS_WARMUP, exemptPermission = HomePermissions.EXEMPT_WARMUP_HOME),
+                @CommandModifier(value = CommandModifiers.HAS_COST, exemptPermission = HomePermissions.EXEMPT_COST_HOME)
+        }
+)
 @NonnullByDefault
-public class HomeCommand extends AbstractCommand<Player> implements Reloadable {
+public class HomeCommand implements ICommandExecutor<Player>, Reloadable {
 
     private final String home = "home";
-
-    public static final String EXEMPT_SAMEDIMENSION_SUFFIX = "exempt.samedimension";
-
-    private final HomeService homeService = Nucleus.getNucleus().getInternalServiceManager().getServiceUnchecked(HomeService.class);
 
     private boolean isSafeTeleport = true;
     private boolean isPreventOverhang = true;
     private boolean isOnlySameDimension = false;
 
     @Override
-    public CommandElement[] getArguments() {
+    public CommandElement[] parameters(INucleusServiceCollection serviceCollection) {
         return new CommandElement[] {
-            GenericArguments.onlyOne(GenericArguments.optional(new HomeArgument(Text.of(this.home), Nucleus.getNucleus())))
+            GenericArguments.onlyOne(GenericArguments.optional(
+                    new HomeArgument(Text.of(this.home), serviceCollection.getServiceUnchecked(HomeService.class), serviceCollection.messageProvider()))
+            )
         };
     }
 
-    @Override protected Map<String, PermissionInformation> permissionSuffixesToRegister() {
-        return new HashMap<String, PermissionInformation>() {{
-            put(EXEMPT_SAMEDIMENSION_SUFFIX, PermissionInformation.getWithTranslation("permission.home.exempt.samedimension", SuggestedLevel.ADMIN));
-        }};
-    }
-
-    @Override
-    public CommandResult executeCommand(Player src, CommandContext args, Cause cause) throws Exception {
-        int max = this.homeService.getMaximumHomes(src) ;
-        int current = this.homeService.getHomeCount(src) ;
+    @Override public ICommandResult execute(ICommandContext<? extends Player> context) throws CommandException {
+        HomeService homeService = context.getServiceCollection().getServiceUnchecked(HomeService.class);
+        Player player = context.getIfPlayer();
+        int max = homeService.getMaximumHomes(player) ;
+        int current = homeService.getHomeCount(player);
         if (this.isPreventOverhang && max < current) {
             // If the player has too many homes, tell them
-            throw ReturnMessageException.fromKey("command.home.overhang", String.valueOf(max), String.valueOf(current));
+            return context.errorResult("command.home.overhang", max, current);
         }
 
         // Get the home.
-        Optional<Home> owl = args.getOne(this.home);
+        Optional<Home> owl = context.getOne(this.home, Home.class);
         Home wl;
         if (owl.isPresent()) {
             wl = owl.get();
         } else {
-            wl = this.homeService.getHome(src, NucleusHomeService.DEFAULT_HOME_NAME)
-                .orElseThrow(() -> new ReturnMessageException(Nucleus.getNucleus().getMessageProvider().getTextMessageWithFormat("args.home.nohome", "home")));
+            wl = homeService.getHome(player, NucleusHomeService.DEFAULT_HOME_NAME)
+                .orElseThrow(() -> context.createException("args.home.nohome", "home"));
         }
 
         Sponge.getServer().loadWorld(wl.getWorldProperties()
-                .orElseThrow(() -> ReturnMessageException.fromKey("command.home.invalid", wl.getName())));
+                .orElseThrow(() -> context.createException("command.home.invalid", wl.getName())));
 
-        Location<World> targetLocation = wl.getLocation().orElseThrow(() -> ReturnMessageException.fromKey("command.home.invalid", wl.getName()));
+        Location<World> targetLocation = wl.getLocation().orElseThrow(() -> context.createException("command.home.invalid", wl.getName()));
 
         if (this.isOnlySameDimension) {
-            if (!targetLocation.getExtent().getUniqueId().equals(src.getLocation().getExtent().getUniqueId())) {
-                if (!this.permissions.testSuffix(src, "exempt.samedimension", src, true)) {
-                    throw ReturnMessageException.fromKey("command.home.invalid", wl.getName());
+            if (!targetLocation.getExtent().getUniqueId().equals(player.getLocation().getExtent().getUniqueId())) {
+                if (!context.testPermission(HomePermissions.HOME_EXEMPT_SAMEDIMENSION)) {
+                    return context.errorResult("command.home.invalid", wl.getName());
                 }
             }
         }
 
         try (CauseStackManager.StackFrame frame = Sponge.getCauseStackManager().pushCauseFrame()) {
-            frame.pushCause(src);
-            UseHomeEvent event = new UseHomeEvent(frame.getCurrentCause(), src, wl);
+            frame.pushCause(player);
+            UseHomeEvent event = new UseHomeEvent(frame.getCurrentCause(), player, wl);
 
             if (Sponge.getEventManager().post(event)) {
-                throw new ReturnMessageException(event.getCancelMessage().orElseGet(() ->
-                        Nucleus.getNucleus().getMessageProvider().getTextMessageWithFormat("nucleus.eventcancelled")
-                ));
+                return event.getCancelMessage().map(x -> context.errorResultLiteral(Text.of(x)))
+                        .orElseGet(() -> context.errorResult("nucleus.eventcancelled"));
             }
         }
 
-        TeleportResult result =
-                Nucleus.getNucleus()
-                        .getInternalServiceManager()
-                        .getServiceUnchecked(HomeService.class)
-                        .warpToHome(
-                                src,
-                                wl,
-                                this.isSafeTeleport
-                        );
+        TeleportResult result = homeService.warpToHome(
+                player,
+                wl,
+                this.isSafeTeleport
+        );
 
         // Warp to it safely.
         if (result.isSuccessful()) {
             if (!wl.getName().equalsIgnoreCase(NucleusHomeService.DEFAULT_HOME_NAME)) {
-                src.sendMessage(Nucleus.getNucleus().getMessageProvider().getTextMessageWithFormat("command.home.success", wl.getName()));
+                context.sendMessage("command.home.success", wl.getName());
             } else {
-                src.sendMessage(Nucleus.getNucleus().getMessageProvider().getTextMessageWithFormat("command.home.successdefault"));
+                context.sendMessage("command.home.successdefault");
             }
 
-            return CommandResult.success();
+            return context.successResult();
         } else {
-            throw ReturnMessageException.fromKey("command.home.fail", wl.getName());
+            return context.errorResult("command.home.fail", wl.getName());
         }
     }
 
     @Override
-    public void onReload() {
-        HomeConfig hc = Nucleus.getNucleus().getInternalServiceManager().getServiceUnchecked(HomeConfigAdapter.class).getNodeOrDefault();
+    public void onReload(INucleusServiceCollection serviceCollection) {
+        HomeConfig hc = serviceCollection.moduleDataProvider().getModuleConfig(HomeConfig.class);
         this.isSafeTeleport = hc.isSafeTeleport();
         this.isPreventOverhang = hc.isPreventHomeCountOverhang();
         this.isOnlySameDimension = hc.isOnlySameDimension();

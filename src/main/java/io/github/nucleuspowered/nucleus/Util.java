@@ -7,24 +7,22 @@ package io.github.nucleuspowered.nucleus;
 import com.flowpowered.math.vector.Vector3d;
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.Maps;
-import io.github.nucleuspowered.nucleus.internal.messages.MessageProvider;
+import io.github.nucleuspowered.nucleus.internal.command.ICommandContext;
 import io.github.nucleuspowered.nucleus.util.PaginationBuilderWrapper;
-import io.github.nucleuspowered.nucleus.util.ThrownFunction;
 import org.spongepowered.api.CatalogType;
 import org.spongepowered.api.Sponge;
 import org.spongepowered.api.block.BlockState;
 import org.spongepowered.api.command.CommandSource;
 import org.spongepowered.api.data.key.Keys;
-import org.spongepowered.api.data.manipulator.mutable.entity.JoinData;
 import org.spongepowered.api.data.type.HandTypes;
 import org.spongepowered.api.entity.Entity;
 import org.spongepowered.api.entity.EntityTypes;
 import org.spongepowered.api.entity.living.player.Player;
 import org.spongepowered.api.entity.living.player.User;
 import org.spongepowered.api.event.Event;
+import org.spongepowered.api.event.cause.Cause;
 import org.spongepowered.api.event.cause.EventContextKeys;
 import org.spongepowered.api.event.message.MessageEvent;
-import org.spongepowered.api.item.ItemType;
 import org.spongepowered.api.item.inventory.Carrier;
 import org.spongepowered.api.item.inventory.Inventory;
 import org.spongepowered.api.item.inventory.InventoryArchetypes;
@@ -34,6 +32,7 @@ import org.spongepowered.api.item.inventory.ItemStackSnapshot;
 import org.spongepowered.api.item.inventory.entity.MainPlayerInventory;
 import org.spongepowered.api.item.inventory.property.InventoryDimension;
 import org.spongepowered.api.item.inventory.query.QueryOperationTypes;
+import org.spongepowered.api.profile.GameProfile;
 import org.spongepowered.api.service.context.Context;
 import org.spongepowered.api.service.pagination.PaginationList;
 import org.spongepowered.api.service.pagination.PaginationService;
@@ -55,11 +54,9 @@ import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.text.MessageFormat;
 import java.text.NumberFormat;
-import java.time.Instant;
 import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
 import java.time.format.FormatStyle;
-import java.time.temporal.ChronoUnit;
 import java.util.Collection;
 import java.util.Comparator;
 import java.util.List;
@@ -94,7 +91,11 @@ public class Util {
     public static final String usernameRegexPattern = "[0-9a-zA-Z_]{3,16}";
     public static final Pattern usernameRegex = Pattern.compile(usernameRegexPattern);
 
-    public static final UUID consoleFakeUUID = UUID.fromString("00000000-0000-0000-0000-000000000000");
+    public static final UUID CONSOLE_FAKE_UUID = UUID.fromString("00000000-0000-0000-0000-000000000000");
+
+    public static CommandSource getSourceFromCause(Cause cause) {
+        return cause.first(CommandSource.class).orElseGet(Sponge.getServer()::getConsole);
+    }
 
     public static Text applyChatTemplate(MessageEvent.MessageFormatter formatter) {
         return applyChatTemplate(formatter.getHeader(), formatter.getBody(), formatter.getFooter());
@@ -113,7 +114,7 @@ public class Util {
             return ((Identifiable) src).getUniqueId();
         }
 
-        return consoleFakeUUID;
+        return CONSOLE_FAKE_UUID;
     }
 
     public static Optional<User> getUserFromUUID(UUID uuid) {
@@ -128,75 +129,10 @@ public class Util {
 
     }
 
-    public static String getTimeToNow(Instant time) {
-        return getTimeToNow(time, "standard.inamoment");
-    }
 
-    public static String getTimeToNow(Instant time, String nowkey) {
-        return getTimeStringFromSeconds(Instant.now().getEpochSecond() - time.getEpochSecond(), nowkey);
-    }
-
-    public static String getTimeStringFromSeconds(long time) {
-        return getTimeStringFromSeconds(time, "standard.inamoment");
-    }
-
-    public static String getTimeStringFromSeconds(long time, String nowkey) {
-        time = Math.abs(time);
-        long sec = time % 60;
-        long min = (time / 60) % 60;
-        long hour = (time / 3600) % 24;
-        long day = time / 86400;
-
-        MessageProvider messageProvider = Nucleus.getNucleus().getMessageProvider();
-        if (time == 0) {
-            return messageProvider.getMessageWithFormat(nowkey);
-        }
-
-        StringBuilder sb = new StringBuilder();
-        if (day > 0) {
-            sb.append(day).append(" ");
-            if (day > 1) {
-                sb.append(messageProvider.getMessageWithFormat("standard.days"));
-            } else {
-                sb.append(messageProvider.getMessageWithFormat("standard.day"));
-            }
-        }
-
-        if (hour > 0) {
-            appendComma(sb);
-            sb.append(hour).append(" ");
-            if (hour > 1) {
-                sb.append(messageProvider.getMessageWithFormat("standard.hours"));
-            } else {
-                sb.append(messageProvider.getMessageWithFormat("standard.hour"));
-            }
-        }
-
-        if (min > 0) {
-            appendComma(sb);
-            sb.append(min).append(" ");
-            if (min > 1) {
-                sb.append(messageProvider.getMessageWithFormat("standard.minutes"));
-            } else {
-                sb.append(messageProvider.getMessageWithFormat("standard.minute"));
-            }
-        }
-
-        if (sec > 0) {
-            appendComma(sb);
-            sb.append(sec).append(" ");
-            if (sec > 1) {
-                sb.append(Nucleus.getNucleus().getMessageProvider().getMessageWithFormat("standard.seconds"));
-            } else {
-                sb.append(Nucleus.getNucleus().getMessageProvider().getMessageWithFormat("standard.second"));
-            }
-        }
-
-        if (sb.length() > 0) {
-            return sb.toString();
-        } else {
-            return messageProvider.getMessageWithFormat("standard.unknown");
-        }
+    public static String getNameOrUnkown(ICommandContext<? extends CommandSource> context, GameProfile profile) {
+        return profile.getName().orElse(
+                context.getServiceCollection().messageProvider().getMessageString(context.getCommandKey(), "standard.unknown"));
     }
 
     public static String getTimeFromTicks(long ticks) {
@@ -219,111 +155,6 @@ public class Util {
             long ahours = hours == 0 ? 12 : hours;
             return MessageFormat.format(Nucleus.getNucleus().getMessageProvider().getMessageWithFormat("standard.time.pm"), ahours, hours, m.format(mins));
         }
-    }
-
-    private static void appendComma(StringBuilder sb) {
-        if (sb.length() > 0) {
-            sb.append(", ");
-        }
-    }
-
-    public static boolean isFirstPlay(User player) {
-        try {
-            Instant firstPlayed = player.get(JoinData.class).get().firstPlayed().get();
-            Instant lastPlayed = player.get(JoinData.class).get().lastPlayed().get();
-
-            // lastPlayed is always ticking - give three seconds.
-            // TODO: Better way of doing this.
-            return firstPlayed.isAfter(lastPlayed.minus(10, ChronoUnit.SECONDS));
-        } catch (Exception e) {
-            return false;
-        }
-    }
-
-    public static Optional<Double> getDoubleOptionFromSubject(Subject player, String... options) {
-        return getTypedObjectFromSubject(Double::parseDouble, player, options);
-    }
-
-    public static Optional<Long> getPositiveLongOptionFromSubject(Subject player, String... options) {
-        return getTypedObjectFromSubject(Long::parseUnsignedLong, player, options);
-    }
-
-    public static Optional<Integer> getPositiveIntOptionFromSubject(Subject player, String... options) {
-        return getTypedObjectFromSubject(Integer::parseUnsignedInt, player, options);
-    }
-
-    public static Optional<Integer> getIntOptionFromSubject(Subject player, String... options) {
-        return getTypedObjectFromSubject(Integer::parseInt, player, options);
-    }
-
-    public static <T> Optional<T> getTypedObjectFromSubject(ThrownFunction<String, T, Exception> conversion, Subject player, String... options) {
-        try {
-            Optional<String> optional = getOptionFromSubject(player, options);
-            if (optional.isPresent()) {
-                return Optional.ofNullable(conversion.apply(optional.get()));
-            }
-        } catch (Exception e) {
-            // ignored
-        }
-
-        return Optional.empty();
-    }
-
-    /**
-     * Utility method for getting the first available option from an {@link Subject}
-     *
-     * @param player The {@link User} to get the subject from.
-     * @param options The option keys to check.
-     * @return An {@link Optional} that might contain a value.
-     */
-    public static Optional<String> getOptionFromSubject(Subject player, String... options) {
-        for (String option : options) {
-            String o = option.toLowerCase();
-
-            // Option for context.
-            Optional<String> os = player.getOption(player.getActiveContexts(), o);
-            if (os.isPresent()) {
-                return os.map(r -> r.isEmpty() ? null : r);
-            }
-
-            // General option
-            os = player.getOption(o);
-            if (os.isPresent()) {
-                return os.map(r -> r.isEmpty() ? null : r);
-            }
-        }
-
-        return Optional.empty();
-    }
-
-    /**
-     * Gets the {@link ItemType} or {@link BlockState} for an ID.
-     *
-     * @param id The ID to check.
-     * @return An {@link Optional} containing the intended {@link CatalogType}
-     */
-    public static Optional<CatalogType> getCatalogTypeForItemFromId(String id) {
-        // Check for ItemType.
-        Optional<CatalogType> oit = Sponge.getRegistry().getAllOf(ItemType.class).stream().filter(x -> x.getId().equalsIgnoreCase(id))
-                .findFirst().map(x -> x);
-        return oit.map(Optional::of)
-                .orElseGet(() -> Sponge.getRegistry().getAllOf(BlockState.class).stream().filter(x -> x.getId().equalsIgnoreCase(id)).findFirst()
-                        .map(x -> (CatalogType) x));
-
-        // BlockState, you're up next!
-
-    }
-
-    public static <T extends CatalogType> String getTranslatableIfPresentOnCatalogType(T ct) {
-        if (ct instanceof ItemType) {
-            return ItemStack.of((ItemType)ct, 1).getTranslation().get();
-        } else if (ct instanceof BlockState) {
-            return ItemStack.builder().fromBlockState(((BlockState) ct)).build().getTranslation().get();
-        } else  if (ct instanceof Translatable) {
-            return getTranslatableIfPresent((Translatable & CatalogType)ct);
-        }
-
-        return ct.getName();
     }
 
     /**
@@ -453,8 +284,12 @@ public class Util {
     }
 
     public static PaginationList.Builder getPaginationBuilder(CommandSource source) {
+        return getPaginationBuilder(source instanceof Player);
+    }
+
+    public static PaginationList.Builder getPaginationBuilder(boolean isPlayer) {
         PaginationList.Builder plb = Sponge.getServiceManager().provideUnchecked(PaginationService.class).builder();
-        if (!(source instanceof Player)) {
+        if (!isPlayer) {
             plb.linesPerPage(-1);
         }
 

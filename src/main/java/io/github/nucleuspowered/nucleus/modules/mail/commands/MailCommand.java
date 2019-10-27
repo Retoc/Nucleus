@@ -4,42 +4,48 @@
  */
 package io.github.nucleuspowered.nucleus.modules.mail.commands;
 
+import io.github.nucleuspowered.nucleus.api.service.NucleusMailService;
 import io.github.nucleuspowered.nucleus.argumentparsers.MailFilterArgument;
-import io.github.nucleuspowered.nucleus.internal.annotations.RunAsync;
-import io.github.nucleuspowered.nucleus.internal.annotations.command.NoModifiers;
-import io.github.nucleuspowered.nucleus.internal.annotations.command.Permissions;
-import io.github.nucleuspowered.nucleus.internal.annotations.command.RegisterCommand;
-import io.github.nucleuspowered.nucleus.internal.command.AbstractCommand;
-import io.github.nucleuspowered.nucleus.internal.docgen.annotations.EssentialsEquivalent;
-import io.github.nucleuspowered.nucleus.internal.permissions.SuggestedLevel;
+import io.github.nucleuspowered.nucleus.internal.command.ICommandContext;
+import io.github.nucleuspowered.nucleus.internal.command.ICommandExecutor;
+import io.github.nucleuspowered.nucleus.internal.command.ICommandResult;
+import io.github.nucleuspowered.nucleus.internal.command.annotation.Command;
+import io.github.nucleuspowered.nucleus.internal.command.annotation.EssentialsEquivalent;
+import io.github.nucleuspowered.nucleus.modules.mail.MailPermissions;
+import io.github.nucleuspowered.nucleus.services.INucleusServiceCollection;
 import io.github.nucleuspowered.nucleus.modules.mail.services.MailHandler;
-import org.spongepowered.api.command.CommandResult;
-import org.spongepowered.api.command.args.CommandContext;
+import org.spongepowered.api.command.CommandException;
 import org.spongepowered.api.command.args.CommandElement;
 import org.spongepowered.api.command.args.GenericArguments;
 import org.spongepowered.api.entity.living.player.Player;
-import org.spongepowered.api.event.cause.Cause;
 import org.spongepowered.api.text.Text;
 import org.spongepowered.api.util.annotation.NonnullByDefault;
 
-@Permissions(suggestedLevel = SuggestedLevel.USER)
-@RunAsync
-@NoModifiers
-@RegisterCommand({"mail", "email"})
 @EssentialsEquivalent({"mail", "email"})
 @NonnullByDefault
-public class MailCommand extends AbstractCommand<Player> {
-
-    private final MailHandler handler = getServiceUnchecked(MailHandler.class);
+@Command(
+        aliases = { "mail", "email" },
+        basePermission = MailPermissions.BASE_MAIL,
+        commandDescriptionKey = "mail",
+        async = true
+)
+public class MailCommand implements ICommandExecutor<Player> {
 
     @Override
-    public CommandElement[] getArguments() {
-        return new CommandElement[] { GenericArguments.optional(GenericArguments.allOf(new MailFilterArgument(Text.of(MailReadBase.filters),
-                this.handler))) };
+    public CommandElement[] parameters(INucleusServiceCollection serviceCollection) {
+        return new CommandElement[] {
+                GenericArguments.optional(
+                        GenericArguments.allOf(
+                                new MailFilterArgument(Text.of(MailReadBase.FILTERS), serviceCollection.getServiceUnchecked(MailHandler.class))
+                        )
+                )
+        };
     }
 
-    @Override
-    public CommandResult executeCommand(Player src, CommandContext args, Cause cause) {
-        return MailReadBase.INSTANCE.executeCommand(src, src, args.getAll(MailReadBase.filters));
+    @Override public ICommandResult execute(ICommandContext<? extends Player> context) throws CommandException {
+        return MailReadBase.INSTANCE.executeCommand(
+                context,
+                context.getIfPlayer(),
+                context.getAll(MailReadBase.FILTERS, NucleusMailService.MailFilter.class));
     }
 }

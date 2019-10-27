@@ -4,23 +4,32 @@
  */
 package io.github.nucleuspowered.nucleus.modules.spawn;
 
-import io.github.nucleuspowered.nucleus.internal.permissions.PermissionResolverImpl;
-import io.github.nucleuspowered.nucleus.internal.permissions.SuggestedLevel;
-import io.github.nucleuspowered.nucleus.internal.qsml.module.ConfigurableModule;
+import io.github.nucleuspowered.nucleus.modules.spawn.config.SpawnConfig;
+import io.github.nucleuspowered.nucleus.services.INucleusServiceCollection;
+import io.github.nucleuspowered.nucleus.services.impl.permission.SuggestedLevel;
+import io.github.nucleuspowered.nucleus.quickstart.module.ConfigurableModule;
 import io.github.nucleuspowered.nucleus.modules.spawn.config.SpawnConfigAdapter;
 import uk.co.drnaylor.quickstart.annotations.ModuleData;
+import uk.co.drnaylor.quickstart.holders.DiscoveryModuleHolder;
+
+import java.util.function.Supplier;
+
+import javax.inject.Inject;
 
 @ModuleData(id = SpawnModule.ID, name = "Spawn")
-public class SpawnModule extends ConfigurableModule<SpawnConfigAdapter> {
+public class SpawnModule extends ConfigurableModule<SpawnConfig, SpawnConfigAdapter> {
 
     public static final String ID = "spawn";
+
+    @Inject
+    public SpawnModule(Supplier<DiscoveryModuleHolder<?, ?>> moduleHolder,
+            INucleusServiceCollection collection) {
+        super(moduleHolder, collection);
+    }
 
     @Override
     public SpawnConfigAdapter createAdapter() {
         return new SpawnConfigAdapter();
     }
 
-    @Override public void setPermissionPredicates() {
-        PermissionResolverImpl.INSTANCE.registerPermissionPredicate(perm -> perm.toLowerCase().startsWith("nucleus.spawn.worlds."), SuggestedLevel.ADMIN);
-    }
 }

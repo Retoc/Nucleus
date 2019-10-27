@@ -4,42 +4,46 @@
  */
 package io.github.nucleuspowered.nucleus.modules.mail.commands;
 
+import io.github.nucleuspowered.nucleus.api.service.NucleusMailService;
 import io.github.nucleuspowered.nucleus.argumentparsers.MailFilterArgument;
-import io.github.nucleuspowered.nucleus.internal.annotations.RunAsync;
-import io.github.nucleuspowered.nucleus.internal.annotations.command.NoModifiers;
-import io.github.nucleuspowered.nucleus.internal.annotations.command.Permissions;
-import io.github.nucleuspowered.nucleus.internal.annotations.command.RegisterCommand;
-import io.github.nucleuspowered.nucleus.internal.command.AbstractCommand;
+import io.github.nucleuspowered.nucleus.internal.command.ICommandContext;
+import io.github.nucleuspowered.nucleus.internal.command.ICommandExecutor;
+import io.github.nucleuspowered.nucleus.internal.command.ICommandResult;
 import io.github.nucleuspowered.nucleus.internal.command.NucleusParameters;
+import io.github.nucleuspowered.nucleus.internal.command.annotation.Command;
+import io.github.nucleuspowered.nucleus.modules.mail.MailPermissions;
 import io.github.nucleuspowered.nucleus.modules.mail.services.MailHandler;
-import org.spongepowered.api.command.CommandResult;
+import io.github.nucleuspowered.nucleus.services.INucleusServiceCollection;
+import org.spongepowered.api.command.CommandException;
 import org.spongepowered.api.command.CommandSource;
-import org.spongepowered.api.command.args.CommandContext;
 import org.spongepowered.api.command.args.CommandElement;
 import org.spongepowered.api.command.args.GenericArguments;
 import org.spongepowered.api.entity.living.player.User;
-import org.spongepowered.api.event.cause.Cause;
 import org.spongepowered.api.text.Text;
 import org.spongepowered.api.util.annotation.NonnullByDefault;
 
-@Permissions(prefix = "mail")
-@RunAsync
-@NoModifiers
-@RegisterCommand(value = {"other", "o"}, subcommandOf = MailCommand.class)
 @NonnullByDefault
-public class MailOtherCommand extends AbstractCommand<CommandSource> {
-
-    private final MailHandler handler = getServiceUnchecked(MailHandler.class);
+@Command(
+        aliases = { "other", "o" },
+        basePermission = MailPermissions.BASE_MAIL_OTHER,
+        commandDescriptionKey = "mail.other",
+        async = true,
+        parentCommand = MailCommand.class
+)
+public class MailOtherCommand implements ICommandExecutor<CommandSource> {
 
     @Override
-    public CommandElement[] getArguments() {
+    public CommandElement[] parameters(INucleusServiceCollection serviceCollection) {
         return new CommandElement[] {
                 NucleusParameters.ONE_USER,
-                GenericArguments.optional(GenericArguments.allOf(new MailFilterArgument(Text.of(MailReadBase.filters), this.handler)))};
+                GenericArguments.optional(GenericArguments.allOf(new MailFilterArgument(Text.of(MailReadBase.FILTERS), serviceCollection.getServiceUnchecked(MailHandler.class))))
+        };
     }
 
-    @Override
-    public CommandResult executeCommand(CommandSource src, CommandContext args, Cause cause) {
-        return MailReadBase.INSTANCE.executeCommand(src, args.<User>getOne(NucleusParameters.Keys.USER).get(), args.getAll(MailReadBase.filters));
+    @Override public ICommandResult execute(ICommandContext<? extends CommandSource> context) throws CommandException {
+        return MailReadBase.INSTANCE.executeCommand(
+                context,
+                context.requireOne(NucleusParameters.Keys.USER, User.class),
+                context.getAll(MailReadBase.FILTERS, NucleusMailService.MailFilter.class));
     }
 }

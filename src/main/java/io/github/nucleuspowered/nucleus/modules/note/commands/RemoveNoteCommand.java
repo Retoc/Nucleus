@@ -4,60 +4,62 @@
  */
 package io.github.nucleuspowered.nucleus.modules.note.commands;
 
-import io.github.nucleuspowered.nucleus.Nucleus;
-import io.github.nucleuspowered.nucleus.argumentparsers.NoteArgument;
-import io.github.nucleuspowered.nucleus.internal.annotations.RunAsync;
-import io.github.nucleuspowered.nucleus.internal.annotations.command.NoModifiers;
-import io.github.nucleuspowered.nucleus.internal.annotations.command.Permissions;
-import io.github.nucleuspowered.nucleus.internal.annotations.command.RegisterCommand;
-import io.github.nucleuspowered.nucleus.internal.command.AbstractCommand;
-import io.github.nucleuspowered.nucleus.internal.permissions.SuggestedLevel;
+import io.github.nucleuspowered.nucleus.internal.command.ICommandContext;
+import io.github.nucleuspowered.nucleus.internal.command.ICommandExecutor;
+import io.github.nucleuspowered.nucleus.internal.command.ICommandResult;
+import io.github.nucleuspowered.nucleus.internal.command.annotation.Command;
+import io.github.nucleuspowered.nucleus.modules.note.NotePermissions;
 import io.github.nucleuspowered.nucleus.modules.note.data.NoteData;
+import io.github.nucleuspowered.nucleus.modules.note.parameter.NoteArgument;
 import io.github.nucleuspowered.nucleus.modules.note.services.NoteHandler;
-import org.spongepowered.api.command.CommandResult;
+import io.github.nucleuspowered.nucleus.services.IMessageProviderService;
+import io.github.nucleuspowered.nucleus.services.INucleusServiceCollection;
+import org.spongepowered.api.command.CommandException;
 import org.spongepowered.api.command.CommandSource;
-import org.spongepowered.api.command.args.CommandContext;
 import org.spongepowered.api.command.args.CommandElement;
 import org.spongepowered.api.command.args.GenericArguments;
 import org.spongepowered.api.entity.living.player.User;
-import org.spongepowered.api.event.cause.Cause;
 import org.spongepowered.api.text.Text;
 import org.spongepowered.api.util.annotation.NonnullByDefault;
 
 import java.util.List;
 
-@Permissions(suggestedLevel = SuggestedLevel.ADMIN)
-@RunAsync
-@NoModifiers
 @NonnullByDefault
-@RegisterCommand({"removenote", "deletenote", "delnote"})
-public class RemoveNoteCommand extends AbstractCommand<CommandSource> {
+@Command(
+        aliases = {"removenote", "deletenote", "delnote"},
+        basePermission = NotePermissions.BASE_REMOVENOTE,
+        commandDescriptionKey = "removenote",
+        async = true
+)
+public class RemoveNoteCommand implements ICommandExecutor<CommandSource> {
 
-    private final NoteHandler handler = getServiceUnchecked(NoteHandler.class);
     private final String noteKey = "note";
 
     @Override
-    public CommandElement[] getArguments() {
-        return new CommandElement[] {GenericArguments.onlyOne(new NoteArgument(Text.of(this.noteKey), this.handler))};
+    public CommandElement[] parameters(INucleusServiceCollection serviceCollection) {
+        NoteHandler handler = serviceCollection.getServiceUnchecked(NoteHandler.class);
+        IMessageProviderService messageProviderService = serviceCollection.messageProvider();
+        return new CommandElement[] {
+                GenericArguments.onlyOne(new NoteArgument(Text.of(this.noteKey), handler, messageProviderService))
+        };
     }
 
-    @Override
-    public CommandResult executeCommand(CommandSource src, CommandContext args, Cause cause) {
-        NoteArgument.Result result = args.<NoteArgument.Result>getOne(this.noteKey).get();
+    @Override public ICommandResult execute(ICommandContext<? extends CommandSource> context) throws CommandException {
+        NoteArgument.Result result = context.requireOne(this.noteKey, NoteArgument.Result.class);
+        NoteHandler handler = context.getServiceCollection().getServiceUnchecked(NoteHandler.class);
         User user = result.user;
 
-        List<NoteData> notes = this.handler.getNotesInternal(user);
+        List<NoteData> notes = handler.getNotesInternal(user);
         if (notes.isEmpty()) {
-            src.sendMessage(Nucleus.getNucleus().getMessageProvider().getTextMessageWithFormat("command.checkwarnings.none", user.getName()));
-            return CommandResult.success();
+            context.sendMessage("command.checkwarnings.none", user.getName());
+            return context.successResult();
         }
 
-        if (this.handler.removeNote(user, result.noteData)) {
-            src.sendMessage(Nucleus.getNucleus().getMessageProvider().getTextMessageWithFormat("command.removenote.success", user.getName()));
-            return CommandResult.success();
+        if (handler.removeNote(user, result.noteData)) {
+            context.sendMessage("command.removenote.success", user.getName());
+            return context.successResult();
         }
 
-        src.sendMessage(Nucleus.getNucleus().getMessageProvider().getTextMessageWithFormat("command.removenote.failure", user.getName()));
-        return CommandResult.empty();
+        return context.errorResult("command.removenote.failure", user.getName());
     }
 }

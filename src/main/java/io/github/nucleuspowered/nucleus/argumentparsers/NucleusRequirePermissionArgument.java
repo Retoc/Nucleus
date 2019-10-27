@@ -8,7 +8,7 @@ import static org.spongepowered.api.util.SpongeApiTranslationHelper.t;
 
 import com.google.common.collect.ImmutableList;
 import io.github.nucleuspowered.nucleus.argumentparsers.util.WrappedElement;
-import io.github.nucleuspowered.nucleus.internal.traits.PermissionTrait;
+import io.github.nucleuspowered.nucleus.services.IPermissionService;
 import org.spongepowered.api.command.CommandSource;
 import org.spongepowered.api.command.args.ArgumentParseException;
 import org.spongepowered.api.command.args.CommandArgs;
@@ -20,12 +20,14 @@ import java.util.List;
 
 import javax.annotation.Nullable;
 
-public class NucleusRequirePermissionArgument extends WrappedElement implements PermissionTrait {
+public class NucleusRequirePermissionArgument extends WrappedElement {
 
     private final String permission;
+    private final IPermissionService permissionService;
 
-    public NucleusRequirePermissionArgument(CommandElement wrapped, String permission) {
+    public NucleusRequirePermissionArgument(CommandElement wrapped, IPermissionService permissionService, String permission) {
         super(wrapped);
+        this.permissionService = permissionService;
         this.permission = permission;
     }
 
@@ -37,7 +39,7 @@ public class NucleusRequirePermissionArgument extends WrappedElement implements 
 
     @Override
     public void parse(CommandSource source, CommandArgs args, CommandContext context) throws ArgumentParseException {
-        if (!hasPermission(source, this.permission)) {
+        if (!this.permissionService.hasPermission(source, this.permission)) {
             Text key = getKey();
             throw args.createError(t("You do not have permission to use the %s argument", key != null ? key : t("unknown")));
         }
@@ -46,7 +48,7 @@ public class NucleusRequirePermissionArgument extends WrappedElement implements 
 
     @Override
     public List<String> complete(CommandSource src, CommandArgs args, CommandContext context) {
-        if (!hasPermission(src, this.permission)) {
+        if (!this.permissionService.hasPermission(src, this.permission)) {
             return ImmutableList.of();
         }
         return getWrappedElement().complete(src, args, context);

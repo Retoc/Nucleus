@@ -4,29 +4,23 @@
  */
 package io.github.nucleuspowered.nucleus.modules.ban.commands;
 
-import io.github.nucleuspowered.nucleus.Nucleus;
-import io.github.nucleuspowered.nucleus.Util;
-import io.github.nucleuspowered.nucleus.internal.annotations.command.NoModifiers;
-import io.github.nucleuspowered.nucleus.internal.annotations.command.Permissions;
-import io.github.nucleuspowered.nucleus.internal.annotations.command.RegisterCommand;
-import io.github.nucleuspowered.nucleus.internal.command.AbstractCommand;
+import io.github.nucleuspowered.nucleus.internal.command.ICommandContext;
+import io.github.nucleuspowered.nucleus.internal.command.ICommandExecutor;
+import io.github.nucleuspowered.nucleus.internal.command.ICommandResult;
 import io.github.nucleuspowered.nucleus.internal.command.NucleusParameters;
-import io.github.nucleuspowered.nucleus.internal.command.ReturnMessageException;
-import io.github.nucleuspowered.nucleus.internal.docgen.annotations.EssentialsEquivalent;
+import io.github.nucleuspowered.nucleus.internal.command.annotation.Command;
+import io.github.nucleuspowered.nucleus.internal.command.annotation.EssentialsEquivalent;
 import io.github.nucleuspowered.nucleus.internal.interfaces.Reloadable;
-import io.github.nucleuspowered.nucleus.internal.permissions.PermissionInformation;
-import io.github.nucleuspowered.nucleus.internal.permissions.SuggestedLevel;
+import io.github.nucleuspowered.nucleus.modules.ban.BanPermissions;
 import io.github.nucleuspowered.nucleus.modules.ban.config.BanConfig;
-import io.github.nucleuspowered.nucleus.modules.ban.config.BanConfigAdapter;
-import io.github.nucleuspowered.nucleus.util.PermissionMessageChannel;
+import io.github.nucleuspowered.nucleus.services.INucleusServiceCollection;
 import org.spongepowered.api.Sponge;
-import org.spongepowered.api.command.CommandResult;
+import org.spongepowered.api.command.CommandException;
 import org.spongepowered.api.command.CommandSource;
-import org.spongepowered.api.command.args.CommandContext;
 import org.spongepowered.api.command.args.CommandElement;
 import org.spongepowered.api.entity.living.player.User;
-import org.spongepowered.api.event.cause.Cause;
 import org.spongepowered.api.service.ban.BanService;
+import org.spongepowered.api.text.channel.MessageReceiver;
 import org.spongepowered.api.text.channel.MutableMessageChannel;
 import org.spongepowered.api.text.serializer.TextSerializers;
 import org.spongepowered.api.util.annotation.NonnullByDefault;
@@ -35,33 +29,24 @@ import org.spongepowered.api.util.ban.BanTypes;
 
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
-import java.util.HashMap;
-import java.util.Map;
 
-@RegisterCommand("tempban")
-@Permissions(suggestedLevel = SuggestedLevel.MOD)
-@NoModifiers
+@Command(
+        aliases = "tempban",
+        basePermission = BanPermissions.BASE_TEMPBAN,
+        commandDescriptionKey = "tempban"
+)
 @EssentialsEquivalent("tempban")
 @NonnullByDefault
-public class TempBanCommand extends AbstractCommand<CommandSource> implements Reloadable {
+public class TempBanCommand implements ICommandExecutor<CommandSource>, Reloadable {
 
     private BanConfig banConfig = new BanConfig();
 
-    @Override public void onReload() {
-        this.banConfig = Nucleus.getNucleus().getInternalServiceManager().getServiceUnchecked(BanConfigAdapter.class).getNodeOrDefault();
+    @Override public void onReload(INucleusServiceCollection serviceCollection) {
+        this.banConfig = serviceCollection.moduleDataProvider().getModuleConfig(BanConfig.class);
     }
 
     @Override
-    public Map<String, PermissionInformation> permissionSuffixesToRegister() {
-        Map<String, PermissionInformation> m = new HashMap<>();
-        m.put("offline", PermissionInformation.getWithTranslation("permission.tempban.offline", SuggestedLevel.MOD));
-        m.put("exempt.target", PermissionInformation.getWithTranslation("permission.tempban.exempt.target", SuggestedLevel.MOD));
-        m.put("exempt.length", PermissionInformation.getWithTranslation("permission.tempban.exempt.length", SuggestedLevel.MOD));
-        return m;
-    }
-
-    @Override
-    public CommandElement[] getArguments() {
+    public CommandElement[] parameters(INucleusServiceCollection serviceCollection) {
         return new CommandElement[] {
                 NucleusParameters.ONE_USER,
                 NucleusParameters.DURATION,
@@ -69,53 +54,61 @@ public class TempBanCommand extends AbstractCommand<CommandSource> implements Re
         };
     }
 
-    @Override
-    public CommandResult executeCommand(CommandSource src, CommandContext args, Cause cause) throws Exception {
-        User u = args.<User>getOne(NucleusParameters.Keys.USER).get();
-        Long time = args.<Long>getOne(NucleusParameters.Keys.DURATION).get();
-        String reason = args.<String>getOne(NucleusParameters.Keys.REASON)
-                .orElseGet(() -> Nucleus.getNucleus().getMessageProvider().getMessageWithFormat("ban.defaultreason"));
+    @Override public ICommandResult execute(ICommandContext<? extends CommandSource> context) throws CommandException {
+        User u = context.requireOne(NucleusParameters.Keys.USER, User.class);
+        long time = context.requireOne(NucleusParameters.Keys.DURATION, long.class);
+        String reason = context.getOne(NucleusParameters.Keys.REASON, String.class)
+                .orElseGet(() -> context.getServiceCollection().messageProvider().getMessageString(context.getCommandSourceUnchecked(), "ban.defaultreason"));
 
-        if (this.permissions.testSuffix(u, "exempt.target", src, false)) {
-            throw new ReturnMessageException(Nucleus.getNucleus().getMessageProvider().getTextMessageWithFormat("command.tempban.exempt", u.getName()));
+        if (!(context.isConsoleAndBypass() || context.testPermissionFor(u, BanPermissions.TEMPBAN_EXEMPT_TARGET))) {
+            return context.errorResult("command.tempban.exempt", u.getName());
         }
 
-        if (!u.isOnline() && !this.permissions.testSuffix(src, "offline")) {
-            throw new ReturnMessageException(Nucleus.getNucleus().getMessageProvider().getTextMessageWithFormat("command.tempban.offline.noperms"));
+        if (!u.isOnline() && !context.testPermission(BanPermissions.TEMPBAN_OFFLINE)) {
+            return context.errorResult("command.tempban.offline.noperms");
         }
 
-        if (time > this.banConfig.getMaximumTempBanLength() && this.banConfig.getMaximumTempBanLength() != -1 &&
-                !this.permissions.testSuffix(src, "exempt.length")) {
-            src.sendMessage(Nucleus.getNucleus().getMessageProvider().getTextMessageWithFormat("command.tempban.length.toolong",
-                    Util.getTimeStringFromSeconds(this.banConfig.getMaximumTempBanLength())));
-            return CommandResult.success();
+        if (time > this.banConfig.getMaximumTempBanLength()
+                && this.banConfig.getMaximumTempBanLength() != -1 &&
+                !context.testPermission(BanPermissions.TEMPBAN_EXEMPT_LENGTH)) {
+            return context.errorResult("command.tempban.length.toolong",
+                    context.getTimeString(this.banConfig.getMaximumTempBanLength()));
         }
 
         BanService service = Sponge.getServiceManager().provideUnchecked(BanService.class);
 
         if (service.isBanned(u.getProfile())) {
-            src.sendMessage(Nucleus.getNucleus().getMessageProvider().getTextMessageWithFormat("command.ban.alreadyset", u.getName()));
-            return CommandResult.empty();
+            return context.errorResult("command.ban.alreadyset", u.getName());
         }
 
         // Expiration date
         Instant date = Instant.now().plus(time, ChronoUnit.SECONDS);
 
         // Create the ban.
+        CommandSource src = context.getCommandSource();
         Ban bp = Ban.builder().type(BanTypes.PROFILE).profile(u.getProfile()).source(src).expirationDate(date).reason(TextSerializers.FORMATTING_CODE.deserialize(reason)).build();
         service.addBan(bp);
 
-        MutableMessageChannel send = new PermissionMessageChannel(BanCommand.notifyPermission).asMutable();
+        MutableMessageChannel send =
+                context.getServiceCollection().permissionService().permissionMessageChannel(BanPermissions.BAN_NOTIFY).asMutable();
         send.addMember(src);
-        send.send(Nucleus.getNucleus()
-                .getMessageProvider().getTextMessageWithFormat("command.tempban.applied", u.getName(), Util.getTimeStringFromSeconds(time), src
-                        .getName()));
-        send.send(Nucleus.getNucleus().getMessageProvider().getTextMessageWithFormat("standard.reasoncoloured", reason));
+        for (MessageReceiver messageReceiver : send.getMembers()) {
+            if (messageReceiver instanceof CommandSource) {
+                context.sendMessageTo(messageReceiver,
+                        "command.tempban.applied",
+                        u.getName(),
+                        context.getTimeString(time),
+                        src.getName());
+                context.sendMessageTo(messageReceiver,
+                        "standard.reasoncoloured",
+                        reason);
+            }
+        }
 
         if (Sponge.getServer().getPlayer(u.getUniqueId()).isPresent()) {
             Sponge.getServer().getPlayer(u.getUniqueId()).get().kick(TextSerializers.FORMATTING_CODE.deserialize(reason));
         }
 
-        return CommandResult.success();
+        return context.successResult();
     }
 }

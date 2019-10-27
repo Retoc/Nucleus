@@ -4,20 +4,19 @@
  */
 package io.github.nucleuspowered.nucleus.modules.world.commands.border;
 
-import io.github.nucleuspowered.nucleus.Nucleus;
 import io.github.nucleuspowered.nucleus.argumentparsers.PositiveIntegerArgument;
-import io.github.nucleuspowered.nucleus.internal.annotations.command.NoModifiers;
-import io.github.nucleuspowered.nucleus.internal.annotations.command.Permissions;
-import io.github.nucleuspowered.nucleus.internal.annotations.command.RegisterCommand;
-import io.github.nucleuspowered.nucleus.internal.command.AbstractCommand;
+import io.github.nucleuspowered.nucleus.internal.command.ICommandContext;
+import io.github.nucleuspowered.nucleus.internal.command.ICommandExecutor;
+import io.github.nucleuspowered.nucleus.internal.command.ICommandResult;
 import io.github.nucleuspowered.nucleus.internal.command.NucleusParameters;
+import io.github.nucleuspowered.nucleus.internal.command.annotation.Command;
+import io.github.nucleuspowered.nucleus.modules.world.WorldPermissions;
+import io.github.nucleuspowered.nucleus.services.INucleusServiceCollection;
 import org.spongepowered.api.Sponge;
-import org.spongepowered.api.command.CommandResult;
+import org.spongepowered.api.command.CommandException;
 import org.spongepowered.api.command.CommandSource;
-import org.spongepowered.api.command.args.CommandContext;
 import org.spongepowered.api.command.args.CommandElement;
 import org.spongepowered.api.command.args.GenericArguments;
-import org.spongepowered.api.event.cause.Cause;
 import org.spongepowered.api.text.Text;
 import org.spongepowered.api.util.annotation.NonnullByDefault;
 import org.spongepowered.api.world.Locatable;
@@ -27,11 +26,14 @@ import org.spongepowered.api.world.storage.WorldProperties;
 
 import java.util.Optional;
 
-@Permissions(prefix = "world.border")
-@NoModifiers
-@RegisterCommand(value = {"set"}, subcommandOf = BorderCommand.class)
 @NonnullByDefault
-public class SetBorderCommand extends AbstractCommand<CommandSource> {
+@Command(
+        aliases = { "set" },
+        basePermission = WorldPermissions.BASE_BORDER_SET,
+        commandDescriptionKey = "world.border.set",
+        parentCommand = BorderCommand.class
+)
+public class SetBorderCommand implements ICommandExecutor<CommandSource> {
 
     private final String xKey = "x";
     private final String zKey = "z";
@@ -39,7 +41,7 @@ public class SetBorderCommand extends AbstractCommand<CommandSource> {
     private final String delayKey = "delay";
 
     @Override
-    public CommandElement[] getArguments() {
+    public CommandElement[] parameters(INucleusServiceCollection serviceCollection) {
         return new CommandElement[] {
             GenericArguments.firstParsing(
                 // Console + player
@@ -59,26 +61,26 @@ public class SetBorderCommand extends AbstractCommand<CommandSource> {
         };
     }
 
-    @Override
-    public CommandResult executeCommand(CommandSource src, CommandContext args, Cause cause) throws Exception {
-        WorldProperties wp = getWorldFromUserOrArgs(src, NucleusParameters.Keys.WORLD, args);
+    @Override public ICommandResult execute(ICommandContext<? extends CommandSource> context) throws CommandException {
+        WorldProperties wp = context.getWorldPropertiesOrFromSelf(NucleusParameters.Keys.WORLD)
+                .orElseThrow(() -> context.createException("command.world.player"));
         int x;
         int z;
-        int dia = args.<Integer>getOne(this.diameter).get();
-        int delay = args.<Integer>getOne(this.delayKey).orElse(0);
+        int dia = context.requireOne(this.diameter, Integer.class);
+        int delay = context.getOne(this.delayKey, Integer.class).orElse(0);
 
-        if (src instanceof Locatable) {
-            Location<World> lw = ((Locatable) src).getLocation();
-            if (args.hasAny(this.zKey)) {
-                x = args.<Integer>getOne(this.xKey).get();
-                z = args.<Integer>getOne(this.zKey).get();
+        if (context.is(Locatable.class)) {
+            Location<World> lw = ((Locatable) context.getCommandSource()).getLocation();
+            if (context.hasAny(this.zKey)) {
+                x = context.requireOne(this.xKey, Integer.class);
+                z = context.requireOne(this.zKey, Integer.class);
             } else {
                 x = lw.getBlockX();
                 z = lw.getBlockZ();
             }
         } else {
-            x = args.<Integer>getOne(this.xKey).get();
-            z = args.<Integer>getOne(this.zKey).get();
+            x = context.requireOne(this.xKey, Integer.class);
+            z = context.requireOne(this.zKey, Integer.class);
         }
 
         // Now, if we have an x and a z key, get the centre from that.
@@ -91,25 +93,25 @@ public class SetBorderCommand extends AbstractCommand<CommandSource> {
         if (delay == 0) {
             world.ifPresent(w -> w.getWorldBorder().setDiameter(dia));
             wp.setWorldBorderDiameter(dia);
-            src.sendMessage(Nucleus.getNucleus().getMessageProvider().getTextMessageWithFormat("command.world.setborder.set",
+            context.sendMessage("command.world.setborder.set",
                     wp.getWorldName(),
                     String.valueOf(x),
                     String.valueOf(z),
-                    String.valueOf(dia)));
+                    String.valueOf(dia));
         } else {
             world.ifPresent(w -> w.getWorldBorder().setDiameter(dia, delay * 1000L));
             wp.setWorldBorderTimeRemaining(delay * 1000L);
             wp.setWorldBorderTargetDiameter(dia);
-            src.sendMessage(Nucleus.getNucleus().getMessageProvider().getTextMessageWithFormat("command.world.setborder.setdelay",
+            context.sendMessage("command.world.setborder.setdelay",
                     wp.getWorldName(),
                     String.valueOf(x),
                     String.valueOf(z),
                     String.valueOf(dia),
-                    String.valueOf(delay)));
+                    String.valueOf(delay));
         }
 
 
-        return CommandResult.success();
+        return context.successResult();
     }
 
 

@@ -4,32 +4,30 @@
  */
 package io.github.nucleuspowered.nucleus.modules.misc.commands;
 
-import io.github.nucleuspowered.nucleus.internal.annotations.command.Permissions;
-import io.github.nucleuspowered.nucleus.internal.annotations.command.RegisterCommand;
-import io.github.nucleuspowered.nucleus.internal.command.AbstractCommand;
-import io.github.nucleuspowered.nucleus.internal.docgen.annotations.EssentialsEquivalent;
-import io.github.nucleuspowered.nucleus.internal.permissions.SuggestedLevel;
-import org.spongepowered.api.command.CommandResult;
-import org.spongepowered.api.command.args.CommandContext;
+import io.github.nucleuspowered.nucleus.internal.command.ICommandContext;
+import io.github.nucleuspowered.nucleus.internal.command.ICommandExecutor;
+import io.github.nucleuspowered.nucleus.internal.command.ICommandResult;
+import io.github.nucleuspowered.nucleus.internal.command.annotation.Command;
+import io.github.nucleuspowered.nucleus.internal.command.annotation.EssentialsEquivalent;
+import io.github.nucleuspowered.nucleus.modules.misc.MiscPermissions;
+import org.spongepowered.api.command.CommandException;
 import org.spongepowered.api.data.DataTransactionResult;
 import org.spongepowered.api.data.key.Keys;
 import org.spongepowered.api.entity.living.player.Player;
-import org.spongepowered.api.event.cause.Cause;
 import org.spongepowered.api.util.annotation.NonnullByDefault;
 
-@Permissions(suggestedLevel = SuggestedLevel.USER)
-@RegisterCommand("suicide")
 @EssentialsEquivalent("suicide")
 @NonnullByDefault
-public class SuicideCommand extends AbstractCommand<Player> {
+@Command(aliases = { "suicide" }, basePermission = MiscPermissions.BASE_SUICIDE, commandDescriptionKey = "suicide")
+public class SuicideCommand implements ICommandExecutor<Player> {
 
     @Override
-    public CommandResult executeCommand(Player src, CommandContext args, Cause cause) {
+    public ICommandResult execute(ICommandContext<? extends Player> context) throws CommandException {
+        Player src = context.getIfPlayer();
         DataTransactionResult dtr = src.offer(Keys.HEALTH, 0d);
         if (!dtr.isSuccessful()) {
-            sendMessageTo(src, "command.suicide.error");
-            return CommandResult.empty();
+            return context.errorResult("command.suicide.error");
         }
-        return CommandResult.success();
+        return context.successResult();
     }
 }

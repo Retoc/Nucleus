@@ -5,8 +5,8 @@
 package io.github.nucleuspowered.nucleus.modules.connectionmessages;
 
 import io.github.nucleuspowered.nucleus.annotationprocessor.RegisterPermissions;
-import io.github.nucleuspowered.nucleus.internal.permissions.PermissionMetadata;
-import io.github.nucleuspowered.nucleus.internal.permissions.SuggestedLevel;
+import io.github.nucleuspowered.nucleus.services.impl.permission.PermissionMetadata;
+import io.github.nucleuspowered.nucleus.services.impl.permission.SuggestedLevel;
 
 @RegisterPermissions
 public class ConnectionMessagesPermissions {
@@ -15,6 +15,6 @@ public class ConnectionMessagesPermissions {
     }
 
     @PermissionMetadata(descriptionKey = "permission.connectionmesssages.disable", level = SuggestedLevel.NONE)
-    public static final String CONNECTIONMESSSAGES_DISABLE = "connectionmessages.disable";
+    public static final String CONNECTIONMESSSAGES_DISABLE = "nucleus.connectionmessages.disable";
 
 }

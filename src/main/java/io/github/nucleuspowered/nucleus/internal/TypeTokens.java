@@ -15,17 +15,25 @@ import io.github.nucleuspowered.nucleus.modules.jail.data.JailData;
 import io.github.nucleuspowered.nucleus.modules.mute.data.MuteData;
 import io.github.nucleuspowered.nucleus.modules.note.data.NoteData;
 import io.github.nucleuspowered.nucleus.modules.warn.data.WarnData;
+import org.spongepowered.api.entity.Entity;
+import org.spongepowered.api.world.Location;
+import org.spongepowered.api.world.World;
+import org.spongepowered.api.world.storage.WorldProperties;
 
 import java.time.Instant;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
+import java.util.function.Predicate;
 
+@SuppressWarnings("UnstableApiUsage")
 public final class TypeTokens {
 
     public static final TypeToken<Boolean> BOOLEAN = TypeToken.of(Boolean.class);
 
     public static final TypeToken<Instant> INSTANT = TypeToken.of(Instant.class);
+
+    public static final TypeToken<Location<World>> LOCATION_WORLD = new TypeToken<Location<World>>() {};
 
     public static final TypeToken<LocationNode> LOCATION_NODE = TypeToken.of(LocationNode.class);
 
@@ -58,4 +66,10 @@ public final class TypeTokens {
     public static final TypeToken<NamedLocation> NAMEDLOCATION = TypeToken.of(NamedLocation.class);
 
     public static final TypeToken<MailMessage> MAIL_MESSAGE = TypeToken.of(MailMessage.class);
+
+    public static final TypeToken<Entity> ENTITY = TypeToken.of(Entity.class);
+
+    public static final TypeToken<WorldProperties> WORLD_PROPERTIES = TypeToken.of(WorldProperties.class);
+
+    public static final TypeToken<Predicate<Entity>> PREDICATE_ENTITY = new TypeToken<Predicate<Entity>>() {};
 }

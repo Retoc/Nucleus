@@ -5,12 +5,14 @@
 package io.github.nucleuspowered.nucleus.modules.core.services;
 
 import com.flowpowered.math.vector.Vector3d;
+import com.google.inject.Inject;
 import io.github.nucleuspowered.nucleus.api.service.NucleusPlayerMetadataService;
 import io.github.nucleuspowered.nucleus.internal.annotations.APIService;
 import io.github.nucleuspowered.nucleus.internal.interfaces.ServiceBase;
-import io.github.nucleuspowered.nucleus.internal.traits.IDataManagerTrait;
 import io.github.nucleuspowered.nucleus.modules.core.CoreKeys;
-import io.github.nucleuspowered.nucleus.storage.dataobjects.modular.IUserDataObject;
+import io.github.nucleuspowered.nucleus.services.INucleusServiceCollection;
+import io.github.nucleuspowered.nucleus.services.IStorageManager;
+import io.github.nucleuspowered.nucleus.services.impl.storage.dataobjects.modular.IUserDataObject;
 import org.spongepowered.api.Sponge;
 import org.spongepowered.api.entity.living.player.Player;
 import org.spongepowered.api.util.Tuple;
@@ -27,13 +29,20 @@ import javax.annotation.Nullable;
 
 @APIService(NucleusPlayerMetadataService.class)
 @NonnullByDefault
-public class PlayerMetadataService implements NucleusPlayerMetadataService, ServiceBase, IDataManagerTrait {
+public class PlayerMetadataService implements NucleusPlayerMetadataService, ServiceBase {
 
-    @Override public Optional<Result> getUserData(UUID uuid) {
-        return getUser(uuid).join().map(x -> new ResultImpl(uuid, x));
+    private final IStorageManager storageManager;
+
+    @Inject
+    public PlayerMetadataService(INucleusServiceCollection serviceCollection) {
+        this.storageManager = serviceCollection.storageManager();
     }
 
-    public class ResultImpl implements Result {
+    @Override public Optional<Result> getUserData(UUID uuid) {
+        return this.storageManager.getUserService().get(uuid).join().map(x -> new ResultImpl(uuid, x));
+    }
+
+    public static class ResultImpl implements Result {
 
         // private final User user;
 

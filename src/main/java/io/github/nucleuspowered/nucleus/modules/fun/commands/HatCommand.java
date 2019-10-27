@@ -4,17 +4,17 @@
  */
 package io.github.nucleuspowered.nucleus.modules.fun.commands;
 
-import io.github.nucleuspowered.nucleus.Nucleus;
 import io.github.nucleuspowered.nucleus.Util;
-import io.github.nucleuspowered.nucleus.internal.annotations.command.NoModifiers;
-import io.github.nucleuspowered.nucleus.internal.annotations.command.Permissions;
-import io.github.nucleuspowered.nucleus.internal.annotations.command.RegisterCommand;
-import io.github.nucleuspowered.nucleus.internal.command.AbstractCommand;
-import io.github.nucleuspowered.nucleus.internal.command.ReturnMessageException;
-import io.github.nucleuspowered.nucleus.internal.docgen.annotations.EssentialsEquivalent;
-import org.spongepowered.api.command.CommandResult;
+import io.github.nucleuspowered.nucleus.internal.command.ICommandContext;
+import io.github.nucleuspowered.nucleus.internal.command.ICommandExecutor;
+import io.github.nucleuspowered.nucleus.internal.command.ICommandResult;
+import io.github.nucleuspowered.nucleus.internal.command.annotation.Command;
+import io.github.nucleuspowered.nucleus.internal.command.annotation.EssentialsEquivalent;
+import io.github.nucleuspowered.nucleus.modules.fun.FunPermissions;
+import io.github.nucleuspowered.nucleus.services.INucleusServiceCollection;
+import org.spongepowered.api.command.CommandException;
 import org.spongepowered.api.command.CommandSource;
-import org.spongepowered.api.command.args.CommandContext;
+import org.spongepowered.api.command.args.CommandElement;
 import org.spongepowered.api.data.key.Keys;
 import org.spongepowered.api.data.type.HandTypes;
 import org.spongepowered.api.entity.living.player.Player;
@@ -26,18 +26,30 @@ import org.spongepowered.api.util.annotation.NonnullByDefault;
 
 import java.util.Optional;
 
-@RegisterCommand({"hat", "head"})
-@NoModifiers
-@Permissions(supportsSelectors = true, supportsOthers = true)
 @EssentialsEquivalent({"hat", "head"})
 @NonnullByDefault
-public class HatCommand extends AbstractCommand.SimpleTargetOtherPlayer {
+@Command(
+        aliases = {"hat", "head"},
+        basePermission = FunPermissions.BASE_HAT,
+        commandDescriptionKey = "hat"
+)
+public class HatCommand implements ICommandExecutor<CommandSource> {
 
-    @Override protected CommandResult executeWithPlayer(CommandSource player, Player pl, CommandContext args, boolean isSelf) throws Exception {
+    @Override
+    public CommandElement[] parameters(INucleusServiceCollection serviceCollection) {
+        return new CommandElement[] {
+                serviceCollection.commandElementSupplier().createOnlyOtherUserPermissionElement(true, FunPermissions.OTHERS_HAT)
+        };
+    }
+
+    @Override
+    public ICommandResult execute(ICommandContext<? extends CommandSource> context) throws CommandException {
+        Player pl = context.getPlayerFromArgs();
+        boolean isSelf = context.is(pl);
         Optional<ItemStack> helmetOptional = pl.getHelmet();
 
         ItemStack stack = pl.getItemInHand(HandTypes.MAIN_HAND)
-                .orElseThrow(() -> ReturnMessageException.fromKey("command.generalerror.handempty"));
+                .orElseThrow(() -> context.createException("command.generalerror.handempty"));
         ItemStack hand = stack.copy();
         hand.setQuantity(1);
         pl.setHelmet(hand);
@@ -58,11 +70,13 @@ public class HatCommand extends AbstractCommand.SimpleTargetOtherPlayer {
                 .getRejectedItems().forEach(x -> Util.dropItemOnFloorAtLocation(x, pl.getWorld(), pl.getLocation().getPosition())));
 
         if (!isSelf) {
-            player.sendMessage(Nucleus.getNucleus()
-                    .getMessageProvider().getTextMessageWithTextFormat("command.hat.success", Nucleus.getNucleus().getNameUtil().getName(pl), itemName));
+            context.sendMessage(
+                    "command.hat.success",
+                    context.getServiceCollection().playerDisplayNameService().getDisplayName(pl.getUniqueId()),
+                    itemName);
         }
 
-        pl.sendMessage(Nucleus.getNucleus().getMessageProvider().getTextMessageWithTextFormat("command.hat.successself", itemName));
-        return CommandResult.success();
+        context.sendMessageTo(pl, "command.hat.successself", itemName);
+        return context.successResult();
     }
 }

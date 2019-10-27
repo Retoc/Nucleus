@@ -9,9 +9,10 @@ import com.google.common.collect.Lists;
 import com.google.common.collect.Maps;
 import io.github.nucleuspowered.nucleus.Nucleus;
 import io.github.nucleuspowered.nucleus.internal.interfaces.Reloadable;
-import io.github.nucleuspowered.nucleus.internal.traits.InternalServiceManagerTrait;
-import io.github.nucleuspowered.nucleus.internal.traits.MessageProviderTrait;
+import io.github.nucleuspowered.nucleus.internal.interfaces.SimpleReloadable;
+import io.github.nucleuspowered.nucleus.modules.core.config.CoreConfig;
 import io.github.nucleuspowered.nucleus.modules.core.config.CoreConfigAdapter;
+import io.github.nucleuspowered.nucleus.services.INucleusServiceCollection;
 import io.github.nucleuspowered.nucleus.util.Tuples;
 import org.spongepowered.api.command.CommandSource;
 import org.spongepowered.api.entity.living.player.Player;
@@ -42,283 +43,15 @@ import java.util.regex.Pattern;
 
 import javax.annotation.Nullable;
 
-public class TextParsingUtils implements Reloadable, MessageProviderTrait, InternalServiceManagerTrait {
-
-    private static final Pattern colours = Pattern.compile(".*?(?<colour>(&[0-9a-flmnrok])+)$");
-
-    private final Pattern enhancedUrlParser =
-            Pattern.compile("(?<first>(^|\\s))(?<reset>&r)?(?<colour>(&[0-9a-flmnrok])+)?"
-                + "((?<options>\\{[a-z]+?})?(?<url>(http(s)?://)?([A-Za-z0-9]+\\.)+[A-Za-z0-9-]{2,}\\S*)|"
-                + "(?<specialUrl>(\\[(?<msg>.+?)](?<optionssurl>\\{[a-z]+})?\\((?<sUrl>(http(s)?://)?([A-Za-z0-9-]+\\.)+[A-Za-z0-9]{2,}[^\\s)]*)\\)))|"
-                + "(?<specialCmd>(\\[(?<sMsg>.+?)](?<optionsscmd>\\{[a-z]+})?\\((?<sCmd>/.+?)\\))))",
-                Pattern.CASE_INSENSITIVE);
-
-    private static final Pattern urlParser =
-            Pattern.compile("(?<first>(^|\\s))(?<reset>&r)?(?<colour>(&[0-9a-flmnrok])+)?"
-                            + "(?<options>\\{[a-z]+?})?(?<url>(http(s)?://)?([A-Za-z0-9-]+\\.)+[A-Za-z0-9]{2,}\\S*)",
-                    Pattern.CASE_INSENSITIVE);
-    private static final StyleTuple EMPTY = new StyleTuple(TextColors.NONE, TextStyles.NONE);
-    private String commandNameOnClick;
-
-    public static Text addUrls(String message) {
-        return addUrls(message, false);
-    }
-
-    public static Text addUrls(String message, boolean replaceBlueUnderline) {
-        if (message == null || message.isEmpty()) {
-            return Text.EMPTY;
-        }
-
-        Matcher m = urlParser.matcher(message);
-        if (!m.find()) {
-            return TextSerializers.FORMATTING_CODE.deserialize(message);
-        }
-
-        List<TextElement> texts = Lists.newArrayList();
-        String remaining = message;
-        TextParsingUtils.StyleTuple st = TextParsingUtils.EMPTY;
-        do {
-            // We found a URL. We split on the URL that we have.
-            String[] textArray = remaining.split(urlParser.pattern(), 2);
-            Text first = Text.builder().color(st.colour).style(st.style)
-                    .append(TextSerializers.FORMATTING_CODE.deserialize(textArray[0])).build();
-
-            // Add this text to the list regardless.
-            texts.add(first);
-
-            // If we have more to do, shove it into the "remaining" variable.
-            if (textArray.length == 2) {
-                remaining = textArray[1];
-            } else {
-                remaining = null;
-            }
-
-            // Get the last colour & styles
-            String colourMatch = m.group("colour");
-            if (replaceBlueUnderline) {
-                st = new StyleTuple(TextColors.BLUE, TextStyles.UNDERLINE);
-            } else if (colourMatch != null && !colourMatch.isEmpty()) {
-
-                // If there is a reset, explicitly do it.
-                TextStyle reset = TextStyles.NONE;
-                if (m.group("reset") != null) {
-                    reset = TextStyles.RESET;
-                }
-
-                st = getLastColourAndStyle(Text.of(reset, TextSerializers.FORMATTING_CODE.deserialize(m.group("colour") + " ")), st);
-            } else {
-                st = getLastColourAndStyle(first, st);
-            }
-
-            // Build the URL
-            String whiteSpace = m.group("first");
-            if (replaceBlueUnderline) {
-                st = new StyleTuple(TextColors.BLUE, TextStyles.UNDERLINE);
-            } else {
-                st = TextParsingUtils.getLastColourAndStyle(first, st);
-            }
-            String url = m.group("url");
-            if (url.endsWith("&r")) {
-                String url2 = url.replaceAll("&r$", "");
-                texts.add(TextParsingUtils.getTextForUrl(url2, url2, whiteSpace, st, m.group("options")));
-            } else {
-                texts.add(TextParsingUtils.getTextForUrl(url, url, whiteSpace, st, m.group("options")));
-            }
-
-            if (replaceBlueUnderline) {
-                st = TextParsingUtils.getLastColourAndStyle(first, st, TextColors.WHITE, TextStyles.NONE);
-            }
-        } while (remaining != null && m.find());
-
-        // Add the last bit.
-        if (remaining != null) {
-            texts.add(
-                Text.builder().color(st.colour).style(st.style).append(TextSerializers.FORMATTING_CODE.deserialize(remaining)).build());
-        }
-
-        // Join it all together.
-        //noinspection SuspiciousToArrayCall,ToArrayCallWithZeroLengthArrayArgument
-        return Text.of((Object[]) texts.toArray(new TextElement[texts.size()]));
-    }
-
-    public static Text oldLegacy(String message) {
-        Matcher colourMatcher = colours.matcher(message);
-        if (colourMatcher.matches()) {
-            Text first = TextSerializers.FORMATTING_CODE.deserialize(message.replace(colourMatcher.group("colour"), ""));
-            String match = colourMatcher.group("colour") + " ";
-            Text t = TextSerializers.FORMATTING_CODE.deserialize(match);
-            return Text.of(first, t.getColor(), first.getStyle().and(t.getStyle()));
-        }
-
-        return TextSerializers.FORMATTING_CODE.deserialize(message);
-    }
-
-    public Tuples.NullableTuple<List<TextRepresentable>, Map<String, Function<CommandSource, Text>>> createTextTemplateFragmentWithLinks(String message) {
-        Preconditions.checkNotNull(message, "message");
-        if (message.isEmpty()) {
-            return new Tuples.NullableTuple<>(Lists.newArrayList(Text.EMPTY), null);
-        }
-
-        Matcher m = this.enhancedUrlParser.matcher(message);
-        if (!m.find()) {
-            return new Tuples.NullableTuple<>(Lists.newArrayList(oldLegacy(message)), null);
-        }
-
-        Map<String, Function<CommandSource, Text>> args = Maps.newHashMap();
-        List<TextRepresentable> texts = Lists.newArrayList();
-        String remaining = message;
-        StyleTuple st = TextParsingUtils.EMPTY;
-        do {
-            // We found a URL. We split on the URL that we have.
-            String[] textArray = remaining.split(this.enhancedUrlParser.pattern(), 2);
-            TextRepresentable first = Text.builder().color(st.colour).style(st.style)
-                    .append(oldLegacy(textArray[0])).build();
-
-            // Add this text to the list regardless.
-            texts.add(first);
-
-            // If we have more to do, shove it into the "remaining" variable.
-            if (textArray.length == 2) {
-                remaining = textArray[1];
-            } else {
-                remaining = null;
-            }
-
-            // Get the last colour & styles
-            String colourMatch = m.group("colour");
-            if (colourMatch != null && !colourMatch.isEmpty()) {
-
-                // If there is a reset, explicitly do it.
-                TextStyle reset = TextStyles.NONE;
-                if (m.group("reset") != null) {
-                    reset = TextStyles.RESET;
-                }
-
-                first = Text.of(reset, oldLegacy(m.group("colour")));
-            }
-
-            st = getLastColourAndStyle(first, st);
-
-            // Build the URL
-            String whiteSpace = m.group("first");
-            if (m.group("url") != null) {
-                String url = m.group("url");
-                texts.add(getTextForUrl(url, url, whiteSpace, st, m.group("options")));
-            } else if (m.group("specialUrl") != null) {
-                String url = m.group("sUrl");
-                String msg = m.group("msg");
-                texts.add(getTextForUrl(url, msg, whiteSpace, st, m.group("optionssurl")));
-            } else {
-                // Must be commands.
-                String cmd = m.group("sCmd");
-                String msg = m.group("sMsg");
-                String optionList = m.group("optionsscmd");
-
-                if (cmd.contains("{{subject}}")) {
-                    String arg = UUID.randomUUID().toString();
-                    args.put(arg, cs -> {
-                        String command = cmd.replace("{{subject}}", cs.getName());
-                        return getCmd(msg, command, optionList, whiteSpace);
-                    });
-
-                    texts.add(TextTemplate.arg(arg).color(st.colour).style(st.style).build());
-                } else {
-                    texts.add(Text.of(st.colour, st.style, getCmd(msg, cmd, optionList, whiteSpace)));
-                }
-            }
-        } while (remaining != null && m.find());
-
-        // Add the last bit.
-        if (remaining != null) {
-            Text.Builder tb = Text.builder().color(st.colour).style(st.style).append(TextSerializers.FORMATTING_CODE.deserialize(remaining));
-            if (remaining.matches("^\\s+&r.*")) {
-                tb.style(TextStyles.RESET);
-            }
-
-            texts.add(tb.build());
-        }
-
-        // Return the list.
-        return new Tuples.NullableTuple<>(texts, args);
-    }
-
-    private Text getCmd(String msg, String cmd, String optionList, String whiteSpace) {
-        Text.Builder textBuilder = Text.builder(msg)
-                .onClick(TextActions.runCommand(cmd))
-                .onHover(setupHoverOnCmd(cmd, optionList));
-        if (optionList != null && optionList.contains("s")) {
-            textBuilder.onClick(TextActions.suggestCommand(cmd));
-        }
-
-        Text toAdd = textBuilder.build();
-        if (!whiteSpace.isEmpty()) {
-            toAdd = Text.join(Text.of(whiteSpace), toAdd);
-        }
-
-        return toAdd;
-    }
-
-    @Nullable
-    private HoverAction<?> setupHoverOnCmd(String cmd, @Nullable String optionList) {
-        if (optionList != null) {
-            if (optionList.contains("h")) {
-                return null;
-            }
-
-            if (optionList.contains("s")) {
-                return TextActions.showText(
-                        getMessage("chat.command.clicksuggest", cmd)
-                );
-            }
-        }
-
-        return TextActions.showText(getMessage("chat.command.click", cmd));
-    }
-
-    private static Text getTextForUrl(String url, String msg, String whiteSpace, StyleTuple st, @Nullable String optionString) {
-        String toParse = TextSerializers.FORMATTING_CODE.stripCodes(url);
-        Nucleus plugin = Nucleus.getNucleus();
-
-        try {
-            URL urlObj;
-            if (!toParse.startsWith("http://") && !toParse.startsWith("https://")) {
-                urlObj = new URL("http://" + toParse);
-            } else {
-                urlObj = new URL(toParse);
-            }
-
-            Text.Builder textBuilder = Text.builder(msg).color(st.colour).style(st.style).onClick(TextActions.openUrl(urlObj));
-            if (optionString == null || !optionString.contains("h")) {
-                textBuilder.onHover(TextActions.showText(plugin.getMessageProvider().getTextMessageWithFormat("chat.url.click", url)));
-            }
-
-            if (!whiteSpace.isEmpty()) {
-                return Text.builder(whiteSpace).append(textBuilder.build()).build();
-            }
-
-            return textBuilder.build();
-        } catch (MalformedURLException e) {
-            // URL parsing failed, just put the original text in here.
-            plugin.getLogger().warn(plugin.getMessageProvider().getMessageWithFormat("chat.url.malformed", url));
-            if (Nucleus.getNucleus().isDebugMode()) {
-                e.printStackTrace();
-            }
-
-            Text ret = Text.builder(url).color(st.colour).style(st.style).build();
-            if (!whiteSpace.isEmpty()) {
-                return Text.builder(whiteSpace).append(ret).build();
-            }
-
-            return ret;
-        }
-    }
+public class TextParsingUtils {
 
     public static Text joinTextsWithColoursFlowing(Text... texts) {
         List<Text> result = Lists.newArrayList();
         Text last = null;
         for (Text n : texts) {
             if (last != null) {
-                getLastColourAndStyle(last, null).applyTo(x -> result.add(Text.of(x.colour, x.style, n)));
+                StyleTuple st = getLastColourAndStyle(last, null);
+                result.add(Text.of(st.colour, st.style, n));
             } else {
                 result.add(n);
             }
@@ -333,7 +66,9 @@ public class TextParsingUtils implements Reloadable, MessageProviderTrait, Inter
         return getLastColourAndStyle(text, current, TextColors.NONE, TextStyles.NONE);
     }
 
-    public static StyleTuple getLastColourAndStyle(TextRepresentable text, @Nullable StyleTuple current, TextColor defaultColour,
+    public static StyleTuple getLastColourAndStyle(TextRepresentable text,
+            @Nullable StyleTuple current,
+            TextColor defaultColour,
             TextStyle defaultStyle) {
         List<Text> texts = flatten(text.toText());
         if (texts.isEmpty()) {
@@ -371,87 +106,21 @@ public class TextParsingUtils implements Reloadable, MessageProviderTrait, Inter
         return texts;
     }
 
-    public Text addCommandToName(CommandSource p) {
-        Text.Builder text = Text.builder(p.getName());
-        if (p instanceof User) {
-            return addCommandToNameInternal(text, (User)p);
-        }
-
-        return text.build();
-    }
-
-    public Text addCommandToDisplayName(CommandSource p) {
-        Text name = getName(p);
-        if (p instanceof User) {
-            return addCommandToNameInternal(name, (User)p);
-        }
-
-        return name;
-    }
-
-    private Text addCommandToNameInternal(Text name, User user) {
-        return addCommandToNameInternal(name.toBuilder(), user);
-    }
-
-    private Text addCommandToNameInternal(Text.Builder name, User user) {
-        if (this.commandNameOnClick == null) {
-            return name.build();
-        }
-
-        final String commandToRun = this.commandNameOnClick.replace("{{subject}}", user.getName()).replace("{{player}}", user.getName());
-        Optional<HoverAction<?>> ha = name.getHoverAction();
-        Text.Builder hoverAction;
-        if (ha.isPresent() && (ha.get() instanceof HoverAction.ShowText)) {
-            HoverAction.ShowText h = (HoverAction.ShowText)ha.get();
-            hoverAction = h.getResult().toBuilder();
-            hoverAction.append(Text.NEW_LINE);
-        } else {
-            hoverAction = Text.builder();
-        }
-
-        hoverAction.append(Nucleus.getNucleus().getMessageProvider().getTextMessageWithFormat("name.hover.command", commandToRun));
-        return name.onClick(TextActions.suggestCommand(commandToRun)).onHover(TextActions.showText(hoverAction.toText())).build();
-    }
-
-    private Text getName(CommandSource cs) {
-        if (cs instanceof Player) {
-            return Nucleus.getNucleus().getNameUtil().getName((Player)cs);
-        }
-
-        return Text.of(cs.getName());
-    }
-
-    @Override
-    public void onReload() throws Exception {
-        this.commandNameOnClick = getServiceUnchecked(CoreConfigAdapter.class).getNodeOrDefault().getCommandOnNameClick();
-        if (this.commandNameOnClick == null || this.commandNameOnClick.isEmpty()) {
-            return;
-        }
-
-        if (!this.commandNameOnClick.startsWith("/")) {
-            this.commandNameOnClick = "/" + this.commandNameOnClick;
-        }
-
-        if (!this.commandNameOnClick.endsWith(" ")) {
-            this.commandNameOnClick = this.commandNameOnClick + " ";
-        }
-    }
-
     @NonnullByDefault
     public static final class StyleTuple {
         public final TextColor colour;
         public final TextStyle style;
 
-        StyleTuple(TextColor colour, TextStyle style) {
+        public StyleTuple(TextColor colour, TextStyle style) {
             this.colour = colour;
             this.style = style;
         }
 
-        void applyTo(Consumer<StyleTuple> consumer) {
+        public void applyTo(Consumer<StyleTuple> consumer) {
             consumer.accept(this);
         }
 
-        Text getTextOf() {
+        public Text getTextOf() {
             Text.Builder tb = Text.builder();
             if (this.colour != TextColors.NONE) {
                 tb.color(this.colour);

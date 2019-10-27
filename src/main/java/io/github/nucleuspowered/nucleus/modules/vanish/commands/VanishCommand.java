@@ -4,131 +4,107 @@
  */
 package io.github.nucleuspowered.nucleus.modules.vanish.commands;
 
-import com.google.common.collect.Maps;
-import io.github.nucleuspowered.nucleus.Nucleus;
-import io.github.nucleuspowered.nucleus.internal.annotations.command.NoModifiers;
-import io.github.nucleuspowered.nucleus.internal.annotations.command.Permissions;
-import io.github.nucleuspowered.nucleus.internal.annotations.command.RegisterCommand;
-import io.github.nucleuspowered.nucleus.internal.command.AbstractCommand;
-import io.github.nucleuspowered.nucleus.internal.command.ReturnMessageException;
-import io.github.nucleuspowered.nucleus.internal.docgen.annotations.EssentialsEquivalent;
-import io.github.nucleuspowered.nucleus.internal.permissions.PermissionInformation;
-import io.github.nucleuspowered.nucleus.internal.permissions.SuggestedLevel;
+import io.github.nucleuspowered.nucleus.internal.command.ICommandContext;
+import io.github.nucleuspowered.nucleus.internal.command.ICommandExecutor;
+import io.github.nucleuspowered.nucleus.internal.command.ICommandResult;
+import io.github.nucleuspowered.nucleus.internal.command.annotation.Command;
+import io.github.nucleuspowered.nucleus.internal.command.annotation.EssentialsEquivalent;
 import io.github.nucleuspowered.nucleus.modules.vanish.VanishKeys;
+import io.github.nucleuspowered.nucleus.modules.vanish.VanishPermissions;
 import io.github.nucleuspowered.nucleus.modules.vanish.services.VanishService;
+import io.github.nucleuspowered.nucleus.services.INucleusServiceCollection;
 import io.github.nucleuspowered.storage.dataobjects.keyed.IKeyedDataObject;
-import org.spongepowered.api.command.CommandResult;
+import org.spongepowered.api.command.CommandException;
 import org.spongepowered.api.command.CommandSource;
-import org.spongepowered.api.command.args.CommandContext;
 import org.spongepowered.api.command.args.CommandElement;
 import org.spongepowered.api.command.args.GenericArguments;
 import org.spongepowered.api.data.key.Keys;
 import org.spongepowered.api.entity.living.player.Player;
 import org.spongepowered.api.entity.living.player.User;
 import org.spongepowered.api.entity.living.player.gamemode.GameModes;
-import org.spongepowered.api.event.cause.Cause;
 import org.spongepowered.api.text.Text;
 import org.spongepowered.api.util.annotation.NonnullByDefault;
 
-import java.util.Map;
-
-@Permissions(supportsOthers = true)
-@NoModifiers
 @NonnullByDefault
-@RegisterCommand({"vanish", "v"})
 @EssentialsEquivalent({"vanish", "v"})
-public class VanishCommand extends AbstractCommand<CommandSource> {
+@Command(
+        aliases = {"vanish", "v"},
+        basePermission = VanishPermissions.BASE_VANISH,
+        commandDescriptionKey = "vanish"
+)
+public class VanishCommand implements ICommandExecutor<CommandSource> {
 
-    private final String player = "player";
     private final String b = "toggle";
 
     @Override
-    public CommandElement[] getArguments() {
+    public CommandElement[] parameters(INucleusServiceCollection serviceCollection) {
         return new CommandElement[] {
-                GenericArguments.optionalWeak(requirePermissionArg(GenericArguments.user(Text.of(this.player)), this.permissions.getOthers())),
+                serviceCollection.commandElementSupplier().createOtherUserPermissionElement(false, VanishPermissions.OTHERS_VANISH),
                 GenericArguments.optional(GenericArguments.onlyOne(GenericArguments.bool(Text.of(this.b))))
         };
     }
 
-    @Override
-    protected Map<String, PermissionInformation> permissionSuffixesToRegister() {
-        Map<String, PermissionInformation> mspi = Maps.newHashMap();
-        mspi.put("see", PermissionInformation.getWithTranslation("permission.vanish.see", SuggestedLevel.ADMIN));
-        mspi.put("persist", PermissionInformation.getWithTranslation("permission.vanish.persist", SuggestedLevel.ADMIN));
-        mspi.put("onlogin", PermissionInformation.getWithTranslation("permission.vanish.onlogin", SuggestedLevel.NONE));
-        return mspi;
-    }
-
-    @Override
-    public CommandResult executeCommand(CommandSource src, CommandContext args, Cause cause) throws Exception {
-        User ou = getUserFromArgs(User.class, src, this.player, args);
+    @Override public ICommandResult execute(ICommandContext<? extends CommandSource> context) throws CommandException {
+        User ou = context.getUserFromArgs();
         if (ou.getPlayer().isPresent()) {
-            return onPlayer(src, args, ou.getPlayer().get());
+            return onPlayer(context, ou.getPlayer().get());
         }
 
-        if (!this.permissions.testSuffix(ou, "persist")) {
-            throw new ReturnMessageException(Nucleus.getNucleus().getMessageProvider().getTextMessageWithFormat("command.vanish.noperm", ou.getName()));
+        if (!context.testPermissionFor(ou, "persist")) {
+            return context.errorResult("command.vanish.noperm", ou.getName());
         }
 
         boolean result;
-        try (IKeyedDataObject.Value<Boolean> value = Nucleus.getNucleus()
-                .getStorageManager()
+        try (IKeyedDataObject.Value<Boolean> value = context
+                .getServiceCollection()
+                .storageManager()
                 .getUserService()
                 .getOrNewOnThread(ou.getUniqueId())
                 .getAndSet(VanishKeys.VANISH_STATUS)) {
-            result = args.<Boolean>getOne(this.b).orElse(!value.getValue().orElse(false));
+            result = context.getOne(this.b, Boolean.class).orElseGet(() -> !value.getValue().orElse(false));
             value.setValue(result);
+            VanishService service = context.getServiceCollection().getServiceUnchecked(VanishService.class);
             if (result) {
-                getServiceUnchecked(VanishService.class).vanishPlayer(ou);
+                service.vanishPlayer(ou);
             } else {
-                getServiceUnchecked(VanishService.class).unvanishPlayer(ou);
+                service.unvanishPlayer(ou);
             }
         }
 
-        sendMessageTo(
-                src,
+        context.sendMessage(
                 "command.vanish.successuser",
                 ou.getName(),
-                result ?
-                        getMessageFor(src, "command.vanish.vanished") :
-                        getMessageFor(src, "command.vanish.visible")
-        );
+                result ? "loc:command.vanish.vanished" : "loc:command.vanish.visible");
 
-        return CommandResult.success();
+        return context.successResult();
     }
 
-    private CommandResult onPlayer(CommandSource src, CommandContext args, Player playerToVanish) throws Exception {
+    private ICommandResult onPlayer(ICommandContext<? extends CommandSource> context, Player playerToVanish) throws CommandException {
         if (playerToVanish.get(Keys.GAME_MODE).orElse(GameModes.NOT_SET).equals(GameModes.SPECTATOR)) {
-            throw ReturnMessageException.fromKey("command.vanish.fail");
+            return context.errorResult("command.vanish.fail");
         }
 
         // If we don't specify whether to vanish, toggle
-        boolean toVanish = args.<Boolean>getOne(this.b).orElse(!playerToVanish.get(Keys.VANISH).orElse(false));
+        boolean toVanish = context.getOne(this.b, Boolean.class).orElse(!playerToVanish.get(Keys.VANISH).orElse(false));
+        VanishService service = context.getServiceCollection().getServiceUnchecked(VanishService.class);
         if (toVanish) {
-            getServiceUnchecked(VanishService.class).vanishPlayer(playerToVanish);
+            service.vanishPlayer(playerToVanish);
         } else {
-            getServiceUnchecked(VanishService.class).unvanishPlayer(playerToVanish);
+            service.unvanishPlayer(playerToVanish);
         }
 
-        sendMessageTo(
+        context.sendMessageTo(
                 playerToVanish,
                 "command.vanish.success",
-                toVanish ?
-                        getMessageFor(playerToVanish, "command.vanish.vanished") :
-                        getMessageFor(playerToVanish, "command.vanish.visible")
-        );
+                toVanish ? "loc:command.vanish.vanished" : "loc:command.vanish.visible");
 
-        if (!(src instanceof Player) || !(((Player) src).getUniqueId().equals(playerToVanish.getUniqueId()))) {
-            sendMessageTo(
-                    playerToVanish,
+        if (!context.is(playerToVanish)) {
+            context.sendMessage(
                     "command.vanish.successplayer",
-                    Nucleus.getNucleus().getNameUtil().getName(playerToVanish),
-                    toVanish ?
-                            getMessageFor(playerToVanish, "command.vanish.vanished") :
-                            getMessageFor(playerToVanish, "command.vanish.visible")
-            );
+                    context.getDisplayName(playerToVanish.getUniqueId()),
+                    toVanish ? "loc:command.vanish.vanished" : "loc:command.vanish.visible");
         }
 
-        return CommandResult.success();
+        return context.successResult();
     }
 }

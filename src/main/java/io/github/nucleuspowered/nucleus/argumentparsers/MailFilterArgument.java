@@ -108,7 +108,7 @@ public class MailFilterArgument extends CommandElement {
 
     private Optional<UUID> player(String text) {
         if (text.equalsIgnoreCase("server") || (text.equalsIgnoreCase("console"))) {
-            return Optional.of(Util.consoleFakeUUID);
+            return Optional.of(Util.CONSOLE_FAKE_UUID);
         }
 
         UserStorageService uss = Sponge.getServiceManager().provideUnchecked(UserStorageService.class);

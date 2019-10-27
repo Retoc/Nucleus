@@ -5,9 +5,9 @@
 package io.github.nucleuspowered.nucleus.modules.ignore.services;
 
 import com.google.common.collect.ImmutableList;
-import io.github.nucleuspowered.nucleus.Nucleus;
 import io.github.nucleuspowered.nucleus.internal.interfaces.ServiceBase;
 import io.github.nucleuspowered.nucleus.modules.ignore.IgnoreKeys;
+import io.github.nucleuspowered.nucleus.services.INucleusServiceCollection;
 
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -15,16 +15,25 @@ import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 
+import javax.inject.Inject;
+
 public class IgnoreService implements ServiceBase {
+
+    private final INucleusServiceCollection serviceCollection;
 
     private final Map<UUID, List<UUID>> ignoredBy = new HashMap<>();
 
-    public void addPlayer(UUID player, List<UUID> ignored) {
+    @Inject
+    public IgnoreService(INucleusServiceCollection serviceCollection) {
+        this.serviceCollection = serviceCollection;
+    }
+
+    private void addPlayer(UUID player, List<UUID> ignored) {
         removePlayer(player);
         this.ignoredBy.put(player, new ArrayList<>(ignored));
     }
 
-    public void removePlayer(UUID player) {
+    private void removePlayer(UUID player) {
         this.ignoredBy.remove(player);
     }
 
@@ -32,7 +41,7 @@ public class IgnoreService implements ServiceBase {
         List<UUID> uuid = get(ignorer);
         if (!uuid.contains(ignoree)) {
             uuid.add(ignoree);
-            Nucleus.getNucleus().getStorageManager().getUserService()
+            this.serviceCollection.storageManager().getUserService()
                     .getOrNew(ignorer)
                     .thenAccept(x -> x.set(IgnoreKeys.IGNORED, new ArrayList<>(uuid)));
         }
@@ -42,7 +51,7 @@ public class IgnoreService implements ServiceBase {
         List<UUID> uuid = get(ignorer);
         if (uuid.contains(ignoree)) {
             uuid.remove(ignoree);
-            Nucleus.getNucleus().getStorageManager().getUserService()
+            this.serviceCollection.storageManager().getUserService()
                     .getOrNew(ignorer)
                     .thenAccept(x -> x.set(IgnoreKeys.IGNORED, new ArrayList<>(uuid)));
         }
@@ -59,7 +68,7 @@ public class IgnoreService implements ServiceBase {
     private List<UUID> get(UUID player) {
         if (!this.ignoredBy.containsKey(player)) {
             addPlayer(player,
-                    Nucleus.getNucleus().getStorageManager().getUserService()
+                    this.serviceCollection.storageManager().getUserService()
                             .getOnThread(player)
                             .flatMap(x -> x.get(IgnoreKeys.IGNORED))
                             .orElseGet(ImmutableList::of));

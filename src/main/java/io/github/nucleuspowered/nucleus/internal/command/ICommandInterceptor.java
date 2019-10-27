@@ -4,13 +4,19 @@
  */
 package io.github.nucleuspowered.nucleus.internal.command;
 
+import io.github.nucleuspowered.nucleus.internal.command.control.CommandControl;
 import org.spongepowered.api.command.CommandResult;
 import org.spongepowered.api.command.CommandSource;
 import org.spongepowered.api.command.args.CommandContext;
 
 public interface ICommandInterceptor {
 
-    void onPreCommand(Class<? extends AbstractCommand<?>> commandClass, CommandSource source, CommandContext context);
+    void onPreCommand(Class<? extends ICommandExecutor<?>> commandClass,
+            CommandControl commandControl,
+            ICommandContext<? extends CommandSource> context);
 
-    void onPostCommand(Class<? extends AbstractCommand<?>> commandClass, CommandSource source, CommandContext context, CommandResult result);
+    void onPostCommand(Class<? extends ICommandExecutor<?>> commandClass,
+            CommandControl commandControl,
+            ICommandContext<? extends CommandSource> context,
+            ICommandResult result);
 }

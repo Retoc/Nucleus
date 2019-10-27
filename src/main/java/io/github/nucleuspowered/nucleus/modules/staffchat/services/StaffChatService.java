@@ -9,13 +9,17 @@ import io.github.nucleuspowered.nucleus.api.chat.NucleusChatChannel;
 import io.github.nucleuspowered.nucleus.api.service.NucleusStaffChatService;
 import io.github.nucleuspowered.nucleus.internal.annotations.APIService;
 import io.github.nucleuspowered.nucleus.internal.interfaces.ServiceBase;
-import io.github.nucleuspowered.nucleus.internal.userprefs.UserPreferenceService;
+import io.github.nucleuspowered.nucleus.services.INucleusServiceCollection;
+import io.github.nucleuspowered.nucleus.services.IUserPreferenceService;
+import io.github.nucleuspowered.nucleus.services.impl.userprefs.UserPreferenceService;
 import io.github.nucleuspowered.nucleus.modules.staffchat.StaffChatMessageChannel;
 import io.github.nucleuspowered.nucleus.modules.staffchat.StaffChatUserPrefKeys;
 import org.spongepowered.api.entity.living.player.Player;
 import org.spongepowered.api.text.channel.MessageChannel;
 
 import javax.annotation.Nullable;
+import javax.inject.Inject;
+
 import java.util.HashMap;
 import java.util.Map;
 import java.util.UUID;
@@ -23,7 +27,13 @@ import java.util.UUID;
 @APIService(NucleusStaffChatService.class)
 public class StaffChatService implements NucleusStaffChatService, ServiceBase {
 
+    private final IUserPreferenceService userPreferenceService;
     private final Map<UUID, MessageChannel> previousChannels = new HashMap<>();
+
+    @Inject
+    public StaffChatService(INucleusServiceCollection serviceCollection) {
+        this.userPreferenceService = serviceCollection.userPreferenceService();
+    }
 
     @Override
     public NucleusChatChannel.StaffChat getStaffChat() {
@@ -47,8 +57,7 @@ public class StaffChatService implements NucleusStaffChatService, ServiceBase {
             player.setMessageChannel(StaffChatMessageChannel.getInstance());
 
             // If you switch, you're switching to the staff chat channel so you should want to listen to it.
-            Nucleus.getNucleus().getInternalServiceManager().getServiceUnchecked(UserPreferenceService.class)
-                    .setPreferenceFor(player, StaffChatUserPrefKeys.VIEW_STAFF_CHAT, true);
+            this.userPreferenceService.setPreferenceFor(player, StaffChatUserPrefKeys.VIEW_STAFF_CHAT, true);
         } else {
             @Nullable MessageChannel mc = this.previousChannels.get(player.getUniqueId());
             if (mc == null) {

@@ -5,8 +5,8 @@
 package io.github.nucleuspowered.nucleus.modules.nickname.listeners;
 
 import io.github.nucleuspowered.nucleus.internal.interfaces.ListenerBase;
-import io.github.nucleuspowered.nucleus.internal.traits.InternalServiceManagerTrait;
 import io.github.nucleuspowered.nucleus.modules.nickname.services.NicknameService;
+import io.github.nucleuspowered.nucleus.services.INucleusServiceCollection;
 import org.spongepowered.api.data.key.Keys;
 import org.spongepowered.api.entity.living.player.Player;
 import org.spongepowered.api.event.Listener;
@@ -17,13 +17,22 @@ import org.spongepowered.api.text.Text;
 
 import java.util.Optional;
 
-public class NicknameListener implements ListenerBase, InternalServiceManagerTrait {
+import javax.inject.Inject;
+
+public class NicknameListener implements ListenerBase {
+
+    private final NicknameService nicknameService;
+
+    @Inject
+    public NicknameListener(INucleusServiceCollection serviceCollection) {
+        this.nicknameService = serviceCollection.getServiceUnchecked(NicknameService.class);
+    }
 
     @Listener(order = Order.FIRST)
     public void onPlayerJoin(ClientConnectionEvent.Join event, @Root Player player) {
-        Optional<Text> nickname = getServiceUnchecked(NicknameService.class).getNickname(player);
+        Optional<Text> nickname = this.nicknameService.getNickname(player);
         nickname.ifPresent(text -> {
-            getServiceUnchecked(NicknameService.class).updateCache(player.getUniqueId(), text);
+            this.nicknameService.updateCache(player.getUniqueId(), text);
         });
         player.offer(
                 Keys.DISPLAY_NAME,
@@ -32,7 +41,7 @@ public class NicknameListener implements ListenerBase, InternalServiceManagerTra
 
     @Listener(order = Order.LAST)
     public void onPlayerQuit(ClientConnectionEvent.Disconnect event, @Root Player player) {
-        getServiceUnchecked(NicknameService.class).removeFromCache(player.getUniqueId());
+        this.nicknameService.removeFromCache(player.getUniqueId());
     }
 
 }

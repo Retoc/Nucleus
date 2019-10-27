@@ -4,15 +4,13 @@
  */
 package io.github.nucleuspowered.nucleus.modules.serverlist.listener;
 
-import io.github.nucleuspowered.nucleus.Nucleus;
 import io.github.nucleuspowered.nucleus.api.text.NucleusTextTemplate;
 import io.github.nucleuspowered.nucleus.internal.interfaces.ListenerBase;
 import io.github.nucleuspowered.nucleus.internal.interfaces.Reloadable;
-import io.github.nucleuspowered.nucleus.internal.text.NucleusTextTemplateImpl;
-import io.github.nucleuspowered.nucleus.modules.serverlist.ServerListModule;
 import io.github.nucleuspowered.nucleus.modules.serverlist.config.ServerListConfig;
-import io.github.nucleuspowered.nucleus.modules.serverlist.config.ServerListConfigAdapter;
 import io.github.nucleuspowered.nucleus.modules.serverlist.services.ServerListService;
+import io.github.nucleuspowered.nucleus.services.INucleusServiceCollection;
+import io.github.nucleuspowered.nucleus.services.impl.texttemplatefactory.NucleusTextTemplateImpl;
 import org.spongepowered.api.Sponge;
 import org.spongepowered.api.data.key.Keys;
 import org.spongepowered.api.entity.living.player.User;
@@ -26,30 +24,23 @@ import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
 import java.util.Random;
-import java.util.function.Function;
 import java.util.stream.Collectors;
+
+import javax.inject.Inject;
 
 public class ServerListListener implements Reloadable, ListenerBase.Conditional {
 
     private final ServerListService service;
     private final Random random = new Random();
-    private ServerListConfig config;
+    private ServerListConfig config = new ServerListConfig();
 
-    public ServerListListener() {
-        this.service = getServiceUnchecked(ServerListService.class);
+    @Inject
+    public ServerListListener(INucleusServiceCollection serviceCollection) {
+        this.service = serviceCollection.getServiceUnchecked(ServerListService.class);
     }
 
     @Listener
     public void onServerListPing(ClientPingServerEvent event, @Getter("getResponse") ClientPingServerEvent.Response response) {
-        if (this.config == null) {
-            try {
-                onReload();
-            } catch (Exception e) {
-                e.printStackTrace();
-                return;
-            }
-        }
-
         if (this.config.isModifyServerList()) {
             List<NucleusTextTemplateImpl> list = null;
             Optional<Text> ott = this.service.getMessage();
@@ -86,13 +77,12 @@ public class ServerListListener implements Reloadable, ListenerBase.Conditional 
     }
 
     @Override
-    public void onReload() {
-        this.config = Nucleus.getNucleus().getConfigValue(ServerListModule.ID, ServerListConfigAdapter.class, Function.identity())
-                .orElseGet(ServerListConfig::new);
+    public void onReload(INucleusServiceCollection serviceCollection) {
+        this.config = serviceCollection.moduleDataProvider().getModuleConfig(ServerListConfig.class);
     }
 
     @Override
-    public boolean shouldEnable() {
-        return Nucleus.getNucleus().getConfigValue(ServerListModule.ID, ServerListConfigAdapter.class, ServerListConfig::enableListener).orElse(false);
+    public boolean shouldEnable(INucleusServiceCollection serviceCollection) {
+        return serviceCollection.moduleDataProvider().getModuleConfig(ServerListConfig.class).enableListener();
     }
 }

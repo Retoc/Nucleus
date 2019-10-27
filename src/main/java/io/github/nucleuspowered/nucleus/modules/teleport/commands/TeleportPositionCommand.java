@@ -6,51 +6,46 @@ package io.github.nucleuspowered.nucleus.modules.teleport.commands;
 
 import com.flowpowered.math.vector.Vector3d;
 import com.flowpowered.math.vector.Vector3i;
-import io.github.nucleuspowered.nucleus.Nucleus;
 import io.github.nucleuspowered.nucleus.api.teleport.TeleportResult;
 import io.github.nucleuspowered.nucleus.api.teleport.TeleportResults;
 import io.github.nucleuspowered.nucleus.api.teleport.TeleportScanners;
-import io.github.nucleuspowered.nucleus.internal.annotations.command.NoModifiers;
-import io.github.nucleuspowered.nucleus.internal.annotations.command.Permissions;
-import io.github.nucleuspowered.nucleus.internal.annotations.command.RegisterCommand;
-import io.github.nucleuspowered.nucleus.internal.command.AbstractCommand;
+import io.github.nucleuspowered.nucleus.internal.command.ICommandContext;
+import io.github.nucleuspowered.nucleus.internal.command.ICommandExecutor;
+import io.github.nucleuspowered.nucleus.internal.command.ICommandResult;
 import io.github.nucleuspowered.nucleus.internal.command.NucleusParameters;
-import io.github.nucleuspowered.nucleus.internal.command.ReturnMessageException;
-import io.github.nucleuspowered.nucleus.internal.docgen.annotations.EssentialsEquivalent;
-import io.github.nucleuspowered.nucleus.internal.permissions.PermissionInformation;
-import io.github.nucleuspowered.nucleus.internal.permissions.SuggestedLevel;
-import io.github.nucleuspowered.nucleus.modules.core.services.SafeTeleportService;
+import io.github.nucleuspowered.nucleus.internal.command.annotation.Command;
+import io.github.nucleuspowered.nucleus.internal.command.annotation.EssentialsEquivalent;
+import io.github.nucleuspowered.nucleus.modules.teleport.TeleportPermissions;
+import io.github.nucleuspowered.nucleus.services.INucleusServiceCollection;
+import io.github.nucleuspowered.nucleus.services.INucleusTeleportService;
 import org.spongepowered.api.Sponge;
-import org.spongepowered.api.command.CommandResult;
+import org.spongepowered.api.command.CommandException;
 import org.spongepowered.api.command.CommandSource;
-import org.spongepowered.api.command.args.CommandContext;
 import org.spongepowered.api.command.args.CommandElement;
 import org.spongepowered.api.command.args.CommandFlags;
 import org.spongepowered.api.command.args.GenericArguments;
 import org.spongepowered.api.entity.living.player.Player;
-import org.spongepowered.api.event.cause.Cause;
 import org.spongepowered.api.text.Text;
 import org.spongepowered.api.util.annotation.NonnullByDefault;
 import org.spongepowered.api.world.Location;
 import org.spongepowered.api.world.World;
 import org.spongepowered.api.world.storage.WorldProperties;
 
-import java.util.HashMap;
-import java.util.Map;
-
-@Permissions(prefix = "teleport", supportsOthers = true)
-@NoModifiers
 @NonnullByDefault
-@RegisterCommand({"tppos"})
 @EssentialsEquivalent("tppos")
-public class TeleportPositionCommand extends AbstractCommand<CommandSource> {
+@Command(
+        aliases = "tppos",
+        basePermission = TeleportPermissions.BASE_TPPOS,
+        commandDescriptionKey = "tppos"
+)
+public class TeleportPositionCommand implements ICommandExecutor<CommandSource> {
 
     private final String location = "world";
 //    private final String p = "pitch";
 //    private final String yaw = "yaw";
 
     @Override
-    public CommandElement[] getArguments() {
+    public CommandElement[] parameters(INucleusServiceCollection serviceCollection) {
         return new CommandElement[] {
                 GenericArguments.flags()
                     .setUnknownShortFlagBehavior(CommandFlags.UnknownFlagBehavior.IGNORE)
@@ -58,12 +53,12 @@ public class TeleportPositionCommand extends AbstractCommand<CommandSource> {
                     .flag("c", "-chunk")
 //                    .valueFlag(GenericArguments.doubleNum(Text.of(this.p)), "p", "-pitch")
 //                    .valueFlag(GenericArguments.doubleNum(Text.of(this.yaw)), "y", "-yaw")
-                    .permissionFlag(this.permissions.getPermissionWithSuffix("exempt.bordercheck"),"b", "-border")
+                    .permissionFlag(TeleportPermissions.TPPOS_BORDER,"b", "-border")
                     .buildWith(
                         GenericArguments.seq(
                             // Actual arguments
-                            GenericArguments.optionalWeak(
-                                    requirePermissionArg(NucleusParameters.ONE_PLAYER, this.permissions.getOthers())),
+                                serviceCollection.commandElementSupplier()
+                                    .createOtherUserPermissionElement(true, TeleportPermissions.OTHERS_TPPOS),
                             GenericArguments.onlyOne(GenericArguments.optionalWeak(GenericArguments.world(Text.of(this.location)))),
                             NucleusParameters.POSITION
                         )
@@ -71,51 +66,42 @@ public class TeleportPositionCommand extends AbstractCommand<CommandSource> {
         };
     }
 
-    @Override
-    protected Map<String, PermissionInformation> permissionSuffixesToRegister() {
-        return new HashMap<String, PermissionInformation>() {{
-            put("exempt.bordercheck", PermissionInformation.getWithTranslation("permission.tppos.border", SuggestedLevel.ADMIN));
-        }};
-    }
-
-    @Override
-    public CommandResult executeCommand(CommandSource src, CommandContext args, Cause cause) throws Exception {
-        Player pl = this.getUserFromArgs(Player.class, src, NucleusParameters.Keys.PLAYER, args);
-        WorldProperties wp = args.<WorldProperties>getOne(this.location).orElse(pl.getWorld().getProperties());
+    @Override public ICommandResult execute(ICommandContext<? extends CommandSource> context) throws CommandException {
+        Player pl = context.getPlayerFromArgs();
+        WorldProperties wp = context.getOne(this.location, WorldProperties.class).orElseGet(() -> pl.getWorld().getProperties());
         World world = Sponge.getServer().loadWorld(wp.getUniqueId()).get();
-        Vector3d location = args.<Vector3d>getOne(NucleusParameters.Keys.XYZ).get();
+        Vector3d location = context.requireOne(NucleusParameters.Keys.XYZ, Vector3d.class);
 
         double xx = location.getX();
         double  zz = location.getZ();
         double  yy = location.getY();
         if (yy < 0) {
-            src.sendMessage(Nucleus.getNucleus().getMessageProvider().getTextMessageWithFormat("command.tppos.ysmall"));
-            return CommandResult.empty();
+            return context.errorResult("command.tppos.ysmall");
         }
 
         // Chunks are 16 in size, chunk 0 is from 0 - 15, -1 from -1 to -16.
-        if (args.hasAny("c")) {
+        if (context.hasAny("c")) {
             xx = xx * 16 + 8;
             yy = yy * 16 + 8;
             zz = zz * 16 + 8;
-            src.sendMessage(Nucleus.getNucleus().getMessageProvider().getTextMessageWithFormat("command.tppos.fromchunk",
-                    String.valueOf(xx), String.valueOf(yy), String.valueOf(zz)));
+            context.sendMessage("command.tppos.fromchunk", xx, yy, zz);
         }
 
         Vector3i max = world.getBlockMax();
         Vector3i min = world.getBlockMin();
         if (!(isBetween(xx, max.getX(), min.getX()) && isBetween(yy, max.getY(), min.getY()) && isBetween(zz, max.getZ(), min.getZ()))) {
-            throw ReturnMessageException.fromKey("command.tppos.invalid");
+            return context.errorResult("command.tppos.invalid");
         }
 
         // Create the location
         Location<World> loc = new Location<>(world, xx, yy, zz);
-        SafeTeleportService teleportHandler = getServiceUnchecked(SafeTeleportService.class);
+        INucleusTeleportService teleportHandler = context.getServiceCollection().teleportService();
 
-        boolean safe = args.<Boolean>getOne("f").orElse(false);
-        boolean border = args.hasAny("b");
+        boolean safe = context.getOne("f", Boolean.class).orElse(false);
+        boolean border = context.hasAny("b");
 
-        try (AutoCloseable ac = teleportHandler.temporarilyDisableBorder(!safe && border, loc.getExtent())) {
+        try (INucleusTeleportService.BorderDisableSession ac =
+                teleportHandler.temporarilyDisableBorder(!safe && border, loc.getExtent())) {
             TeleportResult result = teleportHandler.teleportPlayerSmart(
                     pl,
                     loc,
@@ -125,17 +111,17 @@ public class TeleportPositionCommand extends AbstractCommand<CommandSource> {
             );
 
             if (result.isSuccessful()) {
-                pl.sendMessage(Nucleus.getNucleus().getMessageProvider().getTextMessageWithFormat("command.tppos.success.self"));
-                if (!src.equals(pl)) {
-                    src.sendMessage(Nucleus.getNucleus().getMessageProvider().getTextMessageWithFormat("command.tppos.success.other", pl.getName()));
+                context.sendMessageTo(pl, "command.tppos.success.self");
+                if (!context.is(pl)) {
+                    context.sendMessage("command.tppos.success.other", pl.getName());
                 }
 
-                return CommandResult.success();
+                return context.successResult();
             } else if (result == TeleportResults.FAIL_NO_LOCATION) {
-                throw ReturnMessageException.fromKey("command.tppos.nosafe");
+                return context.errorResult("command.tppos.nosafe");
             }
 
-            throw ReturnMessageException.fromKey("command.tppos.cancelledevent");
+            return context.errorResult("command.tppos.cancelledevent");
         }
     }
 

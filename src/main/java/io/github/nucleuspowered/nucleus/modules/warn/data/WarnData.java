@@ -82,7 +82,7 @@ public class WarnData extends EndTimestamp implements Warning {
     }
 
     @Override public Optional<UUID> getWarner() {
-        return this.warner.equals(Util.consoleFakeUUID) ? Optional.empty() : Optional.of(this.warner);
+        return this.warner.equals(Util.CONSOLE_FAKE_UUID) ? Optional.empty() : Optional.of(this.warner);
     }
 
     @Override public Instant getDate() {

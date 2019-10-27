@@ -5,13 +5,25 @@
 package io.github.nucleuspowered.nucleus.modules.teleport;
 
 import com.google.common.collect.ImmutableMap;
-import io.github.nucleuspowered.nucleus.internal.qsml.module.ConfigurableModule;
+import io.github.nucleuspowered.nucleus.modules.teleport.config.TeleportConfig;
+import io.github.nucleuspowered.nucleus.quickstart.module.ConfigurableModule;
 import io.github.nucleuspowered.nucleus.modules.core.CoreModule;
 import io.github.nucleuspowered.nucleus.modules.teleport.config.TeleportConfigAdapter;
+import io.github.nucleuspowered.nucleus.services.INucleusServiceCollection;
 import uk.co.drnaylor.quickstart.annotations.ModuleData;
+import uk.co.drnaylor.quickstart.holders.DiscoveryModuleHolder;
+
+import java.util.function.Supplier;
+
+import javax.inject.Inject;
 
 @ModuleData(id = "teleport", name = "Teleport", dependencies = CoreModule.ID)
-public class TeleportModule extends ConfigurableModule<TeleportConfigAdapter> {
+public class TeleportModule extends ConfigurableModule<TeleportConfig, TeleportConfigAdapter> {
+
+    @Inject
+    public TeleportModule(Supplier<DiscoveryModuleHolder<?, ?>> moduleHolder, INucleusServiceCollection collection) {
+        super(moduleHolder, collection);
+    }
 
     @Override
     public TeleportConfigAdapter createAdapter() {

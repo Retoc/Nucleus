@@ -4,78 +4,78 @@
  */
 package io.github.nucleuspowered.nucleus.modules.home.commands;
 
-import io.github.nucleuspowered.nucleus.Nucleus;
 import io.github.nucleuspowered.nucleus.api.nucleusdata.Home;
 import io.github.nucleuspowered.nucleus.api.teleport.TeleportResult;
-import io.github.nucleuspowered.nucleus.argumentparsers.HomeOtherArgument;
-import io.github.nucleuspowered.nucleus.internal.annotations.command.Permissions;
-import io.github.nucleuspowered.nucleus.internal.annotations.command.RegisterCommand;
-import io.github.nucleuspowered.nucleus.internal.command.AbstractCommand;
-import io.github.nucleuspowered.nucleus.internal.command.ReturnMessageException;
+import io.github.nucleuspowered.nucleus.internal.command.ICommandContext;
+import io.github.nucleuspowered.nucleus.internal.command.ICommandExecutor;
+import io.github.nucleuspowered.nucleus.internal.command.ICommandResult;
+import io.github.nucleuspowered.nucleus.internal.command.annotation.Command;
+import io.github.nucleuspowered.nucleus.internal.command.annotation.CommandModifier;
+import io.github.nucleuspowered.nucleus.internal.command.requirements.CommandModifiers;
 import io.github.nucleuspowered.nucleus.internal.interfaces.Reloadable;
-import io.github.nucleuspowered.nucleus.internal.permissions.PermissionInformation;
-import io.github.nucleuspowered.nucleus.internal.permissions.SuggestedLevel;
-import io.github.nucleuspowered.nucleus.modules.home.config.HomeConfigAdapter;
+import io.github.nucleuspowered.nucleus.modules.home.HomePermissions;
+import io.github.nucleuspowered.nucleus.modules.home.config.HomeConfig;
+import io.github.nucleuspowered.nucleus.modules.home.parameters.HomeOtherArgument;
 import io.github.nucleuspowered.nucleus.modules.home.services.HomeService;
-import org.spongepowered.api.command.CommandResult;
-import org.spongepowered.api.command.args.CommandContext;
+import io.github.nucleuspowered.nucleus.services.INucleusServiceCollection;
+import org.spongepowered.api.command.CommandException;
 import org.spongepowered.api.command.args.CommandElement;
 import org.spongepowered.api.command.args.GenericArguments;
 import org.spongepowered.api.entity.living.player.Player;
-import org.spongepowered.api.event.cause.Cause;
 import org.spongepowered.api.text.Text;
 import org.spongepowered.api.util.annotation.NonnullByDefault;
 
-import java.util.HashMap;
-import java.util.Map;
-
 @NonnullByDefault
-@Permissions(prefix = "home", mainOverride = "other", suggestedLevel = SuggestedLevel.MOD)
-@RegisterCommand(value = "other", subcommandOf = HomeCommand.class, rootAliasRegister = "homeother")
-public class HomeOtherCommand extends AbstractCommand<Player> implements Reloadable {
+@Command(
+        aliases = {"other", "#homeother"},
+        basePermission = HomePermissions.BASE_HOME_OTHER,
+        commandDescriptionKey = "home.other",
+        parentCommand = HomeCommand.class,
+        modifiers = {
+                @CommandModifier(value = CommandModifiers.HAS_COOLDOWN, exemptPermission = HomePermissions.EXEMPT_COOLDOWN_HOME_OTHER),
+                @CommandModifier(value = CommandModifiers.HAS_WARMUP, exemptPermission = HomePermissions.EXEMPT_WARMUP_HOME_OTHER),
+                @CommandModifier(value = CommandModifiers.HAS_COST, exemptPermission = HomePermissions.EXEMPT_COST_HOME_OTHER)
+        }
+)
+public class HomeOtherCommand implements ICommandExecutor<Player>, Reloadable {
 
     private final String home = "home";
-    public static final String OTHER_EXEMPT_PERM_SUFFIX = "exempt.target";
     private boolean isSafeTeleport = true;
 
-    @Override public void onReload() {
-        this.isSafeTeleport = Nucleus.getNucleus().getInternalServiceManager().getServiceUnchecked(HomeConfigAdapter.class).getNodeOrDefault()
-                .isSafeTeleport();
-    }
-
-    @Override protected Map<String, PermissionInformation> permissionSuffixesToRegister() {
-        return new HashMap<String, PermissionInformation>() {{
-            put("exempt.target", PermissionInformation.getWithTranslation("permission.home.other.exempt.target", SuggestedLevel.ADMIN));
-        }};
+    @Override public void onReload(INucleusServiceCollection serviceCollection) {
+        this.isSafeTeleport = serviceCollection.moduleDataProvider().getModuleConfig(HomeConfig.class).isSafeTeleport();
     }
 
     @Override
-    public CommandElement[] getArguments() {
-        return new CommandElement[] {GenericArguments.onlyOne(new HomeOtherArgument(Text.of(this.home), Nucleus.getNucleus()))};
+    public CommandElement[] parameters(INucleusServiceCollection serviceCollection) {
+        return new CommandElement[] {
+                GenericArguments.onlyOne(
+                        new HomeOtherArgument(
+                                Text.of(this.home),
+                                serviceCollection.getServiceUnchecked(HomeService.class),
+                                serviceCollection.messageProvider(),
+                                serviceCollection.permissionService()))
+        };
     }
 
-    @Override
-    public CommandResult executeCommand(Player src, CommandContext args, Cause cause) throws Exception {
+    @Override public ICommandResult execute(ICommandContext<? extends Player> context) throws CommandException {
         // Get the home.
-        Home wl = args.requireOne(this.home);
+        Home wl = context.requireOne(this.home, Home.class);
+        HomeService service = context.getServiceCollection().getServiceUnchecked(HomeService.class);
 
-        TeleportResult result =
-                Nucleus.getNucleus()
-                    .getInternalServiceManager()
-                    .getServiceUnchecked(HomeService.class)
-                    .warpToHome(
-                            src,
+        Player player = context.getIfPlayer();
+        TeleportResult result = service.warpToHome(
+                            player,
                             wl,
                             this.isSafeTeleport
                     );
 
         // Warp to it safely.
         if (result.isSuccessful()) {
-            src.sendMessage(
-                    Nucleus.getNucleus().getMessageProvider().getTextMessageWithFormat("command.homeother.success", wl.getUser().getName(), wl.getName()));
-            return CommandResult.success();
+            context.sendMessage("command.homeother.success", wl.getUser().getName(), wl.getName());
+            return context.successResult();
         } else {
-            throw ReturnMessageException.fromKey("command.homeother.fail", wl.getUser().getName(), wl.getName());
+            return context.errorResult("command.homeother.fail", wl.getUser().getName(), wl.getName());
         }
     }
 }

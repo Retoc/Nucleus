@@ -4,30 +4,31 @@
  */
 package io.github.nucleuspowered.nucleus.modules.teleport.commands;
 
-import io.github.nucleuspowered.nucleus.internal.annotations.command.NoModifiers;
-import io.github.nucleuspowered.nucleus.internal.annotations.command.Permissions;
-import io.github.nucleuspowered.nucleus.internal.annotations.command.RegisterCommand;
-import io.github.nucleuspowered.nucleus.internal.command.AbstractCommand;
-import io.github.nucleuspowered.nucleus.internal.docgen.annotations.EssentialsEquivalent;
-import io.github.nucleuspowered.nucleus.internal.permissions.SuggestedLevel;
+import io.github.nucleuspowered.nucleus.internal.command.ICommandContext;
+import io.github.nucleuspowered.nucleus.internal.command.ICommandExecutor;
+import io.github.nucleuspowered.nucleus.internal.command.ICommandResult;
+import io.github.nucleuspowered.nucleus.internal.command.annotation.Command;
+import io.github.nucleuspowered.nucleus.internal.command.annotation.EssentialsEquivalent;
+import io.github.nucleuspowered.nucleus.modules.teleport.TeleportPermissions;
 import io.github.nucleuspowered.nucleus.modules.teleport.services.PlayerTeleporterService;
-import org.spongepowered.api.command.CommandResult;
-import org.spongepowered.api.command.args.CommandContext;
+import org.spongepowered.api.command.CommandException;
 import org.spongepowered.api.entity.living.player.Player;
-import org.spongepowered.api.event.cause.Cause;
 import org.spongepowered.api.util.annotation.NonnullByDefault;
 
-@Permissions(prefix = "teleport", suggestedLevel = SuggestedLevel.USER)
-@NoModifiers
 @NonnullByDefault
-@RegisterCommand({"tpaccept", "teleportaccept", "tpyes"})
 @EssentialsEquivalent({"tpaccept", "tpyes"})
-public class TeleportAcceptCommand extends AbstractCommand<Player> {
-
-    private final PlayerTeleporterService teleportHandler = getServiceUnchecked(PlayerTeleporterService.class);
+@Command(
+        aliases = {"tpaccept", "teleportaccept", "tpyes"},
+        basePermission = TeleportPermissions.BASE_TPACCEPT,
+        commandDescriptionKey = "tpaccept"
+)
+public class TeleportAcceptCommand implements ICommandExecutor<Player> {
 
     @Override
-    public CommandResult executeCommand(Player src, CommandContext args, Cause cause) {
-        return this.teleportHandler.accept(src);
+    public ICommandResult execute(ICommandContext<? extends Player> context) throws CommandException {
+        return context.getResultFromBoolean(context.getServiceCollection()
+                .getServiceUnchecked(PlayerTeleporterService.class)
+                .accept(context.getIfPlayer()));
     }
+
 }

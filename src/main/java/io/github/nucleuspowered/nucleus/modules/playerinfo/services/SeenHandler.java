@@ -7,14 +7,15 @@ package io.github.nucleuspowered.nucleus.modules.playerinfo.services;
 import com.google.common.base.Preconditions;
 import com.google.common.collect.Lists;
 import com.google.common.collect.Maps;
-import io.github.nucleuspowered.nucleus.Nucleus;
-import io.github.nucleuspowered.nucleus.NucleusPlugin;
 import io.github.nucleuspowered.nucleus.api.service.NucleusSeenService;
 import io.github.nucleuspowered.nucleus.internal.annotations.APIService;
 import io.github.nucleuspowered.nucleus.internal.interfaces.ServiceBase;
+import io.github.nucleuspowered.nucleus.services.INucleusServiceCollection;
+import io.github.nucleuspowered.nucleus.services.IPlayerInformationService;
 import org.spongepowered.api.command.CommandSource;
 import org.spongepowered.api.entity.living.player.User;
 import org.spongepowered.api.plugin.Plugin;
+import org.spongepowered.api.plugin.PluginContainer;
 import org.spongepowered.api.text.Text;
 import org.spongepowered.api.text.format.TextColors;
 import org.spongepowered.api.util.annotation.NonnullByDefault;
@@ -26,21 +27,27 @@ import java.util.function.BiFunction;
 import java.util.function.Predicate;
 
 import javax.annotation.Nonnull;
+import javax.inject.Inject;
 
 @APIService(NucleusSeenService.class)
 @NonnullByDefault
 public class SeenHandler implements NucleusSeenService, ServiceBase {
 
-    private final Map<String, List<SeenInformationProvider>> moduleInformationProviders = Maps.newTreeMap();
+    private final INucleusServiceCollection serviceCollection;
     private final Map<String, List<SeenInformationProvider>> pluginInformationProviders = Maps.newTreeMap();
 
+    @Inject
+    public SeenHandler(INucleusServiceCollection serviceCollection) {
+        this.serviceCollection = serviceCollection;
+    }
+
     @Override
-    public void register(@Nonnull Object plugin, @Nonnull SeenInformationProvider seenInformationProvider) throws IllegalArgumentException {
+    public void register(@Nonnull PluginContainer plugin, @Nonnull SeenInformationProvider seenInformationProvider) throws IllegalArgumentException {
         Preconditions.checkNotNull(plugin);
         Preconditions.checkNotNull(seenInformationProvider);
 
         Plugin pl = plugin.getClass().getAnnotation(Plugin.class);
-        Preconditions.checkArgument(pl != null, NucleusPlugin.getNucleus().getMessageProvider().getMessageWithFormat("seen.error.requireplugin"));
+        Preconditions.checkArgument(pl != null, this.serviceCollection.messageProvider().getMessage("seen.error.requireplugin"));
 
         String name = pl.name();
         List<SeenInformationProvider> providers;
@@ -55,7 +62,7 @@ public class SeenHandler implements NucleusSeenService, ServiceBase {
     }
 
     @Override
-    public void register(Object plugin, Predicate<CommandSource> permissionCheck, BiFunction<CommandSource, User, Collection<Text>> informationGetter)
+    public void register(PluginContainer plugin, Predicate<CommandSource> permissionCheck, BiFunction<CommandSource, User, Collection<Text>> informationGetter)
         throws IllegalArgumentException {
         register(plugin, new SeenInformationProvider() {
             @Override public boolean hasPermission(@Nonnull CommandSource source, @Nonnull User user) {
@@ -68,46 +75,13 @@ public class SeenHandler implements NucleusSeenService, ServiceBase {
         });
     }
 
-    public void register(Nucleus plugin, String module, SeenInformationProvider seenInformationProvider) throws IllegalArgumentException {
-        Preconditions.checkNotNull(plugin);
-        Preconditions.checkNotNull(module);
-        Preconditions.checkNotNull(seenInformationProvider);
-        Preconditions.checkArgument(plugin.getClass().getAnnotation(Plugin.class).equals(NucleusPlugin.class.getAnnotation(Plugin.class)));
-
-        List<SeenInformationProvider> providers;
-        if (this.moduleInformationProviders.containsKey(module)) {
-            providers = this.moduleInformationProviders.get(module);
-        } else {
-            providers = Lists.newArrayList();
-            this.moduleInformationProviders.put(module, providers);
-        }
-
-        providers.add(seenInformationProvider);
-    }
-
-    public List<Text> buildInformation(final CommandSource requester, final User user) {
-        List<Text> information = getModuleText(requester, user);
-        information.addAll(getText(requester, user));
-        return information;
-    }
-
-    private List<Text> getModuleText(final CommandSource requester, final User user) {
+    public List<Text> getText(final CommandSource requester, final User user) {
         List<Text> information = Lists.newArrayList();
 
-        for (Map.Entry<String, List<SeenInformationProvider>> entry : this.moduleInformationProviders.entrySet()) {
-            entry.getValue().stream().filter(sip -> sip.hasPermission(requester, user)).forEach(sip -> {
-                Collection<Text> input = sip.getInformation(requester, user);
-                if (input != null && !input.isEmpty()) {
-                    information.addAll(input);
-                }
-            });
+        Collection<IPlayerInformationService.Provider> providers = this.serviceCollection.playerInformationService().getProviders();
+        for (IPlayerInformationService.Provider provider : providers) {
+            provider.get(user, requester, this.serviceCollection).ifPresent(information::add);
         }
-
-        return information;
-    }
-
-    private List<Text> getText(final CommandSource requester, final User user) {
-        List<Text> information = Lists.newArrayList();
 
         for (Map.Entry<String, List<SeenInformationProvider>> entry : this.pluginInformationProviders.entrySet()) {
             entry.getValue().stream().filter(sip -> sip.hasPermission(requester, user)).forEach(sip -> {
@@ -116,7 +90,7 @@ public class SeenHandler implements NucleusSeenService, ServiceBase {
                     if (information.isEmpty()) {
                         information.add(Text.EMPTY);
                         information.add(Text.of("-----"));
-                        information.add(NucleusPlugin.getNucleus().getMessageProvider().getTextMessageWithFormat("seen.header.plugins"));
+                        information.add(this.serviceCollection.messageProvider().getMessageFor(requester, "seen.header.plugins"));
                         information.add(Text.of("-----"));
                     }
 

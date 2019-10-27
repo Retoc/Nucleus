@@ -6,7 +6,7 @@ package io.github.nucleuspowered.nucleus.modules.mute;
 
 import io.github.nucleuspowered.nucleus.internal.TypeTokens;
 import io.github.nucleuspowered.nucleus.modules.mute.data.MuteData;
-import io.github.nucleuspowered.nucleus.storage.dataobjects.modular.IUserDataObject;
+import io.github.nucleuspowered.nucleus.services.impl.storage.dataobjects.modular.IUserDataObject;
 import io.github.nucleuspowered.storage.dataobjects.keyed.DataKey;
 
 public class MuteKeys {

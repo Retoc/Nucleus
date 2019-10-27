@@ -5,15 +5,15 @@
 package io.github.nucleuspowered.nucleus.modules.ignore.listeners;
 
 import com.google.common.collect.Lists;
-import io.github.nucleuspowered.nucleus.Nucleus;
 import io.github.nucleuspowered.nucleus.Util;
 import io.github.nucleuspowered.nucleus.api.chat.NucleusNoIgnoreChannel;
 import io.github.nucleuspowered.nucleus.api.events.NucleusMailEvent;
 import io.github.nucleuspowered.nucleus.api.events.NucleusMessageEvent;
-import io.github.nucleuspowered.nucleus.internal.CommandPermissionHandler;
 import io.github.nucleuspowered.nucleus.internal.interfaces.ListenerBase;
-import io.github.nucleuspowered.nucleus.modules.ignore.commands.IgnoreCommand;
+import io.github.nucleuspowered.nucleus.modules.ignore.IgnorePermissions;
 import io.github.nucleuspowered.nucleus.modules.ignore.services.IgnoreService;
+import io.github.nucleuspowered.nucleus.services.INucleusServiceCollection;
+import io.github.nucleuspowered.nucleus.services.IPermissionService;
 import org.spongepowered.api.entity.living.player.Player;
 import org.spongepowered.api.entity.living.player.User;
 import org.spongepowered.api.event.Listener;
@@ -27,10 +27,18 @@ import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
 
+import javax.inject.Inject;
+
 public class IgnoreListener implements ListenerBase {
 
-    private final IgnoreService service = Nucleus.getNucleus().getInternalServiceManager().getServiceUnchecked(IgnoreService.class);
-    private CommandPermissionHandler ignoreHandler = Nucleus.getNucleus().getPermissionRegistry().getPermissionsForNucleusCommand(IgnoreCommand.class);
+    private final IgnoreService service;
+    private final IPermissionService permissionService;
+
+    @Inject
+    public IgnoreListener(INucleusServiceCollection serviceCollection) {
+        this.service = serviceCollection.getServiceUnchecked(IgnoreService.class);
+        this.permissionService = serviceCollection.permissionService();
+    }
 
     @Listener(order = Order.LATE)
     public void onChat(MessageChannelEvent.Chat event) {
@@ -56,9 +64,7 @@ public class IgnoreListener implements ListenerBase {
             try {
                 event.setCancelled(this.service.isIgnored(((User) event.getRecipient()).getUniqueId(), player.getUniqueId()));
             } catch (Exception e) {
-                if (Nucleus.getNucleus().isDebugMode()) {
-                    e.printStackTrace();
-                }
+                e.printStackTrace();
             }
         }
     }
@@ -68,9 +74,7 @@ public class IgnoreListener implements ListenerBase {
         try {
             event.setCancelled(this.service.isIgnored(event.getRecipient().getUniqueId(), player.getUniqueId()));
         } catch (Exception e) {
-            if (Nucleus.getNucleus().isDebugMode()) {
-                e.printStackTrace();
-            }
+            e.printStackTrace();
         }
     }
 
@@ -82,7 +86,7 @@ public class IgnoreListener implements ListenerBase {
      * @return {@link Optional} if unchanged, otherwise a {@link Collection} of {@link MessageReceiver}s to remove
      */
     private Optional<Collection<MessageReceiver>> checkCancels(Collection<MessageReceiver> collection, Player player) {
-        if (this.ignoreHandler.testSuffix(player, "exempt.chat")) {
+        if (this.permissionService.hasPermission(player, IgnorePermissions.IGNORE_CHAT)) {
             return Optional.empty();
         }
 
@@ -102,9 +106,7 @@ public class IgnoreListener implements ListenerBase {
                 // Don't remove if they are in the list.
                 return !this.service.isIgnored(((Player) x).getUniqueId(), player.getUniqueId());
             } catch (Exception e) {
-                if (Nucleus.getNucleus().isDebugMode()) {
-                    e.printStackTrace();
-                }
+                e.printStackTrace();
 
                 // Remove them.
                 return true;

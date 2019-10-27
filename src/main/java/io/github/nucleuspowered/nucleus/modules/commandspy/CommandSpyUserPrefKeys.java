@@ -4,21 +4,16 @@
  */
 package io.github.nucleuspowered.nucleus.modules.commandspy;
 
-import io.github.nucleuspowered.nucleus.Nucleus;
-import io.github.nucleuspowered.nucleus.internal.userprefs.NucleusKeysProvider;
-import io.github.nucleuspowered.nucleus.internal.userprefs.PreferenceKeyImpl;
-import io.github.nucleuspowered.nucleus.internal.userprefs.UserPrefKeys;
-import io.github.nucleuspowered.nucleus.modules.commandspy.commands.CommandSpyCommand;
+import io.github.nucleuspowered.nucleus.services.impl.userprefs.NucleusKeysProvider;
+import io.github.nucleuspowered.nucleus.services.impl.userprefs.PreferenceKeyImpl;
+import io.github.nucleuspowered.nucleus.services.impl.userprefs.UserPrefKeys;
 
 public class CommandSpyUserPrefKeys implements UserPrefKeys {
-
-    private final static String COMMAND_SPY_PERMISSION =
-            Nucleus.getNucleus().getPermissionRegistry().getPermissionsForNucleusCommand(CommandSpyCommand.class).getBase();
 
     public static final PreferenceKeyImpl<Boolean> COMMAND_SPY = new PreferenceKeyImpl.BooleanKey(
             NucleusKeysProvider.COMMAND_SPY_KEY,
             true,
-            COMMAND_SPY_PERMISSION,
+            CommandSpyPermissions.BASE_COMMANDSPY,
             "userpref.commandspy"
     );
 

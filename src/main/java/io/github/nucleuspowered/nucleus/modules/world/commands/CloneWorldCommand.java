@@ -4,23 +4,20 @@
  */
 package io.github.nucleuspowered.nucleus.modules.world.commands;
 
-import io.github.nucleuspowered.nucleus.Nucleus;
-import io.github.nucleuspowered.nucleus.internal.annotations.command.NoModifiers;
-import io.github.nucleuspowered.nucleus.internal.annotations.command.Permissions;
-import io.github.nucleuspowered.nucleus.internal.annotations.command.RegisterCommand;
-import io.github.nucleuspowered.nucleus.internal.command.AbstractCommand;
+import io.github.nucleuspowered.nucleus.internal.command.ICommandContext;
+import io.github.nucleuspowered.nucleus.internal.command.ICommandExecutor;
+import io.github.nucleuspowered.nucleus.internal.command.ICommandResult;
 import io.github.nucleuspowered.nucleus.internal.command.NucleusParameters;
-import io.github.nucleuspowered.nucleus.internal.command.ReturnMessageException;
-import io.github.nucleuspowered.nucleus.internal.permissions.SuggestedLevel;
+import io.github.nucleuspowered.nucleus.internal.command.annotation.Command;
+import io.github.nucleuspowered.nucleus.modules.world.WorldPermissions;
+import io.github.nucleuspowered.nucleus.services.INucleusServiceCollection;
 import org.spongepowered.api.Sponge;
-import org.spongepowered.api.command.CommandResult;
+import org.spongepowered.api.command.CommandException;
 import org.spongepowered.api.command.CommandSource;
-import org.spongepowered.api.command.args.CommandContext;
 import org.spongepowered.api.command.args.CommandElement;
 import org.spongepowered.api.command.args.GenericArguments;
 import org.spongepowered.api.command.source.ConsoleSource;
 import org.spongepowered.api.entity.living.player.Player;
-import org.spongepowered.api.event.cause.Cause;
 import org.spongepowered.api.text.Text;
 import org.spongepowered.api.text.channel.MessageChannel;
 import org.spongepowered.api.text.channel.MessageReceiver;
@@ -31,40 +28,40 @@ import java.util.UUID;
 import java.util.function.Supplier;
 
 @NonnullByDefault
-@NoModifiers
-@Permissions(prefix = "world", suggestedLevel = SuggestedLevel.OWNER)
-@RegisterCommand(value = {"clone", "copy"}, subcommandOf = WorldCommand.class)
-public class CloneWorldCommand extends AbstractCommand<CommandSource> {
+@Command(
+        aliases = {"clone", "copy"},
+        basePermission = WorldPermissions.BASE_WORLD_CLONE,
+        commandDescriptionKey = "world.clone",
+        parentCommand = WorldCommand.class
+)
+public class CloneWorldCommand implements ICommandExecutor<CommandSource> {
 
     private final String newKey = "new name";
 
-    @Override protected CommandElement[] getArguments() {
+    @Override public CommandElement[] parameters(INucleusServiceCollection serviceCollection) {
         return new CommandElement[] {
                 NucleusParameters.WORLD_PROPERTIES_ALL,
                 GenericArguments.string(Text.of(this.newKey))
         };
     }
 
-    @Override
-    protected CommandResult executeCommand(CommandSource src, CommandContext args, Cause cause) throws Exception {
-        WorldProperties worldToCopy = args.<WorldProperties>getOne(NucleusParameters.Keys.WORLD).get();
+    @Override public ICommandResult execute(ICommandContext<? extends CommandSource> context) throws CommandException {
+        WorldProperties worldToCopy = context.requireOne(NucleusParameters.Keys.WORLD, WorldProperties.class);
         final String oldName = worldToCopy.getWorldName();
-        final String newName = args.<String>getOne(this.newKey).get();
+        final String newName = context.requireOne(this.newKey, String.class);
         if (Sponge.getServer().getWorldProperties(newName).isPresent()) {
-            throw ReturnMessageException.fromKey("command.world.clone.alreadyexists", newName);
+            return context.errorResult("command.world.clone.alreadyexists", newName);
         }
 
-        Text message = Nucleus.getNucleus().getMessageProvider().getTextMessageWithFormat("command.world.clone.starting",
-                oldName, newName);
-        src.sendMessage(message);
-        if (!(src instanceof ConsoleSource)) {
-            Sponge.getServer().getConsole().sendMessage(message);
+        context.sendMessage("command.world.clone.starting", oldName, newName);
+        if (!context.is(ConsoleSource.class)) {
+            context.sendMessageTo(Sponge.getServer().getConsole(), "command.world.clone.starting", oldName, newName);
         }
 
         // Well, you never know, the player might die or disconnect - we have to be vigilant.
         final Supplier<MessageReceiver> mr;
-        if (src instanceof Player) {
-            UUID uuid = ((Player) src).getUniqueId();
+        if (context.is(Player.class)) {
+            UUID uuid = context.getIfPlayer().getUniqueId();
             mr = () -> Sponge.getServer().getPlayer(uuid).map(x -> (MessageReceiver) x).orElseGet(() -> new MessageReceiver() {
                 @Override public void sendMessage(Text message) {
 
@@ -79,27 +76,27 @@ public class CloneWorldCommand extends AbstractCommand<CommandSource> {
                 }
             });
         } else {
-            mr = () -> src;
+            mr = context::getCommandSourceUnchecked;
         }
 
         Sponge.getServer().copyWorld(worldToCopy, newName).handle((result, ex) -> {
 
             MessageReceiver m = mr.get();
-            Text msg;
             if (ex == null && result.isPresent()) {
-                msg = Nucleus.getNucleus().getMessageProvider().getTextMessageWithFormat("command.world.clone.success", oldName, newName);
+                context.sendMessage("command.world.clone.success", oldName, newName);
+                if (!(m instanceof ConsoleSource)) {
+                    context.sendMessageTo(Sponge.getServer().getConsole(), "command.world.clone.success", oldName, newName);
+                }
             } else {
-                msg = Nucleus.getNucleus().getMessageProvider().getTextMessageWithFormat("command.world.clone.failed", oldName, newName);
-            }
-
-            m.sendMessage(msg);
-            if (!(m instanceof ConsoleSource)) {
-                Sponge.getServer().getConsole().sendMessage(msg);
+                context.sendMessage("command.world.clone.failed", oldName, newName);
+                if (!(m instanceof ConsoleSource)) {
+                    context.sendMessageTo(Sponge.getServer().getConsole(), "command.world.clone.failed", oldName, newName);
+                }
             }
 
             return result;
         });
 
-        return CommandResult.success();
+        return context.successResult();
     }
 }

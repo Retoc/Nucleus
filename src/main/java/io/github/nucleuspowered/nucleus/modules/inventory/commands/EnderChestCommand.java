@@ -4,91 +4,83 @@
  */
 package io.github.nucleuspowered.nucleus.modules.inventory.commands;
 
-import io.github.nucleuspowered.nucleus.Nucleus;
 import io.github.nucleuspowered.nucleus.argumentparsers.IfConditionElseArgument;
-import io.github.nucleuspowered.nucleus.internal.annotations.Since;
-import io.github.nucleuspowered.nucleus.internal.annotations.command.Permissions;
-import io.github.nucleuspowered.nucleus.internal.annotations.command.RegisterCommand;
-import io.github.nucleuspowered.nucleus.internal.command.AbstractCommand;
+import io.github.nucleuspowered.nucleus.internal.command.ICommandContext;
+import io.github.nucleuspowered.nucleus.internal.command.ICommandExecutor;
+import io.github.nucleuspowered.nucleus.internal.command.ICommandResult;
 import io.github.nucleuspowered.nucleus.internal.command.NucleusParameters;
-import io.github.nucleuspowered.nucleus.internal.command.ReturnMessageException;
-import io.github.nucleuspowered.nucleus.internal.docgen.annotations.EssentialsEquivalent;
-import io.github.nucleuspowered.nucleus.internal.permissions.PermissionInformation;
-import io.github.nucleuspowered.nucleus.internal.permissions.SuggestedLevel;
-import io.github.nucleuspowered.nucleus.internal.traits.InternalServiceManagerTrait;
+import io.github.nucleuspowered.nucleus.internal.command.annotation.Command;
+import io.github.nucleuspowered.nucleus.internal.command.annotation.CommandModifier;
+import io.github.nucleuspowered.nucleus.internal.command.annotation.EssentialsEquivalent;
+import io.github.nucleuspowered.nucleus.internal.command.requirements.CommandModifiers;
+import io.github.nucleuspowered.nucleus.modules.inventory.InventoryPermissions;
 import io.github.nucleuspowered.nucleus.modules.inventory.listeners.InvSeeListener;
-import org.spongepowered.api.command.CommandResult;
-import org.spongepowered.api.command.args.CommandContext;
+import io.github.nucleuspowered.nucleus.services.INucleusServiceCollection;
+import org.spongepowered.api.command.CommandException;
 import org.spongepowered.api.command.args.CommandElement;
 import org.spongepowered.api.command.args.GenericArguments;
 import org.spongepowered.api.entity.living.player.Player;
 import org.spongepowered.api.entity.living.player.User;
-import org.spongepowered.api.event.cause.Cause;
 import org.spongepowered.api.item.inventory.Container;
 import org.spongepowered.api.item.inventory.Inventory;
 import org.spongepowered.api.util.annotation.NonnullByDefault;
 
-import java.util.Map;
-
 @NonnullByDefault
-@Permissions(supportsOthers = true)
-@RegisterCommand({"enderchest", "ec", "echest"})
-@Since(minecraftVersion = "1.10.2", spongeApiVersion = "5.0.0", nucleusVersion = "0.13.0")
+@Command(
+        aliases = {"enderchest", "ec", "echest"},
+        basePermission = InventoryPermissions.BASE_ENDERCHEST,
+        commandDescriptionKey = "enderchest",
+        modifiers = {
+                @CommandModifier(value = CommandModifiers.HAS_COOLDOWN, exemptPermission = InventoryPermissions.EXEMPT_COOLDOWN_ENDERCHEST),
+                @CommandModifier(value = CommandModifiers.HAS_WARMUP, exemptPermission = InventoryPermissions.EXEMPT_WARMUP_ENDERCHEST),
+                @CommandModifier(value = CommandModifiers.HAS_COST, exemptPermission = InventoryPermissions.EXEMPT_COST_ENDERCHEST)
+        }
+)
 @EssentialsEquivalent({"enderchest", "echest", "endersee", "ec"})
-public class EnderChestCommand extends AbstractCommand<Player> implements InternalServiceManagerTrait {
+public class EnderChestCommand implements ICommandExecutor<Player> {
 
     @Override
-    protected Map<String, PermissionInformation> permissionSuffixesToRegister() {
-        Map<String, PermissionInformation> mspi = super.permissionSuffixesToRegister();
-        mspi.put("exempt.target", PermissionInformation.getWithTranslation("permission.enderchest.exempt.inspect", SuggestedLevel.ADMIN));
-        mspi.put("exempt.modify", PermissionInformation.getWithTranslation("permission.enderchest.exempt.modify", SuggestedLevel.ADMIN));
-        mspi.put("modify", PermissionInformation.getWithTranslation("permission.enderchest.modify", SuggestedLevel.ADMIN));
-        mspi.put("offline", PermissionInformation.getWithTranslation("permission.enderchest.offline", SuggestedLevel.ADMIN));
-        return mspi;
-    }
-
-    private final String offlinePerm = this.permissions.getPermissionWithSuffix("offline");
-
-    private final CommandElement element = new IfConditionElseArgument(
-            NucleusParameters.ONE_USER_PLAYER_KEY, // user if permission
-            NucleusParameters.ONE_PLAYER, // player if not
-            (source, context) -> hasPermission(source, this.offlinePerm)
-    );
-
-    @Override
-    public CommandElement[] getArguments() {
+    public CommandElement[] parameters(INucleusServiceCollection serviceCollection) {
         return new CommandElement[] {
                 GenericArguments.optional(
-                    requirePermissionArg(
-                            this.element,
-                            this.permissions.getPermissionWithSuffix("others")
+                        serviceCollection.commandElementSupplier().createPermissionParameter(
+                            IfConditionElseArgument.permission(
+                                    serviceCollection.permissionService(),
+                                    InventoryPermissions.ENDERCHEST_OFFLINE,
+                                    NucleusParameters.ONE_USER_PLAYER_KEY, // user if permission
+                                    NucleusParameters.ONE_PLAYER // player if not
+                            ),
+                            InventoryPermissions.OTHERS_ENDERCHEST
                     ))
         };
     }
 
-    @Override
-    public CommandResult executeCommand(Player src, CommandContext args, Cause cause) throws Exception {
-        User target = args.<User>getOne(NucleusParameters.Keys.PLAYER).orElse(src);
+    @Override public ICommandResult execute(ICommandContext<? extends Player> context) throws CommandException {
+        User target = context.getUserFromArgs();
 
-        if (!target.getUniqueId().equals(src.getUniqueId())) {
-            if (this.permissions.testSuffix(target, "exempt.target")) {
-                throw new ReturnMessageException(
-                        Nucleus.getNucleus().getMessageProvider().getTextMessageWithFormat("command.enderchest.targetexempt", target.getName()));
+        if (!context.is(target)) {
+            if (context.testPermissionFor(target, InventoryPermissions.ENDERCHEST_EXEMPT_INSPECT)) {
+                return context.errorResult("command.enderchest.targetexempt", target.getName());
             }
 
             Inventory ec = target.getEnderChestInventory();
-            Container container = src.openInventory(ec)
-                        .orElseThrow(() -> ReturnMessageException.fromKey("command.invsee.failed"));
+            Container container = context.getCommandSourceAsPlayerUnchecked()
+                    .openInventory(ec)
+                    .orElseThrow(() -> context.createException("command.invsee.failed"));
 
-            if (this.permissions.testSuffix(target, "exempt.modify") || !this.permissions.testSuffix(src, "modify")) {
-
-                InvSeeListener.addEntry(src.getUniqueId(), container);
+            if (context.testPermissionFor(target, InventoryPermissions.ENDERCHEST_EXEMPT_MODIFY)
+                || !context.testPermission(InventoryPermissions.ENDERCHEST_MODIFY)) {
+                InvSeeListener.addEntry(context.getCommandSourceAsPlayerUnchecked().getUniqueId(), container);
             }
+
+            return context.successResult();
         } else {
-            src.openInventory(src.getEnderChestInventory()).orElseThrow(() -> ReturnMessageException.fromKey("command.invsee.failed"));
+            return context.getCommandSourceAsPlayerUnchecked().openInventory(
+                        context.getCommandSourceAsPlayerUnchecked().getEnderChestInventory())
+                    .map(x -> context.successResult())
+                    .orElseGet(() -> context.errorResult("command.invsee.failed"));
         }
 
-        return CommandResult.success();
     }
 
 }

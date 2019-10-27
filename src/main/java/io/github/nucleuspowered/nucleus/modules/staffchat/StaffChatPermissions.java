@@ -5,8 +5,8 @@
 package io.github.nucleuspowered.nucleus.modules.staffchat;
 
 import io.github.nucleuspowered.nucleus.annotationprocessor.RegisterPermissions;
-import io.github.nucleuspowered.nucleus.internal.permissions.PermissionMetadata;
-import io.github.nucleuspowered.nucleus.internal.permissions.SuggestedLevel;
+import io.github.nucleuspowered.nucleus.services.impl.permission.PermissionMetadata;
+import io.github.nucleuspowered.nucleus.services.impl.permission.SuggestedLevel;
 
 @RegisterPermissions
 public class StaffChatPermissions {
@@ -16,6 +16,6 @@ public class StaffChatPermissions {
     }
 
     @PermissionMetadata(descriptionKey = "permission.base", replacements = {"staffchat"}, level = SuggestedLevel.MOD)
-    public static final String BASE_STAFFCHAT = "staffchat.base";
+    public static final String BASE_STAFFCHAT = "nucleus.staffchat.base";
 
 }

@@ -4,7 +4,7 @@
  */
 package io.github.nucleuspowered.nucleus.argumentparsers;
 
-import io.github.nucleuspowered.nucleus.Nucleus;
+import io.github.nucleuspowered.nucleus.services.IPermissionService;
 import org.spongepowered.api.command.CommandSource;
 import org.spongepowered.api.command.args.ArgumentParseException;
 import org.spongepowered.api.command.args.CommandArgs;
@@ -12,24 +12,31 @@ import org.spongepowered.api.command.args.CommandContext;
 import org.spongepowered.api.command.args.CommandElement;
 
 import java.util.List;
-import java.util.function.BiPredicate;
 
 import javax.annotation.Nullable;
 
 public class IfConditionElseArgument extends CommandElement {
 
-    private final BiPredicate<CommandSource, CommandContext> predicate;
+    private final Condition predicate;
     private final CommandElement trueElement;
     private final CommandElement falseElement;
+    private final IPermissionService permissionService;
 
-    public static IfConditionElseArgument permission(String permission,
-            CommandElement ifSo, CommandElement ifNot) {
-        return new IfConditionElseArgument(ifSo, ifNot, (s, c) -> Nucleus.getNucleus().getPermissionResolver().hasPermission(s, permission));
+    public static IfConditionElseArgument permission(
+            IPermissionService permissionService,
+            String permission,
+            CommandElement ifSo,
+            CommandElement ifNot) {
+        return new IfConditionElseArgument(permissionService, ifSo, ifNot, (p, s, c) -> p.hasPermission(s, permission));
     }
 
-    public IfConditionElseArgument(CommandElement trueElement, CommandElement falseElement,
-            BiPredicate<CommandSource, CommandContext> predicate) {
+    public IfConditionElseArgument(
+            IPermissionService permissionService,
+            CommandElement trueElement,
+            CommandElement falseElement,
+            Condition predicate) {
         super(trueElement.getKey());
+        this.permissionService = permissionService;
         this.trueElement = trueElement;
         this.falseElement = falseElement;
         this.predicate = predicate;
@@ -40,7 +47,7 @@ public class IfConditionElseArgument extends CommandElement {
     }
 
     @Override public void parse(CommandSource source, CommandArgs args, CommandContext context) throws ArgumentParseException {
-        if (this.predicate.test(source, context)) {
+        if (this.predicate.test(this.permissionService, source, context)) {
             this.trueElement.parse(source, args, context);
         } else {
             this.falseElement.parse(source, args, context);
@@ -48,10 +55,17 @@ public class IfConditionElseArgument extends CommandElement {
     }
 
     @Override public List<String> complete(CommandSource source, CommandArgs args, CommandContext context) {
-        if (this.predicate.test(source, context)) {
+        if (this.predicate.test(this.permissionService, source, context)) {
             return this.trueElement.complete(source, args, context);
         } else {
             return this.falseElement.complete(source, args, context);
         }
+    }
+
+    @FunctionalInterface
+    public interface Condition {
+
+        boolean test(IPermissionService permissionService, CommandSource commandSource, CommandContext context);
+
     }
 }

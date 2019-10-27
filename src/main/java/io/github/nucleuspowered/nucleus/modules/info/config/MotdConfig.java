@@ -4,7 +4,6 @@
  */
 package io.github.nucleuspowered.nucleus.modules.info.config;
 
-import io.github.nucleuspowered.nucleus.Nucleus;
 import ninja.leaping.configurate.objectmapping.Setting;
 import ninja.leaping.configurate.objectmapping.serialize.ConfigSerializable;
 
@@ -18,7 +17,7 @@ public class MotdConfig {
     private float delay = 0.5f;
 
     @Setting(value = "motd-title", comment = "config.motd.title")
-    private String motdTitle = Nucleus.getNucleus().getMessageProvider().getMessageWithFormat("motd.title");
+    private String motdTitle = "MOTD";
 
     @Setting(value = "use-pagination", comment = "config.motd.pagination")
     private boolean usePagination = true;

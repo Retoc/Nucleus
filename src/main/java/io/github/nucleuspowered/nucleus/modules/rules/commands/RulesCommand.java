@@ -4,47 +4,40 @@
  */
 package io.github.nucleuspowered.nucleus.modules.rules.commands;
 
-import io.github.nucleuspowered.nucleus.Nucleus;
-import io.github.nucleuspowered.nucleus.internal.annotations.RunAsync;
-import io.github.nucleuspowered.nucleus.internal.annotations.command.NoModifiers;
-import io.github.nucleuspowered.nucleus.internal.annotations.command.Permissions;
-import io.github.nucleuspowered.nucleus.internal.annotations.command.RegisterCommand;
-import io.github.nucleuspowered.nucleus.internal.command.AbstractCommand;
-import io.github.nucleuspowered.nucleus.internal.command.ReturnMessageException;
-import io.github.nucleuspowered.nucleus.internal.docgen.annotations.EssentialsEquivalent;
+import io.github.nucleuspowered.nucleus.internal.command.ICommandContext;
+import io.github.nucleuspowered.nucleus.internal.command.ICommandExecutor;
+import io.github.nucleuspowered.nucleus.internal.command.ICommandResult;
+import io.github.nucleuspowered.nucleus.internal.command.annotation.Command;
+import io.github.nucleuspowered.nucleus.internal.command.annotation.EssentialsEquivalent;
 import io.github.nucleuspowered.nucleus.internal.interfaces.Reloadable;
-import io.github.nucleuspowered.nucleus.internal.permissions.SuggestedLevel;
 import io.github.nucleuspowered.nucleus.modules.rules.RulesModule;
+import io.github.nucleuspowered.nucleus.modules.rules.RulesPermissions;
 import io.github.nucleuspowered.nucleus.modules.rules.config.RulesConfig;
-import io.github.nucleuspowered.nucleus.modules.rules.config.RulesConfigAdapter;
-import org.spongepowered.api.command.CommandResult;
+import io.github.nucleuspowered.nucleus.services.INucleusServiceCollection;
+import org.spongepowered.api.command.CommandException;
 import org.spongepowered.api.command.CommandSource;
-import org.spongepowered.api.command.args.CommandContext;
-import org.spongepowered.api.event.cause.Cause;
 import org.spongepowered.api.text.Text;
 import org.spongepowered.api.text.serializer.TextSerializers;
 import org.spongepowered.api.util.annotation.NonnullByDefault;
 
-@Permissions(suggestedLevel = SuggestedLevel.USER)
-@RunAsync
-@RegisterCommand("rules")
-@NoModifiers
 @NonnullByDefault
 @EssentialsEquivalent("rules")
-public class RulesCommand extends AbstractCommand<CommandSource> implements Reloadable {
+@Command(aliases = "rules", basePermission = RulesPermissions.BASE_RULES, commandDescriptionKey = "rules", async = true)
+public class RulesCommand implements ICommandExecutor<CommandSource>, Reloadable {
 
     private Text title = Text.EMPTY;
 
-    @Override
-    public CommandResult executeCommand(CommandSource src, CommandContext args, Cause cause) throws Exception {
-        Nucleus.getNucleus().getTextFileController(RulesModule.RULES_KEY)
-                .orElseThrow(() -> ReturnMessageException.fromKey("command.rules.empty"))
-                .sendToPlayer(src, this.title);
-        return CommandResult.success();
+    @Override public ICommandResult execute(ICommandContext<? extends CommandSource> context) throws CommandException {
+        context.getServiceCollection()
+                .textFileControllerCollection()
+                .get(RulesModule.RULES_KEY)
+                .orElseThrow(() -> context.createException("command.rules.empty"))
+                .sendToPlayer(context.getCommandSource(), this.title);
+        return context.successResult();
     }
 
-    @Override public void onReload() {
-        RulesConfig config = getServiceUnchecked(RulesConfigAdapter.class).getNodeOrDefault();
+    @Override public void onReload(INucleusServiceCollection serviceCollection) {
+        RulesConfig config = serviceCollection.moduleDataProvider().getModuleConfig(RulesConfig.class);
         String title = config.getRulesTitle();
         if (title.isEmpty()) {
             this.title = Text.EMPTY;

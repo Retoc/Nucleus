@@ -7,26 +7,23 @@ package io.github.nucleuspowered.nucleus.modules.message.services;
 import com.google.common.base.Preconditions;
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.Maps;
-import io.github.nucleuspowered.nucleus.Nucleus;
 import io.github.nucleuspowered.nucleus.Util;
 import io.github.nucleuspowered.nucleus.api.service.NucleusPrivateMessagingService;
-import io.github.nucleuspowered.nucleus.internal.CommandPermissionHandler;
 import io.github.nucleuspowered.nucleus.internal.annotations.APIService;
 import io.github.nucleuspowered.nucleus.internal.interfaces.Reloadable;
 import io.github.nucleuspowered.nucleus.internal.interfaces.ServiceBase;
-import io.github.nucleuspowered.nucleus.internal.text.NucleusTextTemplateFactory;
-import io.github.nucleuspowered.nucleus.internal.text.NucleusTextTemplateImpl;
 import io.github.nucleuspowered.nucleus.internal.text.TextParsingUtils;
-import io.github.nucleuspowered.nucleus.internal.traits.PermissionTrait;
-import io.github.nucleuspowered.nucleus.internal.userprefs.UserPreferenceService;
-import io.github.nucleuspowered.nucleus.modules.message.MessageModule;
+import io.github.nucleuspowered.nucleus.modules.message.HelpOpMessageChannel;
+import io.github.nucleuspowered.nucleus.modules.message.MessagePermissions;
 import io.github.nucleuspowered.nucleus.modules.message.MessageUserPrefKeys;
-import io.github.nucleuspowered.nucleus.modules.message.commands.MessageCommand;
-import io.github.nucleuspowered.nucleus.modules.message.commands.MsgToggleCommand;
-import io.github.nucleuspowered.nucleus.modules.message.commands.SocialSpyCommand;
 import io.github.nucleuspowered.nucleus.modules.message.config.MessageConfig;
-import io.github.nucleuspowered.nucleus.modules.message.config.MessageConfigAdapter;
 import io.github.nucleuspowered.nucleus.modules.message.events.InternalNucleusMessageEvent;
+import io.github.nucleuspowered.nucleus.services.INucleusServiceCollection;
+import io.github.nucleuspowered.nucleus.services.INucleusTextTemplateFactory;
+import io.github.nucleuspowered.nucleus.services.IPermissionService;
+import io.github.nucleuspowered.nucleus.services.IPlayerDisplayNameService;
+import io.github.nucleuspowered.nucleus.services.IUserPreferenceService;
+import io.github.nucleuspowered.nucleus.services.impl.texttemplatefactory.NucleusTextTemplateImpl;
 import org.spongepowered.api.Sponge;
 import org.spongepowered.api.command.CommandSource;
 import org.spongepowered.api.command.source.ConsoleSource;
@@ -51,52 +48,49 @@ import java.util.function.Supplier;
 import java.util.stream.Collectors;
 
 import javax.annotation.Nullable;
+import javax.inject.Inject;
 
 @APIService(NucleusPrivateMessagingService.class)
-public class MessageHandler implements NucleusPrivateMessagingService, Reloadable, PermissionTrait, ServiceBase {
+public class MessageHandler implements NucleusPrivateMessagingService, Reloadable, ServiceBase {
 
-    private final MessageConfigAdapter mca;
-    private final TextParsingUtils textParsingUtils;
     private MessageConfig messageConfig;
     private boolean useLevels = false;
     private boolean sameLevel = false;
     private int serverLevel = 0;
-    private final CommandPermissionHandler messagepermissions;
-    private final CommandPermissionHandler socialspypermissions;
 
+    private final INucleusServiceCollection serviceCollection;
     private final Map<String[], Function<String, String>> replacements = createReplacements();
     private final Map<UUID, UUID> messagesReceived = Maps.newHashMap();
     private final Map<UUID, CustomMessageTarget<? extends CommandSource>> targets = Maps.newHashMap();
     private final Map<String, UUID> targetNames = Maps.newHashMap();
-    private final String msgToggleBypass = Nucleus.getNucleus().getPermissionRegistry().getPermissionsForNucleusCommand(MsgToggleCommand.class)
-            .getPermissionWithSuffix("bypass");
-    private final UserPreferenceService userPreferenceService =
-            Nucleus.getNucleus().getInternalServiceManager().getServiceUnchecked(UserPreferenceService.class);
+    private final MessageChannel helpOpMessageChannel;
 
     public static final String socialSpyOption = "nucleus.socialspy.level";
 
-    public MessageHandler() throws Exception {
-        Nucleus nucleus = Nucleus.getNucleus();
-        this.textParsingUtils = nucleus.getTextParsingUtils();
-        this.mca = nucleus.getModuleHolder().getConfigAdapterForModule(MessageModule.ID, MessageConfigAdapter.class);
-        this.messagepermissions = nucleus.getPermissionRegistry().getPermissionsForNucleusCommand(MessageCommand.class);
-        this.socialspypermissions = nucleus.getPermissionRegistry().getPermissionsForNucleusCommand(SocialSpyCommand.class);
-        onReload();
+    @Inject
+    public MessageHandler(INucleusServiceCollection serviceCollection) {
+        this.serviceCollection = serviceCollection;
+        this.helpOpMessageChannel = new HelpOpMessageChannel(serviceCollection);
+        onReload(serviceCollection);
     }
 
     @Override
-    public void onReload() {
-        this.messageConfig = this.mca.getNodeOrDefault();
+    public void onReload(INucleusServiceCollection serviceCollection) {
+        this.messageConfig = serviceCollection.moduleDataProvider().getModuleConfig(MessageConfig.class);
         this.useLevels = this.messageConfig.isSocialSpyLevels();
         this.sameLevel = this.messageConfig.isSocialSpySameLevel();
         this.serverLevel = this.messageConfig.getServerLevel();
+    }
+
+    public MessageChannel getHelpopMessageChannel() {
+        return this.helpOpMessageChannel;
     }
 
     @Override
     public boolean isSocialSpy(User user) {
         Tristate ts = forcedSocialSpyState(user);
         if (ts == Tristate.UNDEFINED) {
-            return this.userPreferenceService.getUnwrapped(user.getUniqueId(), MessageUserPrefKeys.SOCIAL_SPY);
+            return this.serviceCollection.userPreferenceService().getUnwrapped(user.getUniqueId(), MessageUserPrefKeys.SOCIAL_SPY);
         }
 
         return ts.asBoolean();
@@ -119,12 +113,14 @@ public class MessageHandler implements NucleusPrivateMessagingService, Reloadabl
     }
 
     @Override public int getSocialSpyLevel(User user) {
-        return this.useLevels ? Util.getPositiveIntOptionFromSubject(user, socialSpyOption).orElse(0) : 0;
+        return this.useLevels ? this.serviceCollection.permissionService().getPositiveIntOptionFromSubject(user, socialSpyOption).orElse(0) : 0;
     }
 
     @Override public Tristate forcedSocialSpyState(User user) {
-        if (this.socialspypermissions.testSuffix(user, "base")) {
-            if (this.messageConfig.isSocialSpyAllowForced() && this.socialspypermissions.testSuffix(user, "force")) {
+        IPermissionService permissionService = this.serviceCollection.permissionService();
+        if (permissionService.hasPermission(user, MessagePermissions.BASE_SOCIALSPY)) {
+            if (this.messageConfig.isSocialSpyAllowForced() &&
+                    permissionService.hasPermission(user, MessagePermissions.SOCIALSPY_FORCE)) {
                 return Tristate.TRUE;
             }
 
@@ -140,7 +136,7 @@ public class MessageHandler implements NucleusPrivateMessagingService, Reloadabl
             return false;
         }
 
-        this.userPreferenceService.set(user.getUniqueId(), MessageUserPrefKeys.SOCIAL_SPY, isSocialSpy);
+        this.serviceCollection.userPreferenceService().set(user.getUniqueId(), MessageUserPrefKeys.SOCIAL_SPY, isSocialSpy);
         return true;
     }
 
@@ -179,7 +175,7 @@ public class MessageHandler implements NucleusPrivateMessagingService, Reloadabl
 
         // Get the users to scan.
         List<CommandSource> toSpyOn = Arrays.asList(sourceToSpyOn);
-        Set<UUID> uuidsToSpyOn = toSpyOn.stream().map(x -> x instanceof User ? ((User)x).getUniqueId() : Util.consoleFakeUUID)
+        Set<UUID> uuidsToSpyOn = toSpyOn.stream().map(x -> x instanceof User ? ((User)x).getUniqueId() : Util.CONSOLE_FAKE_UUID)
                 .collect(Collectors.toSet());
 
         // Get those who aren't the subjects and have social spy on.
@@ -215,7 +211,7 @@ public class MessageHandler implements NucleusPrivateMessagingService, Reloadabl
         boolean isBlocked = false;
         boolean isCancelled = Sponge.getEventManager().post(new InternalNucleusMessageEvent(sender, receiver, message));
         if (isCancelled) {
-            sender.sendMessage(Nucleus.getNucleus().getMessageProvider().getTextMessageWithFormat("message.cancel"));
+            this.serviceCollection.messageProvider().sendMessageTo(sender, "message.cancel");
 
             // Only continue to show Social Spy messages if the subject is muted.
             if (!this.messageConfig.isShowMessagesInSocialSpyWhileMuted()) {
@@ -224,16 +220,16 @@ public class MessageHandler implements NucleusPrivateMessagingService, Reloadabl
         }
 
         // What about msgtoggle?
-        UserPreferenceService userPreferenceService =
-                Nucleus.getNucleus().getInternalServiceManager().getServiceUnchecked(UserPreferenceService.class);
+        IUserPreferenceService userPreferenceService = this.serviceCollection.userPreferenceService();
         // Cancel message if the reciever has message toggle false
-        if (receiver instanceof Player && !hasPermission(sender, this.msgToggleBypass) &&
+        if (receiver instanceof Player && !this.serviceCollection.permissionService().hasPermission(sender, MessagePermissions.MSGTOGGLE_BYPASS) &&
                 !userPreferenceService.getUnwrapped(((Player) receiver).getUniqueId(), MessageUserPrefKeys.RECEIVING_MESSAGES)) {
 
             isCancelled = true;
             isBlocked = true;
-            sender.sendMessage(Nucleus.getNucleus().getMessageProvider()
-                    .getTextMessageWithTextFormat("message.blocked", Nucleus.getNucleus().getNameUtil().getName((Player) receiver)));
+            this.serviceCollection.messageProvider().sendMessageTo(sender,
+                    "message.blocked",
+                    this.serviceCollection.playerDisplayNameService().getDisplayName(receiver));
 
             if (!this.messageConfig.isShowMessagesInSocialSpyWhileMuted()) {
                 return false;
@@ -250,29 +246,31 @@ public class MessageHandler implements NucleusPrivateMessagingService, Reloadabl
 
         // Create the tokens.
         Map<String, Function<CommandSource, Optional<Text>>> tokens = Maps.newHashMap();
-        tokens.put("from", cs -> getNameFromCommandSource(sender, this.textParsingUtils::addCommandToName));
-        tokens.put("to", cs -> getNameFromCommandSource(receiver, this.textParsingUtils::addCommandToName));
-        tokens.put("fromdisplay", cs -> getNameFromCommandSource(sender, this.textParsingUtils::addCommandToDisplayName));
-        tokens.put("todisplay", cs -> getNameFromCommandSource(receiver, this.textParsingUtils::addCommandToDisplayName));
+        IPlayerDisplayNameService displayNameService = this.serviceCollection.playerDisplayNameService();
+        tokens.put("from", cs -> getNameFromCommandSource(sender, displayNameService::getName));
+        tokens.put("to", cs -> getNameFromCommandSource(receiver, displayNameService::getName));
+        tokens.put("fromdisplay", cs -> getNameFromCommandSource(sender, displayNameService::getDisplayName));
+        tokens.put("todisplay", cs -> getNameFromCommandSource(receiver, displayNameService::getDisplayName));
 
         Text tm = useMessage(sender, message);
+        INucleusTextTemplateFactory textTemplateFactory = this.serviceCollection.textTemplateFactory();
 
         if (!isCancelled) {
-            sender.sendMessage(constructMessage(sender, tm, this.messageConfig.getMessageSenderPrefix(), tokens, variables));
-            receiver.sendMessage(constructMessage(sender, tm, this.messageConfig.getMessageReceiverPrefix(), tokens, variables));
+            sender.sendMessage(constructMessage(sender, tm, this.messageConfig.getMessageSenderPrefix(textTemplateFactory), tokens, variables));
+            receiver.sendMessage(constructMessage(sender, tm, this.messageConfig.getMessageReceiverPrefix(textTemplateFactory), tokens, variables));
         }
 
-        NucleusTextTemplateImpl prefix = this.messageConfig.getMessageSocialSpyPrefix();
+        NucleusTextTemplateImpl prefix = this.messageConfig.getMessageSocialSpyPrefix(textTemplateFactory);
         if (isBlocked) {
-            prefix = NucleusTextTemplateFactory.createFromAmpersandString(this.messageConfig.getBlockedTag() + prefix.getRepresentation());
+            prefix = textTemplateFactory.createFromAmpersandString(this.messageConfig.getBlockedTag() + prefix.getRepresentation());
         } if (isCancelled) {
-            prefix = NucleusTextTemplateFactory.createFromAmpersandString(this.messageConfig.getMutedTag() + prefix.getRepresentation());
+            prefix = textTemplateFactory.createFromAmpersandString(this.messageConfig.getMutedTag() + prefix.getRepresentation());
         }
 
         MessageConfig.Targets targets = this.messageConfig.spyOn();
         if (sender instanceof Player && targets.isPlayer() || sender instanceof ConsoleSource && targets.isCustom() || targets.isCustom()) {
             Set<CommandSource> lm = onlinePlayersCanSpyOn(
-                !uuidSender.equals(Util.consoleFakeUUID) && !uuidReceiver.equals(Util.consoleFakeUUID), sender, receiver
+                !uuidSender.equals(Util.CONSOLE_FAKE_UUID) && !uuidReceiver.equals(Util.CONSOLE_FAKE_UUID), sender, receiver
             );
 
             MessageChannel mc = MessageChannel.fixed(lm);
@@ -306,12 +304,12 @@ public class MessageHandler implements NucleusPrivateMessagingService, Reloadabl
             return sendMessage(sender, cs.get(), message);
         }
 
-        sender.sendMessage(Nucleus.getNucleus().getMessageProvider().getTextMessageWithFormat("message.noreply"));
+        this.serviceCollection.messageProvider().sendMessageTo(sender, "message.noreply");
         return false;
     }
 
     @Override public Optional<CommandSource> getConsoleReplyTo() {
-        return getLastMessageFrom(Util.consoleFakeUUID);
+        return getLastMessageFrom(Util.CONSOLE_FAKE_UUID);
     }
 
     @Override public Optional<CommandSource> getReplyTo(User user) {
@@ -327,7 +325,7 @@ public class MessageHandler implements NucleusPrivateMessagingService, Reloadabl
     }
 
     @Override public void setConsoleReplyTo(CommandSource toReplyTo) {
-        this.messagesReceived.put(Util.consoleFakeUUID, getUUID(Preconditions.checkNotNull(toReplyTo)));
+        this.messagesReceived.put(Util.CONSOLE_FAKE_UUID, getUUID(Preconditions.checkNotNull(toReplyTo)));
     }
 
     @Override public <T extends CommandSource & Identifiable> void setCommandSourceReplyTo(T source, CommandSource replyTo) {
@@ -343,7 +341,7 @@ public class MessageHandler implements NucleusPrivateMessagingService, Reloadabl
     }
 
     @Override public void clearConsoleReplyTo() {
-        this.messagesReceived.remove(Util.consoleFakeUUID);
+        this.messagesReceived.remove(Util.CONSOLE_FAKE_UUID);
     }
 
     @Override
@@ -352,7 +350,7 @@ public class MessageHandler implements NucleusPrivateMessagingService, Reloadabl
         Preconditions.checkNotNull(uniqueId);
         Preconditions.checkNotNull(targetName);
         Preconditions.checkNotNull(target);
-        Preconditions.checkArgument(!uniqueId.equals(Util.consoleFakeUUID), "Cannot use the zero UUID");
+        Preconditions.checkArgument(!uniqueId.equals(Util.CONSOLE_FAKE_UUID), "Cannot use the zero UUID");
         Preconditions.checkArgument(targetName.toLowerCase().matches("[a-z0-9_-]{3,}"),
                 "Target name must only contain letters, numbers, hyphens and underscores. and must be at least three characters long.");
         Preconditions.checkState(!this.targets.containsKey(uniqueId), "UUID already registered");
@@ -370,7 +368,7 @@ public class MessageHandler implements NucleusPrivateMessagingService, Reloadabl
             return Optional.empty();
         }
 
-        if (to.equals(Util.consoleFakeUUID)) {
+        if (to.equals(Util.CONSOLE_FAKE_UUID)) {
             return Optional.of(Sponge.getServer().getConsole());
         }
 
@@ -401,7 +399,7 @@ public class MessageHandler implements NucleusPrivateMessagingService, Reloadabl
     }
 
     private UUID getUUID(CommandSource sender) {
-        return sender instanceof Identifiable ? ((Identifiable) sender).getUniqueId() : Util.consoleFakeUUID;
+        return sender instanceof Identifiable ? ((Identifiable) sender).getUniqueId() : Util.CONSOLE_FAKE_UUID;
     }
 
     @SuppressWarnings("unchecked")
@@ -413,25 +411,24 @@ public class MessageHandler implements NucleusPrivateMessagingService, Reloadabl
     private Map<String[], Function<String, String>> createReplacements() {
         Map<String[], Function<String, String>> t = new HashMap<>();
 
-        t.put(new String[] { "colour", "color" }, s -> s.replaceAll("&[0-9a-fA-F]", ""));
-        t.put(new String[] { "style" }, s -> s.replaceAll("&[l-oL-O]", ""));
-        t.put(new String[] { "magic" }, s -> s.replaceAll("&[kK]", ""));
+        t.put(new String[] { MessagePermissions.MESSAGE_COLOUR, MessagePermissions.MESSAGE_COLOR }, s -> s.replaceAll("&[0-9a-fA-F]", ""));
+        t.put(new String[] { MessagePermissions.MESSAGE_STYLE }, s -> s.replaceAll("&[l-oL-O]", ""));
+        t.put(new String[] { MessagePermissions.MESSAGE_MAGIC }, s -> s.replaceAll("&[kK]", ""));
 
         return t;
     }
 
     private Text useMessage(CommandSource player, String m) {
-        for (Map.Entry<String[],  Function<String, String>> r : this.replacements.entrySet()) {
-            // If we don't have the required permission...
-            if (Arrays.stream(r.getKey()).noneMatch(x -> this.messagepermissions.testSuffix(player, x))) {
-                // ...strip the codes.
-                m = r.getValue().apply(m);
-            }
-        }
+        this.serviceCollection.textStyleService().stripPermissionless(
+                MessagePermissions.MESSAGE_COLOUR,
+                MessagePermissions.MESSAGE_STYLE,
+                player,
+                m
+        );
 
         Text result;
-        if (this.messagepermissions.testSuffix(player, "url")) {
-            result = TextParsingUtils.addUrls(m);
+        if (this.serviceCollection.permissionService().hasPermission(player, MessagePermissions.MESSAGE_URLS)) {
+            result = this.serviceCollection.textStyleService().addUrls(m);
         } else {
             result = TextSerializers.FORMATTING_CODE.deserialize(m);
         }

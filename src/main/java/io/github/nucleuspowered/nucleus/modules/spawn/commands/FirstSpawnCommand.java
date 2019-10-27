@@ -4,66 +4,73 @@
  */
 package io.github.nucleuspowered.nucleus.modules.spawn.commands;
 
-import io.github.nucleuspowered.nucleus.Nucleus;
 import io.github.nucleuspowered.nucleus.api.teleport.TeleportResult;
 import io.github.nucleuspowered.nucleus.api.teleport.TeleportScanners;
 import io.github.nucleuspowered.nucleus.configurate.datatypes.LocationNode;
-import io.github.nucleuspowered.nucleus.internal.annotations.command.Permissions;
-import io.github.nucleuspowered.nucleus.internal.annotations.command.RegisterCommand;
-import io.github.nucleuspowered.nucleus.internal.command.AbstractCommand;
+import io.github.nucleuspowered.nucleus.internal.command.ICommandContext;
+import io.github.nucleuspowered.nucleus.internal.command.ICommandExecutor;
+import io.github.nucleuspowered.nucleus.internal.command.ICommandResult;
+import io.github.nucleuspowered.nucleus.internal.command.annotation.Command;
+import io.github.nucleuspowered.nucleus.internal.command.annotation.CommandModifier;
+import io.github.nucleuspowered.nucleus.internal.command.requirements.CommandModifiers;
 import io.github.nucleuspowered.nucleus.internal.interfaces.Reloadable;
-import io.github.nucleuspowered.nucleus.internal.permissions.SuggestedLevel;
-import io.github.nucleuspowered.nucleus.modules.core.services.SafeTeleportService;
 import io.github.nucleuspowered.nucleus.modules.spawn.SpawnKeys;
-import io.github.nucleuspowered.nucleus.modules.spawn.config.SpawnConfigAdapter;
-import org.spongepowered.api.command.CommandResult;
-import org.spongepowered.api.command.args.CommandContext;
+import io.github.nucleuspowered.nucleus.modules.spawn.SpawnPermissions;
+import io.github.nucleuspowered.nucleus.modules.spawn.config.SpawnConfig;
+import io.github.nucleuspowered.nucleus.services.INucleusServiceCollection;
+import org.spongepowered.api.command.CommandException;
 import org.spongepowered.api.entity.Transform;
 import org.spongepowered.api.entity.living.player.Player;
-import org.spongepowered.api.event.cause.Cause;
 import org.spongepowered.api.util.annotation.NonnullByDefault;
 import org.spongepowered.api.world.World;
 
 import java.util.Optional;
 
-@Permissions(suggestedLevel = SuggestedLevel.USER)
-@RegisterCommand("firstspawn")
 @NonnullByDefault
-public class FirstSpawnCommand extends AbstractCommand<Player> implements Reloadable {
+@Command(
+        aliases = "firstspawn",
+        basePermission = SpawnPermissions.BASE_FIRSTSPAWN,
+        commandDescriptionKey = "firstspawn",
+        modifiers = {
+                @CommandModifier(value = CommandModifiers.HAS_COOLDOWN, exemptPermission = SpawnPermissions.EXEMPT_COOLDOWN_FIRSTSPAWN),
+                @CommandModifier(value = CommandModifiers.HAS_WARMUP, exemptPermission = SpawnPermissions.EXEMPT_WARMUP_FIRSTSPAWN),
+                @CommandModifier(value = CommandModifiers.HAS_COST, exemptPermission = SpawnPermissions.EXEMPT_COST_FIRSTSPAWN)
+        }
+)
+public class FirstSpawnCommand implements ICommandExecutor<Player>, Reloadable {
 
     private boolean isSafeTeleport = true;
 
-    @Override
-    public CommandResult executeCommand(Player src, CommandContext args, Cause cause) {
+    @Override public ICommandResult execute(ICommandContext<? extends Player> context) throws CommandException {
 
-        Optional<Transform<World>> olwr = Nucleus.getNucleus().getStorageManager().getGeneralService()
-                .getOrNewOnThread()
-                .get(SpawnKeys.FIRST_SPAWN_LOCATION)
-                .flatMap(LocationNode::getTransformIfExists);
+        Optional<Transform<World>> olwr =
+                context.getServiceCollection().storageManager()
+                        .getGeneralService()
+                        .getOrNewOnThread()
+                        .get(SpawnKeys.FIRST_SPAWN_LOCATION)
+                        .flatMap(LocationNode::getTransformIfExists);
         if (!olwr.isPresent()) {
-            src.sendMessage(Nucleus.getNucleus().getMessageProvider().getTextMessageWithFormat("command.firstspawn.notset"));
-            return CommandResult.empty();
+            return context.errorResult("command.firstspawn.notset");
         }
 
-        TeleportResult result = getServiceUnchecked(SafeTeleportService.class)
+        TeleportResult result = context.getServiceCollection()
+                .teleportService()
                 .teleportPlayerSmart(
-                        src,
+                        context.getIfPlayer(),
                         olwr.get(),
                         true,
                         this.isSafeTeleport,
                         TeleportScanners.NO_SCAN
                 );
         if (result.isSuccessful()) {
-            src.sendMessage(Nucleus.getNucleus().getMessageProvider().getTextMessageWithFormat("command.firstspawn.success"));
-            return CommandResult.success();
+            context.sendMessage("command.firstspawn.success");
+            return context.successResult();
         }
 
-        src.sendMessage(Nucleus.getNucleus().getMessageProvider().getTextMessageWithFormat("command.firstspawn.fail"));
-        return CommandResult.empty();
+        return context.errorResult("command.firstspawn.fail");
     }
 
-
-    @Override public void onReload() {
-        this.isSafeTeleport = getServiceUnchecked(SpawnConfigAdapter.class).getNodeOrDefault().isSafeTeleport();
+    @Override public void onReload(INucleusServiceCollection serviceCollection) {
+        this.isSafeTeleport = serviceCollection.moduleDataProvider().getModuleConfig(SpawnConfig.class).isSafeTeleport();
     }
 }

@@ -4,38 +4,44 @@
  */
 package io.github.nucleuspowered.nucleus.modules.item.commands;
 
-import io.github.nucleuspowered.nucleus.Nucleus;
-import io.github.nucleuspowered.nucleus.internal.annotations.command.Permissions;
-import io.github.nucleuspowered.nucleus.internal.annotations.command.RegisterCommand;
-import io.github.nucleuspowered.nucleus.internal.command.AbstractCommand;
-import io.github.nucleuspowered.nucleus.internal.docgen.annotations.EssentialsEquivalent;
-import org.spongepowered.api.command.CommandResult;
-import org.spongepowered.api.command.args.CommandContext;
+import io.github.nucleuspowered.nucleus.internal.command.ICommandContext;
+import io.github.nucleuspowered.nucleus.internal.command.ICommandExecutor;
+import io.github.nucleuspowered.nucleus.internal.command.ICommandResult;
+import io.github.nucleuspowered.nucleus.internal.command.annotation.Command;
+import io.github.nucleuspowered.nucleus.internal.command.annotation.CommandModifier;
+import io.github.nucleuspowered.nucleus.internal.command.annotation.EssentialsEquivalent;
+import io.github.nucleuspowered.nucleus.internal.command.requirements.CommandModifiers;
+import io.github.nucleuspowered.nucleus.modules.item.ItemPermissions;
+import org.spongepowered.api.command.CommandException;
 import org.spongepowered.api.data.type.HandTypes;
 import org.spongepowered.api.entity.living.player.Player;
-import org.spongepowered.api.event.cause.Cause;
 import org.spongepowered.api.item.inventory.ItemStack;
 import org.spongepowered.api.util.annotation.NonnullByDefault;
 
-@Permissions
-@RegisterCommand({"more", "stack"})
 @EssentialsEquivalent("more")
 @NonnullByDefault
-public class MoreCommand extends AbstractCommand<Player> {
+@Command(
+        aliases = { "more", "stack" },
+        basePermission = ItemPermissions.BASE_MORE,
+        commandDescriptionKey = "more",
+        modifiers = {
+                @CommandModifier(value = CommandModifiers.HAS_COOLDOWN, exemptPermission = ItemPermissions.EXEMPT_COOLDOWN_MORE),
+                @CommandModifier(value = CommandModifiers.HAS_WARMUP, exemptPermission = ItemPermissions.EXEMPT_WARMUP_MORE),
+                @CommandModifier(value = CommandModifiers.HAS_COST, exemptPermission = ItemPermissions.EXEMPT_COST_MORE)
+        }
+)
+public class MoreCommand implements ICommandExecutor<Player> {
 
-    @Override
-    public CommandResult executeCommand(Player player, CommandContext args, Cause cause) {
-
+    @Override public ICommandResult execute(ICommandContext<? extends Player> context) throws CommandException {
+        Player player = context.getIfPlayer();
         if (player.getItemInHand(HandTypes.MAIN_HAND).isPresent()) {
             ItemStack stack = player.getItemInHand(HandTypes.MAIN_HAND).get();
             stack.setQuantity(stack.getMaxStackQuantity());
             player.setItemInHand(HandTypes.MAIN_HAND, stack);
-            player.sendMessage(Nucleus.getNucleus().getMessageProvider().getTextMessageWithFormat("command.more.success", stack.getType().getName(),
-                    String.valueOf(stack.getType().getMaxStackQuantity())));
-            return CommandResult.success();
+            context.sendMessage("command.more.success", stack.getType().getName(), stack.getType().getMaxStackQuantity());
+            return context.successResult();
         }
 
-        player.sendMessage(Nucleus.getNucleus().getMessageProvider().getTextMessageWithFormat("command.more.none"));
-        return CommandResult.empty();
+        return context.errorResult("command.more.none");
     }
 }

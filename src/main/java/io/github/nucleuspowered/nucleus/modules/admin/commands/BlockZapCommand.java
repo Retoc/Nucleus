@@ -4,21 +4,24 @@
  */
 package io.github.nucleuspowered.nucleus.modules.admin.commands;
 
-import io.github.nucleuspowered.nucleus.Nucleus;
-import io.github.nucleuspowered.nucleus.internal.annotations.command.Permissions;
-import io.github.nucleuspowered.nucleus.internal.annotations.command.RegisterCommand;
-import io.github.nucleuspowered.nucleus.internal.command.AbstractCommand;
-import io.github.nucleuspowered.nucleus.internal.command.ReturnMessageException;
-import io.github.nucleuspowered.nucleus.internal.docgen.annotations.EssentialsEquivalent;
-import io.github.nucleuspowered.nucleus.util.CauseStackHelper;
+import io.github.nucleuspowered.nucleus.internal.TypeTokens;
+import io.github.nucleuspowered.nucleus.internal.command.ICommandContext;
+import io.github.nucleuspowered.nucleus.internal.command.ICommandExecutor;
+import io.github.nucleuspowered.nucleus.internal.command.ICommandResult;
+import io.github.nucleuspowered.nucleus.internal.command.annotation.CommandModifier;
+import io.github.nucleuspowered.nucleus.internal.command.annotation.Command;
+import io.github.nucleuspowered.nucleus.internal.command.requirements.CommandModifiers;
+import io.github.nucleuspowered.nucleus.internal.command.annotation.EssentialsEquivalent;
+import io.github.nucleuspowered.nucleus.modules.admin.AdminPermissions;
+import io.github.nucleuspowered.nucleus.services.INucleusServiceCollection;
+import org.spongepowered.api.Sponge;
 import org.spongepowered.api.block.BlockTypes;
-import org.spongepowered.api.command.CommandResult;
+import org.spongepowered.api.command.CommandException;
 import org.spongepowered.api.command.CommandSource;
-import org.spongepowered.api.command.args.CommandContext;
 import org.spongepowered.api.command.args.CommandElement;
 import org.spongepowered.api.command.args.GenericArguments;
 import org.spongepowered.api.data.key.Keys;
-import org.spongepowered.api.event.cause.Cause;
+import org.spongepowered.api.event.CauseStackManager;
 import org.spongepowered.api.item.inventory.ItemStack;
 import org.spongepowered.api.text.Text;
 import org.spongepowered.api.text.action.TextActions;
@@ -28,24 +31,30 @@ import org.spongepowered.api.world.Location;
 import org.spongepowered.api.world.World;
 
 @NonnullByDefault
-@Permissions
-@RegisterCommand({"blockzap", "zapblock"})
+@Command(aliases = {"blockzap", "zapblock"},
+        basePermission = AdminPermissions.BASE_BLOCKZAP,
+        commandDescriptionKey = "blockzap",
+        modifiers = {
+                @CommandModifier(value = CommandModifiers.HAS_WARMUP, exemptPermission = AdminPermissions.EXEMPT_WARMUP_BLOCKZAP),
+                @CommandModifier(value = CommandModifiers.HAS_COOLDOWN, exemptPermission = AdminPermissions.EXEMPT_COOLDOWN_BLOCKZAP),
+                @CommandModifier(value = CommandModifiers.HAS_COST, exemptPermission = AdminPermissions.EXEMPT_COST_BLOCKZAP)
+        }
+)
 @EssentialsEquivalent(value = "break", isExact = false, notes = "Requires co-ordinates, whereas Essentials required you to look at the block.")
-public class BlockZapCommand extends AbstractCommand<CommandSource> {
+public class BlockZapCommand implements ICommandExecutor<CommandSource> {
 
     private final String locationKey = "location";
 
-    @Override public CommandElement[] getArguments() {
+    @Override public CommandElement[] parameters(INucleusServiceCollection serviceCollection) {
         return new CommandElement[] {
             GenericArguments.onlyOne(GenericArguments.location(Text.of(this.locationKey)))
         };
     }
 
-    @Override public CommandResult executeCommand(CommandSource src, CommandContext args, Cause cause) throws Exception {
-        Location<World> location = args.<Location<World>>getOne(this.locationKey).get();
+    @Override public ICommandResult execute(ICommandContext<? extends CommandSource> context) throws CommandException {
+        Location<World> location = context.requireOne(this.locationKey, TypeTokens.LOCATION_WORLD);
         if (location.getBlockType() == BlockTypes.AIR) {
-            throw new ReturnMessageException(Nucleus.getNucleus()
-                    .getMessageProvider().getTextMessageWithFormat("command.blockzap.alreadyair", location.getPosition().toString(), location.getExtent().getName()));
+            return context.errorResult("command.blockzap.alreadyair", location.getPosition().toString(), location.getExtent().getName());
         }
 
         Text itemText = Text.of(location.getBlock().getName());
@@ -58,14 +67,14 @@ public class BlockZapCommand extends AbstractCommand<CommandSource> {
                     .build();
         }
 
-        if (CauseStackHelper.createFrameWithCausesWithReturn(c -> location.setBlock(BlockTypes.AIR.getDefaultState(), BlockChangeFlags.ALL), src)) {
-
-            src.sendMessage(Nucleus.getNucleus()
-                    .getMessageProvider().getTextMessageWithTextFormat("command.blockzap.success", Text.of(location.getPosition().toString()), Text.of(location.getExtent().getName()), itemText));
-            return CommandResult.success();
+        try (CauseStackManager.StackFrame frame = Sponge.getCauseStackManager().pushCauseFrame()) {
+            frame.pushCause(context.getCommandSource());
+            if (location.setBlock(BlockTypes.AIR.getDefaultState(), BlockChangeFlags.ALL)) {
+                context.sendMessage("command.blockzap.success", Text.of(location.getPosition().toString()), Text.of(location.getExtent().getName()), itemText);
+                return context.successResult();
+            }
         }
 
-        throw new ReturnMessageException(Nucleus.getNucleus()
-                .getMessageProvider().getTextMessageWithFormat("command.blockzap.fail", location.getPosition().toString(), location.getExtent().getName()));
+        return context.errorResult("command.blockzap.fail", location.getPosition().toString(), location.getExtent().getName());
     }
 }

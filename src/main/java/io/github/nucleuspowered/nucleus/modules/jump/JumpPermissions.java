@@ -5,8 +5,8 @@
 package io.github.nucleuspowered.nucleus.modules.jump;
 
 import io.github.nucleuspowered.nucleus.annotationprocessor.RegisterPermissions;
-import io.github.nucleuspowered.nucleus.internal.permissions.PermissionMetadata;
-import io.github.nucleuspowered.nucleus.internal.permissions.SuggestedLevel;
+import io.github.nucleuspowered.nucleus.services.impl.permission.PermissionMetadata;
+import io.github.nucleuspowered.nucleus.services.impl.permission.SuggestedLevel;
 
 @RegisterPermissions
 public class JumpPermissions {
@@ -15,54 +15,54 @@ public class JumpPermissions {
     }
 
     @PermissionMetadata(descriptionKey = "permission.base", replacements = { "jump" }, level = SuggestedLevel.ADMIN)
-    public static final String BASE_JUMP = "jump.base";
+    public static final String BASE_JUMP = "nucleus.jump.base";
 
     @PermissionMetadata(descriptionKey = "permission.exempt.cooldown", replacements = { "jump" }, level = SuggestedLevel.ADMIN)
-    public static final String EXEMPT_COOLDOWN_JUMP = "jump.exempt.cooldown";
+    public static final String EXEMPT_COOLDOWN_JUMP = "nucleus.jump.exempt.cooldown";
 
     @PermissionMetadata(descriptionKey = "permission.exempt.cost", replacements = { "jump" }, level = SuggestedLevel.ADMIN)
-    public static final String EXEMPT_COST_JUMP = "jump.exempt.cost";
+    public static final String EXEMPT_COST_JUMP = "nucleus.jump.exempt.cost";
 
     @PermissionMetadata(descriptionKey = "permission.exempt.warmup", replacements = { "jump" }, level = SuggestedLevel.ADMIN)
-    public static final String EXEMPT_WARMUP_JUMP = "jump.exempt.warmup";
+    public static final String EXEMPT_WARMUP_JUMP = "nucleus.jump.exempt.warmup";
 
     @PermissionMetadata(descriptionKey = "permission.base", replacements = { "thru" }, level = SuggestedLevel.ADMIN)
-    public static final String BASE_THRU = "thru.base";
+    public static final String BASE_THRU = "nucleus.thru.base";
 
     @PermissionMetadata(descriptionKey = "permission.exempt.cooldown", replacements = { "thru" }, level = SuggestedLevel.ADMIN)
-    public static final String EXEMPT_COOLDOWN_THRU = "thru.exempt.cooldown";
+    public static final String EXEMPT_COOLDOWN_THRU = "nucleus.thru.exempt.cooldown";
 
     @PermissionMetadata(descriptionKey = "permission.exempt.cost", replacements = { "thru" }, level = SuggestedLevel.ADMIN)
-    public static final String EXEMPT_COST_THRU = "thru.exempt.cost";
+    public static final String EXEMPT_COST_THRU = "nucleus.thru.exempt.cost";
 
     @PermissionMetadata(descriptionKey = "permission.exempt.warmup", replacements = { "thru" }, level = SuggestedLevel.ADMIN)
-    public static final String EXEMPT_WARMUP_THRU = "thru.exempt.warmup";
+    public static final String EXEMPT_WARMUP_THRU = "nucleus.thru.exempt.warmup";
 
     @PermissionMetadata(descriptionKey = "permission.base", replacements = { "top" }, level = SuggestedLevel.ADMIN)
-    public static final String BASE_TOP = "top.base";
+    public static final String BASE_TOP = "nucleus.top.base";
 
     @PermissionMetadata(descriptionKey = "permission.exempt.cooldown", replacements = { "top" }, level = SuggestedLevel.ADMIN)
-    public static final String EXEMPT_COOLDOWN_TOP = "top.exempt.cooldown";
+    public static final String EXEMPT_COOLDOWN_TOP = "nucleus.top.exempt.cooldown";
 
     @PermissionMetadata(descriptionKey = "permission.exempt.cost", replacements = { "top" }, level = SuggestedLevel.ADMIN)
-    public static final String EXEMPT_COST_TOP = "top.exempt.cost";
+    public static final String EXEMPT_COST_TOP = "nucleus.top.exempt.cost";
 
     @PermissionMetadata(descriptionKey = "permission.exempt.warmup", replacements = { "top" }, level = SuggestedLevel.ADMIN)
-    public static final String EXEMPT_WARMUP_TOP = "top.exempt.warmup";
+    public static final String EXEMPT_WARMUP_TOP = "nucleus.top.exempt.warmup";
 
     @PermissionMetadata(descriptionKey = "permission.others", replacements = { "top" }, level = SuggestedLevel.ADMIN)
-    public static final String OTHERS_TOP = "top.others";
+    public static final String OTHERS_TOP = "nucleus.top.others";
 
     @PermissionMetadata(descriptionKey = "permission.base", replacements = { "unstuck" }, level = SuggestedLevel.ADMIN)
-    public static final String BASE_UNSTUCK = "unstuck.base";
+    public static final String BASE_UNSTUCK = "nucleus.unstuck.base";
 
     @PermissionMetadata(descriptionKey = "permission.exempt.cooldown", replacements = { "unstuck" }, level = SuggestedLevel.ADMIN)
-    public static final String EXEMPT_COOLDOWN_UNSTUCK = "unstuck.exempt.cooldown";
+    public static final String EXEMPT_COOLDOWN_UNSTUCK = "nucleus.unstuck.exempt.cooldown";
 
     @PermissionMetadata(descriptionKey = "permission.exempt.cost", replacements = { "unstuck" }, level = SuggestedLevel.ADMIN)
-    public static final String EXEMPT_COST_UNSTUCK = "unstuck.exempt.cost";
+    public static final String EXEMPT_COST_UNSTUCK = "nucleus.unstuck.exempt.cost";
 
     @PermissionMetadata(descriptionKey = "permission.exempt.warmup", replacements = { "unstuck" }, level = SuggestedLevel.ADMIN)
-    public static final String EXEMPT_WARMUP_UNSTUCK = "unstuck.exempt.warmup";
+    public static final String EXEMPT_WARMUP_UNSTUCK = "nucleus.unstuck.exempt.warmup";
 
 }

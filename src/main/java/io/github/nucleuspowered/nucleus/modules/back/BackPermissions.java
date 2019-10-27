@@ -5,8 +5,8 @@
 package io.github.nucleuspowered.nucleus.modules.back;
 
 import io.github.nucleuspowered.nucleus.annotationprocessor.RegisterPermissions;
-import io.github.nucleuspowered.nucleus.internal.permissions.PermissionMetadata;
-import io.github.nucleuspowered.nucleus.internal.permissions.SuggestedLevel;
+import io.github.nucleuspowered.nucleus.services.impl.permission.PermissionMetadata;
+import io.github.nucleuspowered.nucleus.services.impl.permission.SuggestedLevel;
 
 @RegisterPermissions
 public class BackPermissions {
@@ -15,30 +15,30 @@ public class BackPermissions {
     }
 
     @PermissionMetadata(descriptionKey = "permission.base", replacements = { "back" }, level = SuggestedLevel.ADMIN)
-    public static final String BASE_BACK = "back.base";
+    public static final String BASE_BACK = "nucleus.back.base";
 
     @PermissionMetadata(descriptionKey = "permission.tppos.border", level = SuggestedLevel.ADMIN)
-    public static final String TPPOS_BORDER = "back.exempt.bordercheck";
+    public static final String TPPOS_BORDER = "nucleus.back.exempt.bordercheck";
 
     @PermissionMetadata(descriptionKey = "permission.exempt.cooldown", replacements = { "back" }, level = SuggestedLevel.ADMIN)
-    public static final String EXEMPT_COOLDOWN_BACK = "back.exempt.cooldown";
+    public static final String EXEMPT_COOLDOWN_BACK = "nucleus.back.exempt.cooldown";
 
     @PermissionMetadata(descriptionKey = "permission.exempt.cost", replacements = { "back" }, level = SuggestedLevel.ADMIN)
-    public static final String EXEMPT_COST_BACK = "back.exempt.cost";
+    public static final String EXEMPT_COST_BACK = "nucleus.back.exempt.cost";
 
     @PermissionMetadata(descriptionKey = "permission.back.exempt.samedimension", level = SuggestedLevel.MOD)
-    public static final String BACK_EXEMPT_SAMEDIMENSION = "back.exempt.samedimension";
+    public static final String BACK_EXEMPT_SAMEDIMENSION = "nucleus.back.exempt.samedimension";
 
     @PermissionMetadata(descriptionKey = "permission.exempt.warmup", replacements = { "back" }, level = SuggestedLevel.ADMIN)
-    public static final String EXEMPT_WARMUP_BACK = "back.exempt.warmup";
+    public static final String EXEMPT_WARMUP_BACK = "nucleus.back.exempt.warmup";
 
     @PermissionMetadata(descriptionKey = "permission.back.ondeath", level = SuggestedLevel.USER)
-    public static final String BACK_ONDEATH = "back.targets.death";
+    public static final String BACK_ONDEATH = "nucleus.back.targets.death";
 
     @PermissionMetadata(descriptionKey = "permission.back.onportal", level = SuggestedLevel.USER)
-    public static final String BACK_ONPORTAL = "back.targets.portal";
+    public static final String BACK_ONPORTAL = "nucleus.back.targets.portal";
 
     @PermissionMetadata(descriptionKey = "permission.back.onteleport", level = SuggestedLevel.USER)
-    public static final String BACK_ONTELEPORT = "back.targets.teleport";
+    public static final String BACK_ONTELEPORT = "nucleus.back.targets.teleport";
 
 }

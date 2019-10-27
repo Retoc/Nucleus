@@ -4,8 +4,8 @@
  */
 package io.github.nucleuspowered.storage.persistence;
 
-import io.github.nucleuspowered.nucleus.storage.queryobjects.IUserQueryObject;
-import io.github.nucleuspowered.nucleus.storage.queryobjects.IWorldQueryObject;
+import io.github.nucleuspowered.nucleus.services.impl.storage.queryobjects.IUserQueryObject;
+import io.github.nucleuspowered.nucleus.services.impl.storage.queryobjects.IWorldQueryObject;
 import org.checkerframework.checker.nullness.qual.Nullable;
 import org.spongepowered.api.CatalogType;
 

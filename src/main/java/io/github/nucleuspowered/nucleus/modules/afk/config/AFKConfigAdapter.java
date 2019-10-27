@@ -5,7 +5,7 @@
 package io.github.nucleuspowered.nucleus.modules.afk.config;
 
 import com.google.common.collect.ImmutableList;
-import io.github.nucleuspowered.nucleus.internal.qsml.NucleusConfigAdapter;
+import io.github.nucleuspowered.nucleus.quickstart.NucleusConfigAdapter;
 
 import java.util.List;
 

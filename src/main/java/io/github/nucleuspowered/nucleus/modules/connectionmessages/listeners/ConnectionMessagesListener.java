@@ -8,15 +8,14 @@ import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.Maps;
 import io.github.nucleuspowered.nucleus.Nucleus;
 import io.github.nucleuspowered.nucleus.api.events.NucleusFirstJoinEvent;
-import io.github.nucleuspowered.nucleus.internal.PermissionRegistry;
 import io.github.nucleuspowered.nucleus.internal.interfaces.ListenerBase;
 import io.github.nucleuspowered.nucleus.internal.interfaces.Reloadable;
-import io.github.nucleuspowered.nucleus.internal.permissions.PermissionInformation;
-import io.github.nucleuspowered.nucleus.internal.permissions.SuggestedLevel;
-import io.github.nucleuspowered.nucleus.internal.traits.IDataManagerTrait;
+import io.github.nucleuspowered.nucleus.modules.connectionmessages.ConnectionMessagesPermissions;
 import io.github.nucleuspowered.nucleus.modules.connectionmessages.config.ConnectionMessagesConfig;
-import io.github.nucleuspowered.nucleus.modules.connectionmessages.config.ConnectionMessagesConfigAdapter;
 import io.github.nucleuspowered.nucleus.modules.core.CoreKeys;
+import io.github.nucleuspowered.nucleus.services.INucleusServiceCollection;
+import io.github.nucleuspowered.nucleus.services.IPermissionService;
+import io.github.nucleuspowered.nucleus.services.IStorageManager;
 import org.spongepowered.api.entity.living.player.Player;
 import org.spongepowered.api.event.Listener;
 import org.spongepowered.api.event.filter.Getter;
@@ -24,35 +23,33 @@ import org.spongepowered.api.event.network.ClientConnectionEvent;
 import org.spongepowered.api.text.Text;
 import org.spongepowered.api.text.channel.MessageChannel;
 
-import java.util.HashMap;
-import java.util.Map;
 import java.util.Optional;
 
-public class ConnectionMessagesListener implements Reloadable, ListenerBase, IDataManagerTrait {
+import javax.inject.Inject;
+
+public class ConnectionMessagesListener implements Reloadable, ListenerBase {
+
+    private final IStorageManager storageManager;
+    private final IPermissionService permissionService;
 
     private ConnectionMessagesConfig cmc = new ConnectionMessagesConfig();
-    private final String disablePermission = PermissionRegistry.PERMISSIONS_PREFIX + "connectionmessages.disable";
 
-    @Override
-    public Map<String, PermissionInformation> getPermissions() {
-        return new HashMap<String, PermissionInformation>() {{
-            put(ConnectionMessagesListener.this.disablePermission,
-                    PermissionInformation.getWithTranslation(
-                            "permission.connectionmesssages.disable",
-                            SuggestedLevel.NONE
-                    ));
-        }};
+    @Inject
+    public ConnectionMessagesListener(INucleusServiceCollection serviceCollection) {
+        this.permissionService = serviceCollection.permissionService();
+        this.storageManager = serviceCollection.storageManager();
     }
 
     @Listener
     public void onPlayerLogin(ClientConnectionEvent.Join joinEvent, @Getter("getTargetEntity") Player pl) {
-        if (joinEvent.isMessageCancelled() || (this.cmc.isDisableWithPermission() && hasPermission(pl, this.disablePermission))) {
+        if (joinEvent.isMessageCancelled() || (this.cmc.isDisableWithPermission() &&
+                this.permissionService.hasPermission(pl, ConnectionMessagesPermissions.CONNECTIONMESSSAGES_DISABLE))) {
             joinEvent.setMessageCancelled(true);
             return;
         }
 
         try {
-            Optional<String> lastKnown = getUserOnThread(pl.getUniqueId()).flatMap(x -> x.get(CoreKeys.LAST_KNOWN_NAME));
+            Optional<String> lastKnown = storageManager.getUserOnThread(pl.getUniqueId()).flatMap(x -> x.get(CoreKeys.LAST_KNOWN_NAME));
             if (this.cmc.isDisplayPriorName() &&
                 !this.cmc.getPriorNameMessage().isEmpty() &&
                 !lastKnown.orElseGet(pl::getName).equalsIgnoreCase(pl.getName())) {
@@ -63,9 +60,7 @@ public class ConnectionMessagesListener implements Reloadable, ListenerBase, IDa
                                             ImmutableMap.of("previousname", cs -> Optional.of(Text.of(lastKnown.get()))), Maps.newHashMap()));
             }
         } catch (Exception e) {
-            if (Nucleus.getNucleus().isDebugMode()) {
-                e.printStackTrace();
-            }
+            e.printStackTrace();
         }
 
         if (this.cmc.isModifyLoginMessage()) {
@@ -86,7 +81,8 @@ public class ConnectionMessagesListener implements Reloadable, ListenerBase, IDa
 
     @Listener
     public void onPlayerQuit(ClientConnectionEvent.Disconnect leaveEvent, @Getter("getTargetEntity") Player pl) {
-        if (leaveEvent.isMessageCancelled() || (this.cmc.isDisableWithPermission() && hasPermission(pl, this.disablePermission))) {
+        if (leaveEvent.isMessageCancelled() || (this.cmc.isDisableWithPermission() &&
+                this.permissionService.hasPermission(pl, ConnectionMessagesPermissions.CONNECTIONMESSSAGES_DISABLE))) {
             leaveEvent.setMessageCancelled(true);
             return;
         }
@@ -100,8 +96,7 @@ public class ConnectionMessagesListener implements Reloadable, ListenerBase, IDa
         }
     }
 
-    @Override
-    public void onReload() {
-        this.cmc = Nucleus.getNucleus().getInternalServiceManager().getServiceUnchecked(ConnectionMessagesConfigAdapter.class).getNodeOrDefault();
+    @Override public void onReload(INucleusServiceCollection serviceCollection) {
+        this.cmc = serviceCollection.moduleDataProvider().getModuleConfig(ConnectionMessagesConfig.class);
     }
 }

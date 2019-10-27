@@ -4,37 +4,33 @@
  */
 package io.github.nucleuspowered.nucleus.modules.mail.commands;
 
-import io.github.nucleuspowered.nucleus.Nucleus;
-import io.github.nucleuspowered.nucleus.internal.annotations.RunAsync;
-import io.github.nucleuspowered.nucleus.internal.annotations.command.NoModifiers;
-import io.github.nucleuspowered.nucleus.internal.annotations.command.Permissions;
-import io.github.nucleuspowered.nucleus.internal.annotations.command.RegisterCommand;
-import io.github.nucleuspowered.nucleus.internal.command.AbstractCommand;
-import io.github.nucleuspowered.nucleus.internal.permissions.SuggestedLevel;
+import io.github.nucleuspowered.nucleus.internal.command.ICommandContext;
+import io.github.nucleuspowered.nucleus.internal.command.ICommandExecutor;
+import io.github.nucleuspowered.nucleus.internal.command.ICommandResult;
+import io.github.nucleuspowered.nucleus.internal.command.annotation.Command;
+import io.github.nucleuspowered.nucleus.modules.mail.MailPermissions;
 import io.github.nucleuspowered.nucleus.modules.mail.services.MailHandler;
-import org.spongepowered.api.command.CommandResult;
-import org.spongepowered.api.command.args.CommandContext;
+import org.spongepowered.api.command.CommandException;
 import org.spongepowered.api.entity.living.player.Player;
-import org.spongepowered.api.event.cause.Cause;
 import org.spongepowered.api.util.annotation.NonnullByDefault;
 
-@Permissions(mainOverride = "mail", suggestedLevel = SuggestedLevel.USER)
-@NoModifiers
-@RunAsync
-@RegisterCommand(value = "clear", subcommandOf = MailCommand.class)
 @NonnullByDefault
-public class ClearMailCommand extends AbstractCommand<Player> {
+@Command(
+        aliases = { "clear" },
+        basePermission = MailPermissions.BASE_MAIL,
+        commandDescriptionKey = "mail.clear",
+        parentCommand = MailCommand.class,
+        async = true
+)
+public class ClearMailCommand implements ICommandExecutor<Player> {
 
-    private final MailHandler handler = getServiceUnchecked(MailHandler.class);
-
-    @Override
-    public CommandResult executeCommand(Player src, CommandContext args, Cause cause) {
-        if (this.handler.clearUserMail(src)) {
-            src.sendMessage(Nucleus.getNucleus().getMessageProvider().getTextMessageWithFormat("command.mail.clear.success"));
+    @Override public ICommandResult execute(ICommandContext<? extends Player> context) throws CommandException {
+        if (context.getServiceCollection().getServiceUnchecked(MailHandler.class).clearUserMail(context.getIfPlayer())) {
+            context.sendMessage("command.mail.clear.success");
         } else {
-            src.sendMessage(Nucleus.getNucleus().getMessageProvider().getTextMessageWithFormat("command.mail.clear.nomail"));
+            context.sendMessage("command.mail.clear.nomail");
         }
 
-        return CommandResult.success();
+        return context.successResult();
     }
 }

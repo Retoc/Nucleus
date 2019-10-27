@@ -4,34 +4,39 @@
  */
 package io.github.nucleuspowered.nucleus.modules.misc.commands;
 
-import io.github.nucleuspowered.nucleus.Nucleus;
-import io.github.nucleuspowered.nucleus.internal.annotations.command.NoModifiers;
-import io.github.nucleuspowered.nucleus.internal.annotations.command.Permissions;
-import io.github.nucleuspowered.nucleus.internal.annotations.command.RegisterCommand;
-import io.github.nucleuspowered.nucleus.internal.command.AbstractCommand;
-import io.github.nucleuspowered.nucleus.internal.docgen.annotations.EssentialsEquivalent;
-import org.spongepowered.api.command.CommandResult;
+import io.github.nucleuspowered.nucleus.internal.command.ICommandContext;
+import io.github.nucleuspowered.nucleus.internal.command.ICommandExecutor;
+import io.github.nucleuspowered.nucleus.internal.command.ICommandResult;
+import io.github.nucleuspowered.nucleus.internal.command.annotation.Command;
+import io.github.nucleuspowered.nucleus.internal.command.annotation.EssentialsEquivalent;
+import io.github.nucleuspowered.nucleus.modules.misc.MiscPermissions;
+import io.github.nucleuspowered.nucleus.services.INucleusServiceCollection;
+import org.spongepowered.api.command.CommandException;
 import org.spongepowered.api.command.CommandSource;
-import org.spongepowered.api.command.args.CommandContext;
+import org.spongepowered.api.command.args.CommandElement;
 import org.spongepowered.api.entity.living.player.Player;
 import org.spongepowered.api.util.annotation.NonnullByDefault;
 
-@Permissions(supportsOthers = true)
-@NoModifiers
 @NonnullByDefault
-@RegisterCommand("ping")
+@Command(aliases = { "ping" }, basePermission = MiscPermissions.BASE_PING, commandDescriptionKey = "ping")
 @EssentialsEquivalent(value = { "ping", "pong", "echo" }, isExact = false, notes = "Returns your latency, not your message.")
-public class PingCommand extends AbstractCommand.SimpleTargetOtherPlayer {
+public class PingCommand implements ICommandExecutor<CommandSource> { // extends AbstractCommand.SimpleTargetOtherPlayer {
 
-    @Override protected CommandResult executeWithPlayer(CommandSource source, Player target, CommandContext args, boolean isSelf) {
-        if (isSelf) {
-            source.sendMessage(Nucleus.getNucleus().getMessageProvider().getTextMessageWithFormat("command.ping.current.self",
-                String.valueOf(target.getConnection().getLatency())));
+    @Override public CommandElement[] parameters(INucleusServiceCollection serviceCollection) {
+        return new CommandElement[] {
+                serviceCollection.commandElementSupplier()
+                        .createOnlyOtherUserPermissionElement(true, MiscPermissions.OTHERS_PING)
+        };
+    }
+
+    @Override public ICommandResult execute(ICommandContext<? extends CommandSource> context) throws CommandException {
+        Player player = context.getPlayerFromArgs();
+        if (context.is(player)) {
+            context.sendMessage("command.ping.current.self", player.getConnection().getLatency());
         } else {
-            source.sendMessage(Nucleus.getNucleus().getMessageProvider().getTextMessageWithFormat("command.ping.current.other",
-                target.getName(), String.valueOf(target.getConnection().getLatency())));
+            context.sendMessage("command.ping.current.other", player.getName(), player.getConnection().getLatency());
         }
 
-        return CommandResult.success();
+        return context.successResult();
     }
 }

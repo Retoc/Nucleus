@@ -23,8 +23,7 @@ import java.util.Optional;
 
 @Store(Constants.REGISTRY)
 @NonnullByDefault
-public abstract class NucleusRegistryModule<T extends CatalogType>
-        implements AdditionalCatalogRegistryModule<T> {
+public abstract class NucleusRegistryModule<T extends CatalogType> implements AdditionalCatalogRegistryModule<T> {
 
     private boolean registered = false;
     private final Map<String, T> entries = new HashMap<>();

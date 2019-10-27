@@ -5,8 +5,8 @@
 package io.github.nucleuspowered.nucleus.modules.message;
 
 import io.github.nucleuspowered.nucleus.annotationprocessor.RegisterPermissions;
-import io.github.nucleuspowered.nucleus.internal.permissions.PermissionMetadata;
-import io.github.nucleuspowered.nucleus.internal.permissions.SuggestedLevel;
+import io.github.nucleuspowered.nucleus.services.impl.permission.PermissionMetadata;
+import io.github.nucleuspowered.nucleus.services.impl.permission.SuggestedLevel;
 
 @RegisterPermissions
 public class MessagePermissions {
@@ -15,57 +15,57 @@ public class MessagePermissions {
     }
 
     @PermissionMetadata(descriptionKey = "permission.base", replacements = { "helpop" }, level = SuggestedLevel.USER)
-    public static final String BASE_HELPOP = "helpop.base";
+    public static final String BASE_HELPOP = "nucleus.helpop.base";
 
     @PermissionMetadata(descriptionKey = "permission.exempt.cooldown", replacements = { "helpop" }, level = SuggestedLevel.ADMIN)
-    public static final String EXEMPT_COOLDOWN_HELPOP = "helpop.exempt.cooldown";
+    public static final String EXEMPT_COOLDOWN_HELPOP = "nucleus.helpop.exempt.cooldown";
 
     @PermissionMetadata(descriptionKey = "permission.exempt.cost", replacements = { "helpop" }, level = SuggestedLevel.ADMIN)
-    public static final String EXEMPT_COST_HELPOP = "helpop.exempt.cost";
+    public static final String EXEMPT_COST_HELPOP = "nucleus.helpop.exempt.cost";
 
     @PermissionMetadata(descriptionKey = "permission.exempt.warmup", replacements = { "helpop" }, level = SuggestedLevel.ADMIN)
-    public static final String EXEMPT_WARMUP_HELPOP = "helpop.exempt.warmup";
+    public static final String EXEMPT_WARMUP_HELPOP = "nucleus.helpop.exempt.warmup";
 
     @PermissionMetadata(descriptionKey = "permission.helpop.receive", level = SuggestedLevel.MOD)
-    public static final String HELPOP_RECEIVE = "helpop.receive";
+    public static final String HELPOP_RECEIVE = "nucleus.helpop.receive";
 
     @PermissionMetadata(descriptionKey = "permission.base", replacements = { "reply" }, level = SuggestedLevel.USER)
-    public static final String BASE_REPLY = "message.base";
+    public static final String BASE_MESSAGE = "nucleus.message.base";
 
     @PermissionMetadata(descriptionKey = "permission.message.color", level = SuggestedLevel.ADMIN)
-    public static final String MESSAGE_COLOR = "message.color";
+    public static final String MESSAGE_COLOR = "nucleus.message.color";
 
     @PermissionMetadata(descriptionKey = "permission.message.colour", level = SuggestedLevel.ADMIN)
-    public static final String MESSAGE_COLOUR = "message.colour";
+    public static final String MESSAGE_COLOUR = "nucleus.message.colour";
 
     @PermissionMetadata(descriptionKey = "permission.exempt.cooldown", replacements = { "reply" }, level = SuggestedLevel.ADMIN)
-    public static final String EXEMPT_COOLDOWN_REPLY = "message.exempt.cooldown";
+    public static final String EXEMPT_COOLDOWN_MESSAGE = "nucleus.message.exempt.cooldown";
 
     @PermissionMetadata(descriptionKey = "permission.exempt.cost", replacements = { "reply" }, level = SuggestedLevel.ADMIN)
-    public static final String EXEMPT_COST_REPLY = "message.exempt.cost";
+    public static final String EXEMPT_COST_MESSAGE = "nucleus.message.exempt.cost";
 
     @PermissionMetadata(descriptionKey = "permission.exempt.warmup", replacements = { "reply" }, level = SuggestedLevel.ADMIN)
-    public static final String EXEMPT_WARMUP_REPLY = "message.exempt.warmup";
+    public static final String EXEMPT_WARMUP_MESSAGE = "nucleus.message.exempt.warmup";
 
     @PermissionMetadata(descriptionKey = "permission.message.magic", level = SuggestedLevel.ADMIN)
-    public static final String MESSAGE_MAGIC = "message.magic";
+    public static final String MESSAGE_MAGIC = "nucleus.message.magic";
 
     @PermissionMetadata(descriptionKey = "permission.message.style", level = SuggestedLevel.ADMIN)
-    public static final String MESSAGE_STYLE = "message.style";
+    public static final String MESSAGE_STYLE = "nucleus.message.style";
 
     @PermissionMetadata(descriptionKey = "permission.message.urls", level = SuggestedLevel.ADMIN)
-    public static final String MESSAGE_URLS = "message.url";
+    public static final String MESSAGE_URLS = "nucleus.message.url";
 
     @PermissionMetadata(descriptionKey = "permission.base", replacements = { "msgtoggle" }, level = SuggestedLevel.ADMIN)
-    public static final String BASE_MSGTOGGLE = "msgtoggle.base";
+    public static final String BASE_MSGTOGGLE = "nucleus.msgtoggle.base";
 
     @PermissionMetadata(descriptionKey = "permission.msgtoggle.bypass", level = SuggestedLevel.ADMIN)
-    public static final String MSGTOGGLE_BYPASS = "msgtoggle.bypass";
+    public static final String MSGTOGGLE_BYPASS = "nucleus.msgtoggle.bypass";
 
     @PermissionMetadata(descriptionKey = "permission.base", replacements = { "socialspy" }, level = SuggestedLevel.MOD)
-    public static final String BASE_SOCIALSPY = "socialspy.base";
+    public static final String BASE_SOCIALSPY = "nucleus.socialspy.base";
 
     @PermissionMetadata(descriptionKey = "permission.socialspy.force", level = SuggestedLevel.NONE)
-    public static final String SOCIALSPY_FORCE = "socialspy.force";
+    public static final String SOCIALSPY_FORCE = "nucleus.socialspy.force";
 
 }

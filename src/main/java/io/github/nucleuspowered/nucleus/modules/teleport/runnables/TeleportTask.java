@@ -6,15 +6,22 @@ package io.github.nucleuspowered.nucleus.modules.teleport.runnables;
 
 import io.github.nucleuspowered.nucleus.internal.interfaces.TaskBase;
 import io.github.nucleuspowered.nucleus.modules.teleport.services.PlayerTeleporterService;
+import io.github.nucleuspowered.nucleus.services.INucleusServiceCollection;
 import org.spongepowered.api.scheduler.Task;
 
 import java.time.Duration;
 import java.time.temporal.ChronoUnit;
 
-@SuppressWarnings("ALL")
+import javax.inject.Inject;
+
 public class TeleportTask implements TaskBase {
 
-    private final PlayerTeleporterService teleporterService = getServiceUnchecked(PlayerTeleporterService.class);
+    private final PlayerTeleporterService teleporterService;
+
+    @Inject
+    public TeleportTask(INucleusServiceCollection serviceCollection) {
+        this.teleporterService = serviceCollection.getServiceUnchecked(PlayerTeleporterService.class);
+    }
 
     @Override
     public void accept(Task task) {

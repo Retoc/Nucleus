@@ -6,15 +6,12 @@ package io.github.nucleuspowered.nucleus.modules.fly.listeners;
 
 import io.github.nucleuspowered.nucleus.Nucleus;
 import io.github.nucleuspowered.nucleus.api.teleport.TeleportScanners;
-import io.github.nucleuspowered.nucleus.internal.CommandPermissionHandler;
 import io.github.nucleuspowered.nucleus.internal.interfaces.ListenerBase;
 import io.github.nucleuspowered.nucleus.internal.interfaces.Reloadable;
-import io.github.nucleuspowered.nucleus.internal.traits.IDataManagerTrait;
-import io.github.nucleuspowered.nucleus.modules.core.services.SafeTeleportService;
 import io.github.nucleuspowered.nucleus.modules.fly.FlyKeys;
-import io.github.nucleuspowered.nucleus.modules.fly.commands.FlyCommand;
+import io.github.nucleuspowered.nucleus.modules.fly.FlyPermissions;
 import io.github.nucleuspowered.nucleus.modules.fly.config.FlyConfig;
-import io.github.nucleuspowered.nucleus.modules.fly.config.FlyConfigAdapter;
+import io.github.nucleuspowered.nucleus.services.INucleusServiceCollection;
 import org.spongepowered.api.Sponge;
 import org.spongepowered.api.block.BlockTypes;
 import org.spongepowered.api.data.key.Keys;
@@ -31,11 +28,15 @@ import org.spongepowered.api.event.network.ClientConnectionEvent;
 import org.spongepowered.api.scheduler.Task;
 import org.spongepowered.api.world.World;
 
-public class FlyListener implements Reloadable, ListenerBase, IDataManagerTrait {
+public class FlyListener implements Reloadable, ListenerBase {
 
-    private FlyConfig flyConfig = new FlyConfig();
-    private CommandPermissionHandler flyCommandHandler =
-            Nucleus.getNucleus().getPermissionRegistry().getPermissionsForNucleusCommand(FlyCommand.class);
+    private final INucleusServiceCollection serviceCollection;
+    private FlyConfig flyConfig;
+
+    public FlyListener(INucleusServiceCollection serviceCollection) {
+        this.serviceCollection = serviceCollection;
+        this.flyConfig = serviceCollection.moduleDataProvider().getDefaultModuleConfig(FlyConfig.class);
+    }
 
     // Do it first, so other plugins can have a say.
     @Listener(order = Order.FIRST)
@@ -44,12 +45,12 @@ public class FlyListener implements Reloadable, ListenerBase, IDataManagerTrait 
             return;
         }
 
-        if (this.flyConfig.isPermissionOnLogin() && !this.flyCommandHandler.testBase(pl)) {
+        if (this.flyConfig.isPermissionOnLogin() && !this.serviceCollection.permissionService().hasPermission(pl, FlyPermissions.BASE_FLY)) {
             safeTeleport(pl);
             return;
         }
 
-        getUser(pl.getUniqueId()).thenAccept(x -> x.ifPresent(y -> {
+        this.serviceCollection.storageManager().getUser(pl.getUniqueId()).thenAccept(x -> x.ifPresent(y -> {
             if (y.get(FlyKeys.FLY_TOGGLE).orElse(false)) {
                 if (Sponge.getServer().isMainThread()) {
                     exec(pl);
@@ -85,9 +86,8 @@ public class FlyListener implements Reloadable, ListenerBase, IDataManagerTrait 
             return;
         }
 
-        getOrCreateUser(pl.getUniqueId()).thenAccept(x -> {
-            x.set(FlyKeys.FLY_TOGGLE, pl.get(Keys.CAN_FLY).orElse(false));
-        });
+        this.serviceCollection.storageManager().getOrCreateUser(pl.getUniqueId())
+                .thenAccept(x -> x.set(FlyKeys.FLY_TOGGLE, pl.get(Keys.CAN_FLY).orElse(false)));
 
     }
 
@@ -114,13 +114,13 @@ public class FlyListener implements Reloadable, ListenerBase, IDataManagerTrait 
         if (!twfrom.getExtent().getUniqueId().equals(twto.getExtent().getUniqueId())) {
             // Next tick, they can fly... if they have permission to do so.
             Sponge.getScheduler().createTaskBuilder().execute(() -> {
-                if (getFlyCommandHandler().testBase(pl)) {
+                if (this.serviceCollection.permissionService().hasPermission(pl, FlyPermissions.BASE_FLY)) {
                     target.offer(Keys.CAN_FLY, true);
                     if (isFlying) {
                         target.offer(Keys.IS_FLYING, true);
                     }
                 } else {
-                    getOrCreateUser(pl.getUniqueId()).thenAccept(x -> x.set(FlyKeys.FLY_TOGGLE, false));
+                    this.serviceCollection.storageManager().getOrCreateUser(pl.getUniqueId()).thenAccept(x -> x.set(FlyKeys.FLY_TOGGLE, false));
                     target.offer(Keys.CAN_FLY, false);
                     target.offer(Keys.IS_FLYING, false);
                 }
@@ -133,22 +133,16 @@ public class FlyListener implements Reloadable, ListenerBase, IDataManagerTrait 
         return (gm.equals(GameModes.CREATIVE) || gm.equals(GameModes.SPECTATOR));
     }
 
-    private CommandPermissionHandler getFlyCommandHandler() {
-        if (this.flyCommandHandler == null) {
-            this.flyCommandHandler = Nucleus.getNucleus().getPermissionRegistry().getPermissionsForNucleusCommand(FlyCommand.class);
-        }
-
-        return this.flyCommandHandler;
-    }
-
-    @Override public void onReload() throws Exception {
-        this.flyConfig = Nucleus.getNucleus().getInternalServiceManager().getServiceUnchecked(FlyConfigAdapter.class).getNode();
+    @Override
+    public void onReload(INucleusServiceCollection serviceCollection) {
+        this.flyConfig = this.serviceCollection.moduleDataProvider().getModuleConfig(FlyConfig.class);
     }
 
     private void safeTeleport(Player pl) {
         if (!pl.isOnGround() && this.flyConfig.isFindSafeOnLogin()) {
             // Try to bring the subject down.
-            getServiceUnchecked(SafeTeleportService.class)
+            this.serviceCollection
+                    .teleportService()
                     .teleportPlayerSmart(
                             pl,
                             pl.getTransform(),

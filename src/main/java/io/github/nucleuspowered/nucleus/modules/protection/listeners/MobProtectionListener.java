@@ -4,11 +4,10 @@
  */
 package io.github.nucleuspowered.nucleus.modules.protection.listeners;
 
-import io.github.nucleuspowered.nucleus.Nucleus;
 import io.github.nucleuspowered.nucleus.internal.interfaces.ListenerBase;
 import io.github.nucleuspowered.nucleus.internal.interfaces.Reloadable;
-import io.github.nucleuspowered.nucleus.modules.protection.ProtectionModule;
-import io.github.nucleuspowered.nucleus.modules.protection.config.ProtectionConfigAdapter;
+import io.github.nucleuspowered.nucleus.modules.protection.config.ProtectionConfig;
+import io.github.nucleuspowered.nucleus.services.INucleusServiceCollection;
 import org.spongepowered.api.entity.EntityType;
 import org.spongepowered.api.entity.living.Living;
 import org.spongepowered.api.entity.living.player.Player;
@@ -19,7 +18,6 @@ import org.spongepowered.api.event.filter.type.Exclude;
 
 import java.util.List;
 
-@SuppressWarnings("ALL")
 public class MobProtectionListener implements Reloadable, ListenerBase.Conditional {
 
     private List<EntityType> whitelistedTypes;
@@ -36,12 +34,12 @@ public class MobProtectionListener implements Reloadable, ListenerBase.Condition
     }
 
     @Override
-    public void onReload() throws Exception {
-        whitelistedTypes = getServiceUnchecked(ProtectionConfigAdapter.class).getNodeOrDefault().getWhitelistedEntities();
+    public void onReload(INucleusServiceCollection serviceCollection) {
+        this.whitelistedTypes = serviceCollection.moduleDataProvider().getModuleConfig(ProtectionConfig.class).getWhitelistedEntities();
     }
 
     @Override
-    public boolean shouldEnable() {
-        return Nucleus.getNucleus().getConfigValue(ProtectionModule.ID, ProtectionConfigAdapter.class, x -> x.isEnableProtection()).orElse(false);
+    public boolean shouldEnable(INucleusServiceCollection serviceCollection) {
+        return serviceCollection.moduleDataProvider().getModuleConfig(ProtectionConfig.class).isEnableProtection();
     }
 }

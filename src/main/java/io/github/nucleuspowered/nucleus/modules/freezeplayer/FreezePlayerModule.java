@@ -6,10 +6,9 @@ package io.github.nucleuspowered.nucleus.modules.freezeplayer;
 
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.Lists;
-import io.github.nucleuspowered.nucleus.Nucleus;
-import io.github.nucleuspowered.nucleus.internal.qsml.module.StandardModule;
-import io.github.nucleuspowered.nucleus.internal.text.Tokens;
-import io.github.nucleuspowered.nucleus.internal.traits.InternalServiceManagerTrait;
+import io.github.nucleuspowered.nucleus.quickstart.module.StandardModule;
+import io.github.nucleuspowered.nucleus.services.INucleusServiceCollection;
+import io.github.nucleuspowered.nucleus.services.impl.messagetoken.Tokens;
 import io.github.nucleuspowered.nucleus.modules.freezeplayer.commands.FreezePlayerCommand;
 import io.github.nucleuspowered.nucleus.modules.freezeplayer.services.FreezePlayerService;
 import org.spongepowered.api.command.CommandSource;
@@ -17,21 +16,21 @@ import org.spongepowered.api.entity.living.player.Player;
 import org.spongepowered.api.text.Text;
 import org.spongepowered.api.text.format.TextColors;
 import uk.co.drnaylor.quickstart.annotations.ModuleData;
+import uk.co.drnaylor.quickstart.holders.DiscoveryModuleHolder;
 
 import java.util.Map;
 import java.util.Optional;
+import java.util.function.Supplier;
+
+import javax.inject.Inject;
 
 @ModuleData(id = "freeze-subject", name = "Freeze Player")
-public class FreezePlayerModule extends StandardModule implements InternalServiceManagerTrait {
+public class FreezePlayerModule extends StandardModule {
 
-    @Override public void performEnableTasks() {
-        createSeenModule(FreezePlayerCommand.class, (c, u) -> {
-            if (getServiceUnchecked(FreezePlayerService.class).getFromUUID(u.getUniqueId())) {
-                return Lists.newArrayList(Nucleus.getNucleus().getMessageProvider().getTextMessageWithFormat("seen.frozen"));
-            }
-
-            return Lists.newArrayList(Nucleus.getNucleus().getMessageProvider().getTextMessageWithFormat("seen.notfrozen"));
-        });
+    @Inject
+    public FreezePlayerModule(Supplier<DiscoveryModuleHolder<?, ?>> moduleHolder,
+            INucleusServiceCollection collection) {
+        super(moduleHolder, collection);
     }
 
     @Override protected Map<String, Tokens.Translator> tokensToRegister() {
@@ -46,7 +45,7 @@ public class FreezePlayerModule extends StandardModule implements InternalServic
 
                     @Override protected boolean condition(CommandSource commandSource) {
                         return commandSource instanceof Player &&
-                                getServiceUnchecked(FreezePlayerService.class).getFromUUID(((Player) commandSource).getUniqueId());
+                                serviceCollection.getServiceUnchecked(FreezePlayerService.class).getFromUUID(((Player) commandSource).getUniqueId());
                     }
                 })
                 .build();

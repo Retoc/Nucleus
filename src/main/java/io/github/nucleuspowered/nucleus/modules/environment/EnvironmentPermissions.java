@@ -5,8 +5,8 @@
 package io.github.nucleuspowered.nucleus.modules.environment;
 
 import io.github.nucleuspowered.nucleus.annotationprocessor.RegisterPermissions;
-import io.github.nucleuspowered.nucleus.internal.permissions.PermissionMetadata;
-import io.github.nucleuspowered.nucleus.internal.permissions.SuggestedLevel;
+import io.github.nucleuspowered.nucleus.services.impl.permission.PermissionMetadata;
+import io.github.nucleuspowered.nucleus.services.impl.permission.SuggestedLevel;
 
 @RegisterPermissions
 public class EnvironmentPermissions {
@@ -15,45 +15,45 @@ public class EnvironmentPermissions {
     }
 
     @PermissionMetadata(descriptionKey = "permission.base", replacements = { "lockweather" }, level = SuggestedLevel.ADMIN)
-    public static final String BASE_LOCKWEATHER = "lockweather.base";
+    public static final String BASE_LOCKWEATHER = "nucleus.lockweather.base";
 
     @PermissionMetadata(descriptionKey = "permission.base", replacements = { "time" }, level = SuggestedLevel.USER)
-    public static final String BASE_TIME = "time.base";
+    public static final String BASE_TIME = "nucleus.time.base";
 
     @PermissionMetadata(descriptionKey = "permission.exempt.cooldown", replacements = { "time" }, level = SuggestedLevel.ADMIN)
-    public static final String EXEMPT_COOLDOWN_TIME = "time.exempt.cooldown";
+    public static final String EXEMPT_COOLDOWN_TIME = "nucleus.time.exempt.cooldown";
 
     @PermissionMetadata(descriptionKey = "permission.exempt.cost", replacements = { "time" }, level = SuggestedLevel.ADMIN)
-    public static final String EXEMPT_COST_TIME = "time.exempt.cost";
+    public static final String EXEMPT_COST_TIME = "nucleus.time.exempt.cost";
 
     @PermissionMetadata(descriptionKey = "permission.exempt.warmup", replacements = { "time" }, level = SuggestedLevel.ADMIN)
-    public static final String EXEMPT_WARMUP_TIME = "time.exempt.warmup";
+    public static final String EXEMPT_WARMUP_TIME = "nucleus.time.exempt.warmup";
 
     @PermissionMetadata(descriptionKey = "permission.base", replacements = { "time set" }, level = SuggestedLevel.ADMIN)
-    public static final String BASE_TIME_SET = "time.set.base";
+    public static final String BASE_TIME_SET = "nucleus.time.set.base";
 
     @PermissionMetadata(descriptionKey = "permission.exempt.cooldown", replacements = { "time set" }, level = SuggestedLevel.ADMIN)
-    public static final String EXEMPT_COOLDOWN_TIME_SET = "time.set.exempt.cooldown";
+    public static final String EXEMPT_COOLDOWN_TIME_SET = "nucleus.time.set.exempt.cooldown";
 
     @PermissionMetadata(descriptionKey = "permission.exempt.cost", replacements = { "time set" }, level = SuggestedLevel.ADMIN)
-    public static final String EXEMPT_COST_TIME_SET = "time.set.exempt.cost";
+    public static final String EXEMPT_COST_TIME_SET = "nucleus.time.set.exempt.cost";
 
     @PermissionMetadata(descriptionKey = "permission.exempt.warmup", replacements = { "time set" }, level = SuggestedLevel.ADMIN)
-    public static final String EXEMPT_WARMUP_TIME_SET = "time.set.exempt.warmup";
+    public static final String EXEMPT_WARMUP_TIME_SET = "nucleus.time.set.exempt.warmup";
 
     @PermissionMetadata(descriptionKey = "permission.base", replacements = { "weather" }, level = SuggestedLevel.ADMIN)
-    public static final String BASE_WEATHER = "weather.base";
+    public static final String BASE_WEATHER = "nucleus.weather.base";
 
     @PermissionMetadata(descriptionKey = "permission.exempt.cooldown", replacements = { "weather" }, level = SuggestedLevel.ADMIN)
-    public static final String EXEMPT_COOLDOWN_WEATHER = "weather.exempt.cooldown";
+    public static final String EXEMPT_COOLDOWN_WEATHER = "nucleus.weather.exempt.cooldown";
 
     @PermissionMetadata(descriptionKey = "permission.exempt.cost", replacements = { "weather" }, level = SuggestedLevel.ADMIN)
-    public static final String EXEMPT_COST_WEATHER = "weather.exempt.cost";
+    public static final String EXEMPT_COST_WEATHER = "nucleus.weather.exempt.cost";
 
     @PermissionMetadata(descriptionKey = "permission.weather.exempt.length", level = SuggestedLevel.ADMIN)
-    public static final String WEATHER_EXEMPT_LENGTH = "weather.exempt.length";
+    public static final String WEATHER_EXEMPT_LENGTH = "nucleus.weather.exempt.length";
 
     @PermissionMetadata(descriptionKey = "permission.exempt.warmup", replacements = { "weather" }, level = SuggestedLevel.ADMIN)
-    public static final String EXEMPT_WARMUP_WEATHER = "weather.exempt.warmup";
+    public static final String EXEMPT_WARMUP_WEATHER = "nucleus.weather.exempt.warmup";
 
 }

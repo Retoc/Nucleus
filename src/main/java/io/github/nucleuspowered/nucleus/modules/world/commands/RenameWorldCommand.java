@@ -4,50 +4,50 @@
  */
 package io.github.nucleuspowered.nucleus.modules.world.commands;
 
-import io.github.nucleuspowered.nucleus.Nucleus;
-import io.github.nucleuspowered.nucleus.internal.annotations.command.NoModifiers;
-import io.github.nucleuspowered.nucleus.internal.annotations.command.Permissions;
-import io.github.nucleuspowered.nucleus.internal.annotations.command.RegisterCommand;
-import io.github.nucleuspowered.nucleus.internal.command.AbstractCommand;
+import io.github.nucleuspowered.nucleus.internal.command.ICommandContext;
+import io.github.nucleuspowered.nucleus.internal.command.ICommandExecutor;
+import io.github.nucleuspowered.nucleus.internal.command.ICommandResult;
 import io.github.nucleuspowered.nucleus.internal.command.NucleusParameters;
-import io.github.nucleuspowered.nucleus.internal.command.ReturnMessageException;
-import io.github.nucleuspowered.nucleus.internal.permissions.SuggestedLevel;
+import io.github.nucleuspowered.nucleus.internal.command.annotation.Command;
+import io.github.nucleuspowered.nucleus.modules.world.WorldPermissions;
+import io.github.nucleuspowered.nucleus.services.INucleusServiceCollection;
 import org.spongepowered.api.Sponge;
-import org.spongepowered.api.command.CommandResult;
+import org.spongepowered.api.command.CommandException;
 import org.spongepowered.api.command.CommandSource;
-import org.spongepowered.api.command.args.CommandContext;
 import org.spongepowered.api.command.args.CommandElement;
 import org.spongepowered.api.command.args.GenericArguments;
-import org.spongepowered.api.event.cause.Cause;
 import org.spongepowered.api.text.Text;
 import org.spongepowered.api.util.annotation.NonnullByDefault;
 import org.spongepowered.api.world.storage.WorldProperties;
 
 @NonnullByDefault
-@NoModifiers
-@Permissions(prefix = "world", suggestedLevel = SuggestedLevel.OWNER)
-@RegisterCommand(value = "rename", subcommandOf = WorldCommand.class)
-public class RenameWorldCommand extends AbstractCommand<CommandSource> {
+@Command(
+        aliases = {"rename"},
+        basePermission = WorldPermissions.BASE_WORLD_RENAME,
+        commandDescriptionKey = "world.rename",
+        parentCommand = WorldCommand.class
+)
+public class RenameWorldCommand implements ICommandExecutor<CommandSource> {
 
     private final String newNameKey = "new name";
 
-    @Override protected CommandElement[] getArguments() {
+    @Override
+    public CommandElement[] parameters(INucleusServiceCollection serviceCollection) {
         return new CommandElement[] {
                 NucleusParameters.WORLD_PROPERTIES_UNLOADED_ONLY,
                 GenericArguments.string(Text.of(this.newNameKey))
         };
     }
 
-    @Override
-    protected CommandResult executeCommand(CommandSource src, CommandContext args, Cause cause) throws Exception {
-        WorldProperties worldProperties = args.<WorldProperties>getOne(NucleusParameters.Keys.WORLD).get();
+    @Override public ICommandResult execute(ICommandContext<? extends CommandSource> context) throws CommandException {
+        WorldProperties worldProperties = context.requireOne(NucleusParameters.Keys.WORLD, WorldProperties.class);
         String oldName = worldProperties.getWorldName();
-        String newName =  args.<String>getOne(this.newNameKey).get();
+        String newName =  context.requireOne(this.newNameKey, String.class);
         if (Sponge.getServer().renameWorld(worldProperties, newName).isPresent()) {
-            src.sendMessage(Nucleus.getNucleus().getMessageProvider().getTextMessageWithFormat("command.world.rename.success", oldName, newName));
-            return CommandResult.success();
+            context.sendMessage("command.world.rename.success", oldName, newName);
+            return context.successResult();
         }
 
-        throw ReturnMessageException.fromKey("command.world.rename.failed", worldProperties.getWorldName(), newName);
+        return context.errorResult("command.world.rename.failed", worldProperties.getWorldName(), newName);
     }
 }

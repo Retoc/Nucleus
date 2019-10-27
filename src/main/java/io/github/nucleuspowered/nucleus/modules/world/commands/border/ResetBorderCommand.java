@@ -4,39 +4,43 @@
  */
 package io.github.nucleuspowered.nucleus.modules.world.commands.border;
 
-import io.github.nucleuspowered.nucleus.Nucleus;
-import io.github.nucleuspowered.nucleus.internal.annotations.command.NoModifiers;
-import io.github.nucleuspowered.nucleus.internal.annotations.command.Permissions;
-import io.github.nucleuspowered.nucleus.internal.annotations.command.RegisterCommand;
-import io.github.nucleuspowered.nucleus.internal.command.AbstractCommand;
+import io.github.nucleuspowered.nucleus.internal.command.ICommandContext;
+import io.github.nucleuspowered.nucleus.internal.command.ICommandExecutor;
+import io.github.nucleuspowered.nucleus.internal.command.ICommandResult;
 import io.github.nucleuspowered.nucleus.internal.command.NucleusParameters;
+import io.github.nucleuspowered.nucleus.internal.command.annotation.Command;
+import io.github.nucleuspowered.nucleus.modules.world.WorldPermissions;
+import io.github.nucleuspowered.nucleus.services.INucleusServiceCollection;
 import org.spongepowered.api.Sponge;
-import org.spongepowered.api.command.CommandResult;
+import org.spongepowered.api.command.CommandException;
 import org.spongepowered.api.command.CommandSource;
-import org.spongepowered.api.command.args.CommandContext;
 import org.spongepowered.api.command.args.CommandElement;
-import org.spongepowered.api.event.cause.Cause;
 import org.spongepowered.api.util.annotation.NonnullByDefault;
 import org.spongepowered.api.world.World;
 import org.spongepowered.api.world.storage.WorldProperties;
 
 import java.util.Optional;
 
-@Permissions(prefix = "world.border", mainOverride = "set")
-@NoModifiers
-@RegisterCommand(value = {"reset"}, subcommandOf = BorderCommand.class)
 @NonnullByDefault
-public class ResetBorderCommand extends AbstractCommand<CommandSource> {
+@Command(
+        aliases = { "reset" },
+        basePermission = WorldPermissions.BASE_BORDER_SET,
+        commandDescriptionKey = "world.border.reset",
+        parentCommand = BorderCommand.class
+)
+public class ResetBorderCommand implements ICommandExecutor<CommandSource> {
 
     @Override
-    public CommandElement[] getArguments() {
+    public CommandElement[] parameters(INucleusServiceCollection serviceCollection) {
         return new CommandElement[] {
                 NucleusParameters.OPTIONAL_WORLD_PROPERTIES_ALL,
         };
     }
 
-    @Override protected CommandResult executeCommand(CommandSource src, CommandContext args, Cause cause) throws Exception {
-        WorldProperties wp = getWorldFromUserOrArgs(src, NucleusParameters.Keys.WORLD, args);
+    @Override public ICommandResult execute(ICommandContext<? extends CommandSource> context) throws CommandException {
+        WorldProperties wp = context.getWorldPropertiesOrFromSelf(NucleusParameters.Keys.WORLD)
+                .orElseThrow(() -> context.createException("command.world.player"));
+
         wp.setWorldBorderCenter(0, 0);
         Optional<World> world = Sponge.getServer().getWorld(wp.getUniqueId());
 
@@ -53,12 +57,12 @@ public class ResetBorderCommand extends AbstractCommand<CommandSource> {
             w.getWorldBorder().setDiameter(diameter);
         });
 
-        src.sendMessage(Nucleus.getNucleus().getMessageProvider().getTextMessageWithFormat("command.world.setborder.set",
+        context.sendMessage("command.world.setborder.set",
                 wp.getWorldName(),
                 "0",
                 "0",
-                String.valueOf(diameter)));
+                String.valueOf(diameter));
 
-        return CommandResult.success();
+        return context.successResult();
     }
 }

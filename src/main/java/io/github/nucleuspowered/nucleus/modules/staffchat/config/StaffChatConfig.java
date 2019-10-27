@@ -5,11 +5,9 @@
 package io.github.nucleuspowered.nucleus.modules.staffchat.config;
 
 import io.github.nucleuspowered.neutrino.annotations.Default;
-import io.github.nucleuspowered.nucleus.NameUtil;
-import io.github.nucleuspowered.nucleus.internal.text.NucleusTextTemplateImpl;
+import io.github.nucleuspowered.nucleus.services.impl.texttemplatefactory.NucleusTextTemplateImpl;
 import ninja.leaping.configurate.objectmapping.Setting;
 import ninja.leaping.configurate.objectmapping.serialize.ConfigSerializable;
-import org.spongepowered.api.text.format.TextColor;
 
 @ConfigSerializable
 public class StaffChatConfig {
@@ -34,10 +32,6 @@ public class StaffChatConfig {
         }
 
         return this.messageColour.substring(0, 1);
-    }
-
-    public TextColor getColour() {
-        return NameUtil.getColours().get(getMessageColour().charAt(0));
     }
 
     public boolean isIncludeStandardChatFormatting() {

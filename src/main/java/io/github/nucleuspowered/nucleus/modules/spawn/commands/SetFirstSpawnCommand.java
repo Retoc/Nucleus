@@ -4,35 +4,35 @@
  */
 package io.github.nucleuspowered.nucleus.modules.spawn.commands;
 
-import io.github.nucleuspowered.nucleus.Nucleus;
 import io.github.nucleuspowered.nucleus.configurate.datatypes.LocationNode;
-import io.github.nucleuspowered.nucleus.internal.annotations.RunAsync;
-import io.github.nucleuspowered.nucleus.internal.annotations.command.NoModifiers;
-import io.github.nucleuspowered.nucleus.internal.annotations.command.Permissions;
-import io.github.nucleuspowered.nucleus.internal.annotations.command.RegisterCommand;
-import io.github.nucleuspowered.nucleus.internal.command.AbstractCommand;
+import io.github.nucleuspowered.nucleus.internal.command.ICommandContext;
+import io.github.nucleuspowered.nucleus.internal.command.ICommandExecutor;
+import io.github.nucleuspowered.nucleus.internal.command.ICommandResult;
+import io.github.nucleuspowered.nucleus.internal.command.annotation.Command;
 import io.github.nucleuspowered.nucleus.modules.spawn.SpawnKeys;
-import org.spongepowered.api.command.CommandResult;
-import org.spongepowered.api.command.args.CommandContext;
+import io.github.nucleuspowered.nucleus.modules.spawn.SpawnPermissions;
+import org.spongepowered.api.command.CommandException;
 import org.spongepowered.api.entity.living.player.Player;
-import org.spongepowered.api.event.cause.Cause;
 import org.spongepowered.api.util.annotation.NonnullByDefault;
 
-@RegisterCommand({"setfirstspawn"})
-@Permissions(prefix = "firstspawn", mainOverride = "set")
-@NoModifiers
-@RunAsync
 @NonnullByDefault
-public class SetFirstSpawnCommand extends AbstractCommand<Player> {
+@Command(
+        aliases = { "setfirstspawn" },
+        basePermission = SpawnPermissions.BASE_SETFIRSTSPAWN,
+        commandDescriptionKey = "setfirstspawn",
+        async = true
+)
+public class SetFirstSpawnCommand implements ICommandExecutor<Player> {
 
     @Override
-    public CommandResult executeCommand(Player src, CommandContext args, Cause cause) {
-        Nucleus.getNucleus().getStorageManager().getGeneralService().getOrNewOnThread()
-                .set(SpawnKeys.FIRST_SPAWN_LOCATION, new LocationNode(src.getLocation(), src.getRotation()));
-        src.sendMessage(Nucleus.getNucleus().getMessageProvider().getTextMessageWithFormat("command.setfirstspawn.success"));
-        src.sendMessage(Nucleus.getNucleus().getMessageProvider().getTextMessageWithFormat("command.setfirstspawn.success2"));
+    public ICommandResult execute(ICommandContext<? extends Player> context) throws CommandException {
+        Player player = context.getIfPlayer();
+        context.getServiceCollection().storageManager().getGeneralService().getOrNewOnThread()
+                .set(SpawnKeys.FIRST_SPAWN_LOCATION,
+                        new LocationNode(player.getLocation(), player.getRotation()));
+        context.sendMessage("command.setfirstspawn.success");
+        context.sendMessage("command.setfirstspawn.success2");
 
-        return CommandResult.success();
+        return context.successResult();
     }
-
 }

@@ -6,27 +6,33 @@ package io.github.nucleuspowered.nucleus.modules.home;
 
 import io.github.nucleuspowered.nucleus.Nucleus;
 import io.github.nucleuspowered.nucleus.api.service.NucleusHomeService;
-import io.github.nucleuspowered.nucleus.internal.qsml.module.ConfigurableModule;
+import io.github.nucleuspowered.nucleus.modules.home.config.HomeConfig;
+import io.github.nucleuspowered.nucleus.quickstart.module.ConfigurableModule;
 import io.github.nucleuspowered.nucleus.modules.home.config.HomeConfigAdapter;
 import io.github.nucleuspowered.nucleus.modules.home.services.HomeService;
+import io.github.nucleuspowered.nucleus.services.INucleusServiceCollection;
 import org.spongepowered.api.Sponge;
 import uk.co.drnaylor.quickstart.annotations.ModuleData;
+import uk.co.drnaylor.quickstart.holders.DiscoveryModuleHolder;
+
+import java.util.function.Supplier;
+
+import javax.inject.Inject;
 
 @ModuleData(id = HomeModule.ID, name = "Home")
-public class HomeModule extends ConfigurableModule<HomeConfigAdapter> {
+public class HomeModule extends ConfigurableModule<HomeConfig, HomeConfigAdapter> {
 
     public static final String ID = "home";
+
+    @Inject
+    public HomeModule(Supplier<DiscoveryModuleHolder<?, ?>> moduleHolder,
+            INucleusServiceCollection collection) {
+        super(moduleHolder, collection);
+    }
 
     @Override
     public HomeConfigAdapter createAdapter() {
         return new HomeConfigAdapter();
     }
 
-    @Override public void performPreTasks() throws Exception {
-        super.performPreTasks();
-
-        HomeService homeService = new HomeService();
-        Nucleus.getNucleus().getInternalServiceManager().registerService(HomeService.class, homeService);
-        Sponge.getServiceManager().setProvider(Nucleus.getNucleus(), NucleusHomeService.class, homeService);
-    }
 }

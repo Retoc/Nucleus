@@ -4,46 +4,45 @@
  */
 package io.github.nucleuspowered.nucleus.modules.jail.commands;
 
-import io.github.nucleuspowered.nucleus.Nucleus;
 import io.github.nucleuspowered.nucleus.api.nucleusdata.NamedLocation;
-import io.github.nucleuspowered.nucleus.internal.annotations.command.NoModifiers;
-import io.github.nucleuspowered.nucleus.internal.annotations.command.Permissions;
-import io.github.nucleuspowered.nucleus.internal.annotations.command.RegisterCommand;
-import io.github.nucleuspowered.nucleus.internal.command.AbstractCommand;
-import io.github.nucleuspowered.nucleus.internal.command.ReturnMessageException;
-import io.github.nucleuspowered.nucleus.internal.permissions.SuggestedLevel;
+import io.github.nucleuspowered.nucleus.internal.command.ICommandContext;
+import io.github.nucleuspowered.nucleus.internal.command.ICommandExecutor;
+import io.github.nucleuspowered.nucleus.internal.command.ICommandResult;
+import io.github.nucleuspowered.nucleus.internal.command.annotation.Command;
 import io.github.nucleuspowered.nucleus.modules.jail.JailParameters;
-import org.spongepowered.api.command.CommandResult;
-import org.spongepowered.api.command.args.CommandContext;
+import io.github.nucleuspowered.nucleus.modules.jail.JailPermissions;
+import io.github.nucleuspowered.nucleus.services.INucleusServiceCollection;
+import org.spongepowered.api.command.CommandException;
 import org.spongepowered.api.command.args.CommandElement;
 import org.spongepowered.api.entity.Transform;
 import org.spongepowered.api.entity.living.player.Player;
-import org.spongepowered.api.event.cause.Cause;
 import org.spongepowered.api.util.annotation.NonnullByDefault;
 import org.spongepowered.api.world.World;
 
-@NoModifiers
 @NonnullByDefault
-@RegisterCommand(value = "tp", subcommandOf = JailsCommand.class)
-@Permissions(prefix = "jail", mainOverride = "list", suggestedLevel = SuggestedLevel.MOD)
-public class JailTeleportCommand extends AbstractCommand<Player> {
+@Command(
+        aliases = "tp",
+        basePermission = JailPermissions.BASE_JAILS_TP,
+        commandDescriptionKey = "jails.tp",
+        parentCommand = JailsCommand.class
+)
+public class JailTeleportCommand implements ICommandExecutor<Player> {
 
     @Override
-    public CommandElement[] getArguments() {
+    public CommandElement[] parameters(INucleusServiceCollection serviceCollection) {
         return new CommandElement[] {
                 JailParameters.JAIL
         };
     }
 
-    @Override protected CommandResult executeCommand(Player src, CommandContext args, Cause cause) throws Exception {
-        NamedLocation location = args.<NamedLocation>getOne(JailParameters.JAIL_KEY).get();
-        Transform<World> location1 = location.getTransform().orElseThrow(
-                () -> new ReturnMessageException(
-                        Nucleus.getNucleus().getMessageProvider().getTextMessageWithFormat("command.jails.tp.noworld", location.getName()))
-        );
+    @Override public ICommandResult execute(ICommandContext<? extends Player> context) throws CommandException {
+        NamedLocation location = context.requireOne(JailParameters.JAIL_KEY, NamedLocation.class);
+        Transform<World> location1 = location.getTransform().orElseThrow(() -> context.createException("command.jails.tp.noworld",
+                location.getName()));
 
-        src.setTransform(location1);
-        src.sendMessage(Nucleus.getNucleus().getMessageProvider().getTextMessageWithFormat("command.jails.tp.success", location.getName()));
-        return CommandResult.success();
+        Player player = context.getIfPlayer();
+        player.setTransform(location1);
+        context.sendMessage("command.jails.tp.success", location.getName());
+        return context.successResult();
     }
 }

@@ -5,50 +5,45 @@
 package io.github.nucleuspowered.nucleus.modules.teleport.commands;
 
 import com.google.common.collect.Lists;
-import io.github.nucleuspowered.nucleus.Nucleus;
-import io.github.nucleuspowered.nucleus.internal.annotations.command.NoModifiers;
-import io.github.nucleuspowered.nucleus.internal.annotations.command.Permissions;
-import io.github.nucleuspowered.nucleus.internal.annotations.command.RegisterCommand;
-import io.github.nucleuspowered.nucleus.internal.command.AbstractCommand;
-import io.github.nucleuspowered.nucleus.internal.command.ReturnMessageException;
-import io.github.nucleuspowered.nucleus.internal.docgen.annotations.EssentialsEquivalent;
+import io.github.nucleuspowered.nucleus.internal.command.ICommandContext;
+import io.github.nucleuspowered.nucleus.internal.command.ICommandExecutor;
+import io.github.nucleuspowered.nucleus.internal.command.ICommandResult;
+import io.github.nucleuspowered.nucleus.internal.command.annotation.Command;
+import io.github.nucleuspowered.nucleus.internal.command.annotation.EssentialsEquivalent;
+import io.github.nucleuspowered.nucleus.modules.teleport.TeleportPermissions;
 import io.github.nucleuspowered.nucleus.modules.teleport.events.RequestEvent;
 import io.github.nucleuspowered.nucleus.modules.teleport.services.PlayerTeleporterService;
+import io.github.nucleuspowered.nucleus.services.INucleusServiceCollection;
 import org.spongepowered.api.Sponge;
-import org.spongepowered.api.command.CommandResult;
-import org.spongepowered.api.command.args.CommandContext;
+import org.spongepowered.api.command.CommandException;
 import org.spongepowered.api.command.args.CommandElement;
 import org.spongepowered.api.command.args.GenericArguments;
 import org.spongepowered.api.entity.living.player.Player;
 import org.spongepowered.api.entity.living.player.User;
-import org.spongepowered.api.event.cause.Cause;
 import org.spongepowered.api.util.annotation.NonnullByDefault;
 
 import java.util.List;
 import java.util.stream.Collectors;
 
-@Permissions(prefix = "teleport")
-@NoModifiers
 @NonnullByDefault
-@RegisterCommand({"tpaall", "tpaskall"})
 @EssentialsEquivalent({"tpaall"})
-public class TeleportAskAllHereCommand extends AbstractCommand<Player> {
-
-    private final PlayerTeleporterService playerTeleporterService = getServiceUnchecked(PlayerTeleporterService.class);
+@Command(aliases = {"tpaall", "tpaskall"}, basePermission = TeleportPermissions.BASE_TPAALL, commandDescriptionKey = "tpaall")
+public class TeleportAskAllHereCommand implements ICommandExecutor<Player> {
 
     @Override
-    public CommandElement[] getArguments() {
+    public CommandElement[] parameters(INucleusServiceCollection serviceCollection) {
         return new CommandElement[] {
                 GenericArguments.flags().flag("f").buildWith(GenericArguments.none())
         };
     }
 
-    @Override
-    public CommandResult executeCommand(Player src, CommandContext args, Cause cause) throws ReturnMessageException {
-        //Cause cause = Cause.of(NamedCause.owner(src));
+    @Override public ICommandResult execute(ICommandContext<? extends Player> context) throws CommandException {
         List<Player> cancelled = Lists.newArrayList();
+        PlayerTeleporterService playerTeleporterService = context
+                .getServiceCollection()
+                .getServiceUnchecked(PlayerTeleporterService.class);
         for (Player x : Sponge.getServer().getOnlinePlayers()) {
-            if (x.equals(src)) {
+            if (context.is(x)) {
                 continue;
             }
 
@@ -59,14 +54,14 @@ public class TeleportAskAllHereCommand extends AbstractCommand<Player> {
                 continue;
             }
 
-            this.playerTeleporterService.requestTeleport(
-                    src,
+            playerTeleporterService.requestTeleport(
+                    context.getIfPlayer(),
                     x,
                     0,
                     0,
                     x,
-                    src,
-                    !args.<Boolean>getOne("f").orElse(false),
+                    context.getIfPlayer(),
+                    !context.getOne("f", Boolean.class).orElse(false),
                     false,
                     true,
                     p -> {},
@@ -74,12 +69,12 @@ public class TeleportAskAllHereCommand extends AbstractCommand<Player> {
             );
         }
 
-        src.sendMessage(Nucleus.getNucleus().getMessageProvider().getTextMessageWithFormat("command.tpaall.success"));
+        context.sendMessage("command.tpaall.success");
         if (!cancelled.isEmpty()) {
-            src.sendMessage(Nucleus.getNucleus().getMessageProvider().getTextMessageWithFormat("command.tpall.cancelled",
-                cancelled.stream().map(User::getName).collect(Collectors.joining(", "))));
+            context.sendMessage("command.tpall.cancelled",
+                    cancelled.stream().map(User::getName).collect(Collectors.joining(", ")));
         }
 
-        return CommandResult.success();
+        return context.successResult();
     }
 }

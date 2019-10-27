@@ -8,7 +8,10 @@ import com.google.common.collect.Maps;
 import io.github.nucleuspowered.nucleus.Nucleus;
 import io.github.nucleuspowered.nucleus.internal.interfaces.ListenerBase;
 import io.github.nucleuspowered.nucleus.modules.freezeplayer.services.FreezePlayerService;
-import io.github.nucleuspowered.nucleus.internal.traits.InternalServiceManagerTrait;
+import io.github.nucleuspowered.nucleus.services.IMessageProviderService;
+import io.github.nucleuspowered.nucleus.services.INucleusServiceCollection;
+import io.github.nucleuspowered.nucleus.services.IPermissionService;
+import io.github.nucleuspowered.nucleus.services.IPlayerDisplayNameService;
 import org.spongepowered.api.entity.living.player.Player;
 import org.spongepowered.api.event.Listener;
 import org.spongepowered.api.event.action.InteractEvent;
@@ -22,14 +25,20 @@ import java.time.temporal.ChronoUnit;
 import java.util.Map;
 import java.util.UUID;
 
-public class FreezePlayerListener implements ListenerBase, InternalServiceManagerTrait {
+import javax.inject.Inject;
 
-    private final FreezePlayerService service = Nucleus.getNucleus()
-            .getInternalServiceManager()
-            .getServiceUnchecked(FreezePlayerService.class);
+public class FreezePlayerListener implements ListenerBase {
+
+    private final IMessageProviderService messageProviderService;
+    private final FreezePlayerService service;
 
     private final Map<UUID, Instant> lastFreezeNotification = Maps.newHashMap();
-    private final FreezePlayerService freezeService = Nucleus.getNucleus().getInternalServiceManager().getServiceUnchecked(FreezePlayerService.class);
+
+    @Inject
+    public FreezePlayerListener(INucleusServiceCollection serviceCollection) {
+        this.messageProviderService = serviceCollection.messageProvider();
+        this.service = serviceCollection.getServiceUnchecked(FreezePlayerService.class);
+    }
 
     @Listener
     public void onPlayerMovement(MoveEntityEvent event, @Root Player player) {
@@ -52,10 +61,10 @@ public class FreezePlayerListener implements ListenerBase, InternalServiceManage
     }
 
     private boolean checkForFrozen(Player player, String message) {
-        if (this.freezeService.getFromUUID(player.getUniqueId())) {
+        if (this.service.getFromUUID(player.getUniqueId())) {
             Instant now = Instant.now();
             if (this.lastFreezeNotification.getOrDefault(player.getUniqueId(), now).isBefore(now)) {
-                player.sendMessage(Nucleus.getNucleus().getMessageProvider().getTextMessageWithFormat(message));
+                this.messageProviderService.sendMessageTo(player, message);
                 this.lastFreezeNotification.put(player.getUniqueId(), now.plus(2, ChronoUnit.SECONDS));
             }
 

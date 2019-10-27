@@ -4,23 +4,23 @@
  */
 package io.github.nucleuspowered.nucleus.modules.jump.commands;
 
-import io.github.nucleuspowered.nucleus.Nucleus;
 import io.github.nucleuspowered.nucleus.Util;
 import io.github.nucleuspowered.nucleus.api.teleport.TeleportScanners;
-import io.github.nucleuspowered.nucleus.internal.annotations.command.Permissions;
-import io.github.nucleuspowered.nucleus.internal.annotations.command.RegisterCommand;
-import io.github.nucleuspowered.nucleus.internal.command.AbstractCommand;
-import io.github.nucleuspowered.nucleus.internal.command.ReturnMessageException;
-import io.github.nucleuspowered.nucleus.internal.docgen.annotations.EssentialsEquivalent;
+import io.github.nucleuspowered.nucleus.internal.command.ICommandContext;
+import io.github.nucleuspowered.nucleus.internal.command.ICommandExecutor;
+import io.github.nucleuspowered.nucleus.internal.command.ICommandResult;
+import io.github.nucleuspowered.nucleus.internal.command.annotation.Command;
+import io.github.nucleuspowered.nucleus.internal.command.annotation.CommandModifier;
+import io.github.nucleuspowered.nucleus.internal.command.annotation.EssentialsEquivalent;
+import io.github.nucleuspowered.nucleus.internal.command.requirements.CommandModifiers;
 import io.github.nucleuspowered.nucleus.internal.interfaces.Reloadable;
-import io.github.nucleuspowered.nucleus.modules.core.services.SafeTeleportService;
-import io.github.nucleuspowered.nucleus.modules.jump.config.JumpConfigAdapter;
+import io.github.nucleuspowered.nucleus.modules.jump.JumpPermissions;
+import io.github.nucleuspowered.nucleus.modules.jump.config.JumpConfig;
+import io.github.nucleuspowered.nucleus.services.INucleusServiceCollection;
 import org.spongepowered.api.block.BlockTypes;
-import org.spongepowered.api.command.CommandResult;
-import org.spongepowered.api.command.args.CommandContext;
+import org.spongepowered.api.command.CommandException;
 import org.spongepowered.api.data.property.block.PassableProperty;
 import org.spongepowered.api.entity.living.player.Player;
-import org.spongepowered.api.event.cause.Cause;
 import org.spongepowered.api.util.Direction;
 import org.spongepowered.api.util.annotation.NonnullByDefault;
 import org.spongepowered.api.util.blockray.BlockRay;
@@ -32,18 +32,27 @@ import java.util.Optional;
 
 import javax.annotation.Nullable;
 
-@Permissions
-@RegisterCommand({"jump", "j", "jmp"})
 @EssentialsEquivalent({"jump", "j", "jumpto"})
 @NonnullByDefault
-public class JumpCommand extends AbstractCommand<Player> implements Reloadable {
+@Command(
+        aliases = {"jump", "j", "jmp"},
+        basePermission = JumpPermissions.BASE_JUMP,
+        commandDescriptionKey = "jump",
+        modifiers = {
+            @CommandModifier(value = CommandModifiers.HAS_COOLDOWN, exemptPermission = JumpPermissions.EXEMPT_COOLDOWN_JUMP),
+            @CommandModifier(value = CommandModifiers.HAS_WARMUP, exemptPermission = JumpPermissions.EXEMPT_WARMUP_JUMP),
+            @CommandModifier(value = CommandModifiers.HAS_COST, exemptPermission = JumpPermissions.EXEMPT_COST_JUMP)
+        }
+)
+public class JumpCommand implements ICommandExecutor<Player>, Reloadable {
 
     private int maxJump = 20;
 
     // Original code taken from EssentialCmds. With thanks to 12AwsomeMan34 for
     // the initial contribution.
     @Override
-    public CommandResult executeCommand(Player player, CommandContext args, Cause cause) throws Exception {
+    public ICommandResult execute(ICommandContext<? extends Player> context) throws CommandException {
+        Player player = context.getIfPlayer();
         BlockRay<World> playerBlockRay = BlockRay.from(player).distanceLimit(this.maxJump).build();
 
         BlockRayHit<World> finalHitRay = null;
@@ -58,7 +67,7 @@ public class JumpCommand extends AbstractCommand<Player> implements Reloadable {
 
         if (finalHitRay == null) {
             // We didn't find anywhere to jump to.
-            throw ReturnMessageException.fromKey("command.jump.noblock");
+            return context.errorResult("command.jump.noblock");
         }
 
         // If the block not passable, then it is a solid block
@@ -74,10 +83,11 @@ public class JumpCommand extends AbstractCommand<Player> implements Reloadable {
         }
 
         if (!Util.isLocationInWorldBorder(finalLocation)) {
-            throw ReturnMessageException.fromKey("command.jump.outsideborder");
+            return context.errorResult("command.jump.outsideborder");
         }
 
-        boolean result = getServiceUnchecked(SafeTeleportService.class)
+        boolean result = context.getServiceCollection()
+                .teleportService()
                 .teleportPlayerSmart(
                         player,
                         finalLocation,
@@ -86,18 +96,19 @@ public class JumpCommand extends AbstractCommand<Player> implements Reloadable {
                         TeleportScanners.NO_SCAN
                 ).isSuccessful();
         if (result) {
-            player.sendMessage(Nucleus.getNucleus().getMessageProvider().getTextMessageWithFormat("command.jump.success"));
-            return CommandResult.success();
+            context.sendMessage("command.jump.success");
+            return context.successResult();
         }
 
-        throw ReturnMessageException.fromKey("command.jump.notsafe");
+        return context.errorResult("command.jump.notsafe");
     }
 
     private boolean getFromBoxed(@Nullable Boolean bool) {
         return bool != null ? bool : false;
     }
 
-    @Override public void onReload() {
-        this.maxJump = Nucleus.getNucleus().getInternalServiceManager().getServiceUnchecked(JumpConfigAdapter.class).getNodeOrDefault().getMaxJump();
+    @Override
+    public void onReload(INucleusServiceCollection serviceCollection) {
+        this.maxJump = serviceCollection.moduleDataProvider().getModuleConfig(JumpConfig.class).getMaxJump();
     }
 }

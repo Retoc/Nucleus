@@ -4,22 +4,19 @@
  */
 package io.github.nucleuspowered.nucleus.modules.ban.commands;
 
-import io.github.nucleuspowered.nucleus.Nucleus;
 import io.github.nucleuspowered.nucleus.Util;
-import io.github.nucleuspowered.nucleus.internal.annotations.RunAsync;
-import io.github.nucleuspowered.nucleus.internal.annotations.command.NoModifiers;
-import io.github.nucleuspowered.nucleus.internal.annotations.command.Permissions;
-import io.github.nucleuspowered.nucleus.internal.annotations.command.RegisterCommand;
-import io.github.nucleuspowered.nucleus.internal.command.AbstractCommand;
+import io.github.nucleuspowered.nucleus.internal.command.ICommandContext;
+import io.github.nucleuspowered.nucleus.internal.command.ICommandExecutor;
+import io.github.nucleuspowered.nucleus.internal.command.ICommandResult;
 import io.github.nucleuspowered.nucleus.internal.command.NucleusParameters;
-import io.github.nucleuspowered.nucleus.internal.permissions.SuggestedLevel;
+import io.github.nucleuspowered.nucleus.internal.command.annotation.Command;
+import io.github.nucleuspowered.nucleus.modules.ban.BanPermissions;
+import io.github.nucleuspowered.nucleus.services.INucleusServiceCollection;
 import org.spongepowered.api.Sponge;
-import org.spongepowered.api.command.CommandResult;
+import org.spongepowered.api.command.CommandException;
 import org.spongepowered.api.command.CommandSource;
-import org.spongepowered.api.command.args.CommandContext;
 import org.spongepowered.api.command.args.CommandElement;
 import org.spongepowered.api.command.args.GenericArguments;
-import org.spongepowered.api.event.cause.Cause;
 import org.spongepowered.api.profile.GameProfile;
 import org.spongepowered.api.service.ban.BanService;
 import org.spongepowered.api.text.serializer.TextSerializers;
@@ -28,15 +25,12 @@ import org.spongepowered.api.util.ban.Ban;
 
 import java.util.Optional;
 
-@RegisterCommand("checkban")
-@Permissions(suggestedLevel = SuggestedLevel.MOD)
-@NoModifiers
-@RunAsync
+@Command(aliases = "checkban", basePermission = BanPermissions.BASE_CHECKBAN, commandDescriptionKey = "checkban")
 @NonnullByDefault
-public class CheckBanCommand extends AbstractCommand<CommandSource> {
+public class CheckBanCommand implements ICommandExecutor<CommandSource> {
 
     @Override
-    public CommandElement[] getArguments() {
+    public CommandElement[] parameters(INucleusServiceCollection serviceCollection) {
         return new CommandElement[] {
                 GenericArguments.firstParsing(
                         NucleusParameters.ONE_GAME_PROFILE_UUID,
@@ -46,21 +40,19 @@ public class CheckBanCommand extends AbstractCommand<CommandSource> {
     }
 
     @Override
-    public CommandResult executeCommand(CommandSource src, CommandContext args, Cause cause) {
+    public ICommandResult execute(ICommandContext<? extends CommandSource> context) throws CommandException {
         GameProfile gp;
-        if (args.hasAny(NucleusParameters.Keys.USER_UUID)) {
-            gp = args.<GameProfile>getOne(NucleusParameters.Keys.USER_UUID).get();
+        if (context.hasAny(NucleusParameters.Keys.USER_UUID)) {
+            gp = context.requireOne(NucleusParameters.Keys.USER_UUID, GameProfile.class);
         } else {
-            gp = args.<GameProfile>getOne(NucleusParameters.Keys.USER).get();
+            gp = context.requireOne(NucleusParameters.Keys.USER, GameProfile.class);
         }
 
         BanService service = Sponge.getServiceManager().provideUnchecked(BanService.class);
 
         Optional<Ban.Profile> obp = service.getBanFor(gp);
         if (!obp.isPresent()) {
-            src.sendMessage(Nucleus.getNucleus().getMessageProvider().getTextMessageWithFormat("command.checkban.notset", gp.getName().orElse(
-                    Nucleus.getNucleus().getMessageProvider().getMessageWithFormat("standard.unknown"))));
-            return CommandResult.success();
+            return context.errorResult("command.checkban.notset", Util.getNameOrUnkown(context, gp));
         }
 
         Ban.Profile bp = obp.get();
@@ -69,25 +61,23 @@ public class CheckBanCommand extends AbstractCommand<CommandSource> {
         if (bp.getBanSource().isPresent()) {
             name = bp.getBanSource().get().toPlain();
         } else {
-            name = Nucleus.getNucleus().getMessageProvider().getMessageWithFormat("standard.unknown");
+            name = context.getServiceCollection().messageProvider().getMessageString(context.getCommandSource(), "standard.unknown");
         }
 
         if (bp.getExpirationDate().isPresent()) {
-            src.sendMessage(Nucleus.getNucleus().getMessageProvider().getTextMessageWithFormat("command.checkban.bannedfor",
-                    gp.getName().orElse(Nucleus.getNucleus().getMessageProvider().getMessageWithFormat("standard.unknown")), name,
-                    Util.getTimeToNow(bp.getExpirationDate().get())));
+            context.sendMessage("command.checkban.bannedfor", Util.getNameOrUnkown(context, gp), name,
+                    context.getTimeToNowString(bp.getExpirationDate().get()));
         } else {
-            src.sendMessage(Nucleus.getNucleus().getMessageProvider().getTextMessageWithFormat("command.checkban.bannedperm",
-                    gp.getName().orElse(Nucleus.getNucleus().getMessageProvider().getMessageWithFormat("standard.unknown")), name));
+            context.sendMessage("command.checkban.bannedperm", Util.getNameOrUnkown(context, gp), name);
         }
 
-        src.sendMessage(Nucleus.getNucleus().getMessageProvider().getTextMessageWithFormat("command.checkban.created", Util.FULL_TIME_FORMATTER.withLocale(src.getLocale())
+        context.sendMessage("command.checkban.created", Util.FULL_TIME_FORMATTER.withLocale(context.getCommandSource().getLocale())
                 .format(bp.getCreationDate()
-        )));
-        src.sendMessage(Nucleus.getNucleus()
-                .getMessageProvider().getTextMessageWithFormat("standard.reasoncoloured", TextSerializers.FORMATTING_CODE.serialize(bp.getReason()
+        ));
+        context.sendMessage("standard.reasoncoloured", TextSerializers.FORMATTING_CODE.serialize(bp.getReason()
                         .orElse(
-                        Nucleus.getNucleus().getMessageProvider().getTextMessageWithFormat("ban.defaultreason")))));
-        return CommandResult.success();
+                        context.getServiceCollection().messageProvider().getMessageFor(context.getCommandSource().getLocale(), "ban.defaultreason"))));
+        return context.successResult();
     }
+
 }

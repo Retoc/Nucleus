@@ -5,8 +5,8 @@
 package io.github.nucleuspowered.nucleus.modules.fun;
 
 import io.github.nucleuspowered.nucleus.annotationprocessor.RegisterPermissions;
-import io.github.nucleuspowered.nucleus.internal.permissions.PermissionMetadata;
-import io.github.nucleuspowered.nucleus.internal.permissions.SuggestedLevel;
+import io.github.nucleuspowered.nucleus.services.impl.permission.PermissionMetadata;
+import io.github.nucleuspowered.nucleus.services.impl.permission.SuggestedLevel;
 
 @RegisterPermissions
 public class FunPermissions {
@@ -15,79 +15,79 @@ public class FunPermissions {
     }
 
     @PermissionMetadata(descriptionKey = "permission.base", replacements = { "hat" }, level = SuggestedLevel.ADMIN)
-    public static final String BASE_HAT = "hat.base";
+    public static final String BASE_HAT = "nucleus.hat.base";
 
     @PermissionMetadata(descriptionKey = "permission.others", replacements = { "hat" }, level = SuggestedLevel.ADMIN)
-    public static final String OTHERS_HAT = "hat.others";
+    public static final String OTHERS_HAT = "nucleus.hat.others";
 
     @PermissionMetadata(descriptionKey = "permission.base", replacements = { "ignite" }, level = SuggestedLevel.ADMIN)
-    public static final String BASE_IGNITE = "ignite.base";
+    public static final String BASE_IGNITE = "nucleus.ignite.base";
 
     @PermissionMetadata(descriptionKey = "permission.exempt.cooldown", replacements = { "ignite" }, level = SuggestedLevel.ADMIN)
-    public static final String EXEMPT_COOLDOWN_IGNITE = "ignite.exempt.cooldown";
+    public static final String EXEMPT_COOLDOWN_IGNITE = "nucleus.ignite.exempt.cooldown";
 
     @PermissionMetadata(descriptionKey = "permission.exempt.cost", replacements = { "ignite" }, level = SuggestedLevel.ADMIN)
-    public static final String EXEMPT_COST_IGNITE = "ignite.exempt.cost";
+    public static final String EXEMPT_COST_IGNITE = "nucleus.ignite.exempt.cost";
 
     @PermissionMetadata(descriptionKey = "permission.exempt.warmup", replacements = { "ignite" }, level = SuggestedLevel.ADMIN)
-    public static final String EXEMPT_WARMUP_IGNITE = "ignite.exempt.warmup";
+    public static final String EXEMPT_WARMUP_IGNITE = "nucleus.ignite.exempt.warmup";
 
     @PermissionMetadata(descriptionKey = "permission.others", replacements = { "ignite" }, level = SuggestedLevel.ADMIN)
-    public static final String OTHERS_IGNITE = "ignite.others";
+    public static final String OTHERS_IGNITE = "nucleus.ignite.others";
 
     @PermissionMetadata(descriptionKey = "permission.base", replacements = { "kittycannon" }, level = SuggestedLevel.ADMIN)
-    public static final String BASE_KITTYCANNON = "kittycannon.base";
+    public static final String BASE_KITTYCANNON = "nucleus.kittycannon.base";
 
     @PermissionMetadata(descriptionKey = "permission.kittycannon.break", level = SuggestedLevel.ADMIN)
-    public static final String KITTYCANNON_BREAK = "kittycannon.break";
+    public static final String KITTYCANNON_BREAK = "nucleus.kittycannon.break";
 
     @PermissionMetadata(descriptionKey = "permission.kittycannon.damage", level = SuggestedLevel.ADMIN)
-    public static final String KITTYCANNON_DAMAGE = "kittycannon.damage";
+    public static final String KITTYCANNON_DAMAGE = "nucleus.kittycannon.damage";
 
     @PermissionMetadata(descriptionKey = "permission.exempt.cooldown", replacements = { "kittycannon" }, level = SuggestedLevel.ADMIN)
-    public static final String EXEMPT_COOLDOWN_KITTYCANNON = "kittycannon.exempt.cooldown";
+    public static final String EXEMPT_COOLDOWN_KITTYCANNON = "nucleus.kittycannon.exempt.cooldown";
 
     @PermissionMetadata(descriptionKey = "permission.exempt.cost", replacements = { "kittycannon" }, level = SuggestedLevel.ADMIN)
-    public static final String EXEMPT_COST_KITTYCANNON = "kittycannon.exempt.cost";
+    public static final String EXEMPT_COST_KITTYCANNON = "nucleus.kittycannon.exempt.cost";
 
     @PermissionMetadata(descriptionKey = "permission.exempt.warmup", replacements = { "kittycannon" }, level = SuggestedLevel.ADMIN)
-    public static final String EXEMPT_WARMUP_KITTYCANNON = "kittycannon.exempt.warmup";
+    public static final String EXEMPT_WARMUP_KITTYCANNON = "nucleus.kittycannon.exempt.warmup";
 
     @PermissionMetadata(descriptionKey = "permission.kittycannon.fire", level = SuggestedLevel.ADMIN)
-    public static final String KITTYCANNON_FIRE = "kittycannon.fire";
+    public static final String KITTYCANNON_FIRE = "nucleus.kittycannon.fire";
 
     @PermissionMetadata(descriptionKey = "permission.others", replacements = { "kittycannon" }, level = SuggestedLevel.ADMIN)
-    public static final String OTHERS_KITTYCANNON = "kittycannon.others";
+    public static final String OTHERS_KITTYCANNON = "nucleus.kittycannon.others";
 
     @PermissionMetadata(descriptionKey = "permission.base", replacements = { "lightning" }, level = SuggestedLevel.ADMIN)
-    public static final String BASE_LIGHTNING = "lightning.base";
+    public static final String BASE_LIGHTNING = "nucleus.lightning.base";
 
     @PermissionMetadata(descriptionKey = "permission.exempt.cooldown", replacements = { "lightning" }, level = SuggestedLevel.ADMIN)
-    public static final String EXEMPT_COOLDOWN_LIGHTNING = "lightning.exempt.cooldown";
+    public static final String EXEMPT_COOLDOWN_LIGHTNING = "nucleus.lightning.exempt.cooldown";
 
     @PermissionMetadata(descriptionKey = "permission.exempt.cost", replacements = { "lightning" }, level = SuggestedLevel.ADMIN)
-    public static final String EXEMPT_COST_LIGHTNING = "lightning.exempt.cost";
+    public static final String EXEMPT_COST_LIGHTNING = "nucleus.lightning.exempt.cost";
 
     @PermissionMetadata(descriptionKey = "permission.exempt.warmup", replacements = { "lightning" }, level = SuggestedLevel.ADMIN)
-    public static final String EXEMPT_WARMUP_LIGHTNING = "lightning.exempt.warmup";
+    public static final String EXEMPT_WARMUP_LIGHTNING = "nucleus.lightning.exempt.warmup";
 
     @PermissionMetadata(descriptionKey = "permission.others", replacements = { "lightning" }, level = SuggestedLevel.ADMIN)
-    public static final String OTHERS_LIGHTNING = "lightning.others";
+    public static final String OTHERS_LIGHTNING = "nucleus.lightning.others";
 
     @PermissionMetadata(descriptionKey = "permission.base", replacements = { "rocket" }, level = SuggestedLevel.ADMIN)
-    public static final String BASE_ROCKET = "rocket.base";
+    public static final String BASE_ROCKET = "nucleus.rocket.base";
 
     @PermissionMetadata(descriptionKey = "permission.exempt.cooldown", replacements = { "rocket" }, level = SuggestedLevel.ADMIN)
-    public static final String EXEMPT_COOLDOWN_ROCKET = "rocket.exempt.cooldown";
+    public static final String EXEMPT_COOLDOWN_ROCKET = "nucleus.rocket.exempt.cooldown";
 
     @PermissionMetadata(descriptionKey = "permission.exempt.cost", replacements = { "rocket" }, level = SuggestedLevel.ADMIN)
-    public static final String EXEMPT_COST_ROCKET = "rocket.exempt.cost";
+    public static final String EXEMPT_COST_ROCKET = "nucleus.rocket.exempt.cost";
 
     @PermissionMetadata(descriptionKey = "permission.exempt.warmup", replacements = { "rocket" }, level = SuggestedLevel.ADMIN)
-    public static final String EXEMPT_WARMUP_ROCKET = "rocket.exempt.warmup";
+    public static final String EXEMPT_WARMUP_ROCKET = "nucleus.rocket.exempt.warmup";
 
     @PermissionMetadata(descriptionKey = "permission.others", replacements = { "rocket" }, level = SuggestedLevel.ADMIN)
-    public static final String OTHERS_ROCKET = "rocket.others";
+    public static final String OTHERS_ROCKET = "nucleus.rocket.others";
 
 }
 

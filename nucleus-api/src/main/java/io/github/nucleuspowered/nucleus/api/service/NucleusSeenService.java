@@ -6,6 +6,7 @@ package io.github.nucleuspowered.nucleus.api.service;
 
 import org.spongepowered.api.command.CommandSource;
 import org.spongepowered.api.entity.living.player.User;
+import org.spongepowered.api.plugin.PluginContainer;
 import org.spongepowered.api.text.Text;
 import org.spongepowered.api.util.annotation.NonnullByDefault;
 
@@ -34,7 +35,7 @@ public interface NucleusSeenService {
     /**
      * Registers a {@link SeenInformationProvider} with Nucleus.
      *
-     * @param plugin The plugin registering the service.
+     * @param plugin The {@link PluginContainer} registering the service.
      * @param seenInformationProvider The {@link SeenInformationProvider}
      * @throws IllegalArgumentException Thrown if the plugin has either
      * <ul>
@@ -42,12 +43,12 @@ public interface NucleusSeenService {
      *  <li>Not provided the {@link org.spongepowered.api.plugin.Plugin} annotated class</li>
      * </ul>
      */
-    void register(Object plugin, SeenInformationProvider seenInformationProvider) throws IllegalArgumentException;
+    void register(PluginContainer plugin, SeenInformationProvider seenInformationProvider) throws IllegalArgumentException;
 
     /**
      * Registers a {@link SeenInformationProvider} with Nucleus that can be constructed using a functional programming style.
      *
-     * @param plugin The plugin registering the service.
+     * @param plugin The {@link PluginContainer} registering the service.
      * @param permissionCheck A {@link Predicate} that checks that the {@link CommandSource} has permission to view the information provided.
      * @param informationGetter A {@link BiFunction} that accepts a {@link CommandSource} that wants to view information about a {@link User}
      *                          and returns a {@link Collection} of {@link Text} to view.
@@ -57,7 +58,7 @@ public interface NucleusSeenService {
      *  <li>Not provided the {@link org.spongepowered.api.plugin.Plugin} annotated class</li>
      * </ul>
      */
-    void register(Object plugin,
+    void register(PluginContainer plugin,
         Predicate<CommandSource> permissionCheck,
         BiFunction<CommandSource, User, Collection<Text>> informationGetter) throws IllegalArgumentException;
 

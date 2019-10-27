@@ -4,14 +4,14 @@
  */
 package io.github.nucleuspowered.nucleus.modules.powertool.listeners;
 
-import io.github.nucleuspowered.nucleus.Nucleus;
-import io.github.nucleuspowered.nucleus.internal.CommandPermissionHandler;
 import io.github.nucleuspowered.nucleus.internal.interfaces.ListenerBase;
-import io.github.nucleuspowered.nucleus.internal.traits.PermissionTrait;
-import io.github.nucleuspowered.nucleus.internal.userprefs.UserPreferenceService;
+import io.github.nucleuspowered.nucleus.modules.powertool.PowertoolPermissions;
 import io.github.nucleuspowered.nucleus.modules.powertool.PowertoolUserPreferenceKeys;
-import io.github.nucleuspowered.nucleus.modules.powertool.commands.PowertoolCommand;
 import io.github.nucleuspowered.nucleus.modules.powertool.services.PowertoolService;
+import io.github.nucleuspowered.nucleus.services.IMessageProviderService;
+import io.github.nucleuspowered.nucleus.services.INucleusServiceCollection;
+import io.github.nucleuspowered.nucleus.services.IPermissionService;
+import io.github.nucleuspowered.nucleus.services.IUserPreferenceService;
 import org.spongepowered.api.Sponge;
 import org.spongepowered.api.data.type.HandTypes;
 import org.spongepowered.api.entity.living.player.Player;
@@ -24,13 +24,22 @@ import org.spongepowered.api.event.filter.type.Exclude;
 import org.spongepowered.api.event.network.ClientConnectionEvent;
 import org.spongepowered.api.item.ItemType;
 
-public class PowertoolListener implements ListenerBase, PermissionTrait {
+import javax.inject.Inject;
 
-    private final PowertoolService service = getServiceUnchecked(PowertoolService.class);
-    private final CommandPermissionHandler permissionRegistry =
-            Nucleus.getNucleus().getPermissionRegistry().getPermissionsForNucleusCommand(PowertoolCommand.class);
-    private final String basePermission = this.permissionRegistry.getBase();
-    private final UserPreferenceService userPreferenceService = getServiceUnchecked(UserPreferenceService.class);
+public class PowertoolListener implements ListenerBase {
+
+    private final PowertoolService service;
+    private final IUserPreferenceService userPreferenceService;
+    private final IPermissionService permissionService;
+    private final IMessageProviderService messageProviderService;
+
+    @Inject
+    public PowertoolListener(INucleusServiceCollection serviceCollection) {
+        this.service = serviceCollection.getServiceUnchecked(PowertoolService.class);
+        this.userPreferenceService = serviceCollection.userPreferenceService();
+        this.permissionService = serviceCollection.permissionService();
+        this.messageProviderService = serviceCollection.messageProvider();
+    }
 
     @Listener
     public void onLogout(ClientConnectionEvent.Disconnect event) {
@@ -41,7 +50,8 @@ public class PowertoolListener implements ListenerBase, PermissionTrait {
     @Exclude(InteractBlockEvent.class)
     public void onUserInteract(final InteractEvent event, @Root Player player) {
         // No item in hand or no permission -> no powertool.
-        if (!hasPermission(player, this.basePermission) || !player.getItemInHand(HandTypes.MAIN_HAND).isPresent()) {
+        if (!this.permissionService.hasPermission(player, PowertoolPermissions.BASE_POWERTOOL)
+                || !player.getItemInHand(HandTypes.MAIN_HAND).isPresent()) {
             return;
         }
 
@@ -64,7 +74,7 @@ public class PowertoolListener implements ListenerBase, PermissionTrait {
 
                 // Run each command.
                 if (interacting == null && x.stream().allMatch(i -> i.contains("{{subject}}"))) {
-                    player.sendMessage(Nucleus.getNucleus().getMessageProvider().getTextMessageWithFormat("powertool.playeronly"));
+                    this.messageProviderService.sendMessageTo(player, "powertool.playeronly");
                     return;
                 }
 

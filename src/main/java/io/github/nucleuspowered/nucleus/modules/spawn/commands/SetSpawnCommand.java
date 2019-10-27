@@ -5,36 +5,38 @@
 package io.github.nucleuspowered.nucleus.modules.spawn.commands;
 
 import com.flowpowered.math.vector.Vector3d;
-import io.github.nucleuspowered.nucleus.Nucleus;
-import io.github.nucleuspowered.nucleus.internal.annotations.command.NoModifiers;
-import io.github.nucleuspowered.nucleus.internal.annotations.command.Permissions;
-import io.github.nucleuspowered.nucleus.internal.annotations.command.RegisterCommand;
-import io.github.nucleuspowered.nucleus.internal.command.AbstractCommand;
-import io.github.nucleuspowered.nucleus.internal.docgen.annotations.EssentialsEquivalent;
+import io.github.nucleuspowered.nucleus.internal.command.ICommandContext;
+import io.github.nucleuspowered.nucleus.internal.command.ICommandExecutor;
+import io.github.nucleuspowered.nucleus.internal.command.ICommandResult;
+import io.github.nucleuspowered.nucleus.internal.command.annotation.Command;
+import io.github.nucleuspowered.nucleus.internal.command.annotation.EssentialsEquivalent;
 import io.github.nucleuspowered.nucleus.modules.spawn.SpawnKeys;
-import org.spongepowered.api.command.CommandResult;
-import org.spongepowered.api.command.args.CommandContext;
+import io.github.nucleuspowered.nucleus.modules.spawn.SpawnPermissions;
+import org.spongepowered.api.command.CommandException;
 import org.spongepowered.api.entity.living.player.Player;
-import org.spongepowered.api.event.cause.Cause;
 import org.spongepowered.api.util.annotation.NonnullByDefault;
 
-@RegisterCommand({"setspawn"})
-@Permissions
-@NoModifiers
 @NonnullByDefault
 @EssentialsEquivalent("setspawn")
-public class SetSpawnCommand extends AbstractCommand<Player> {
+@Command(
+        aliases = { "setspawn" },
+        basePermission = SpawnPermissions.BASE_SETSPAWN,
+        commandDescriptionKey = "setspawn"
+)
+public class SetSpawnCommand implements ICommandExecutor<Player> {
 
-    @Override
-    public CommandResult executeCommand(Player src, CommandContext args, Cause cause) {
+    @Override public ICommandResult execute(ICommandContext<? extends Player> context) throws CommandException {
+        Player src = context.getIfPlayer();
         // Minecraft does not set the rotation of the player at the spawn point, so we'll do it for them!
         final Vector3d rotation = src.getRotation();
-        Nucleus.getNucleus().getStorageManager().getWorldService()
+        context.getServiceCollection()
+                .storageManager()
+                .getWorldService()
                 .getOrNew(src.getUniqueId())
                 .thenAccept(x -> x.set(SpawnKeys.WORLD_SPAWN_ROTATION, rotation));
 
         src.getWorld().getProperties().setSpawnPosition(src.getLocation().getBlockPosition());
-        sendMessageTo(src, "command.setspawn.success", src.getWorld().getName());
-        return CommandResult.success();
+        context.sendMessage("command.setspawn.success", src.getWorld().getName());
+        return context.successResult();
     }
 }

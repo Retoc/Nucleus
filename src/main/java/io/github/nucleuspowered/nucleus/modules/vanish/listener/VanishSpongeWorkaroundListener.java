@@ -5,7 +5,8 @@
 package io.github.nucleuspowered.nucleus.modules.vanish.listener;
 
 import io.github.nucleuspowered.nucleus.internal.interfaces.ListenerBase;
-import io.github.nucleuspowered.nucleus.modules.vanish.config.VanishConfigAdapter;
+import io.github.nucleuspowered.nucleus.modules.vanish.config.VanishConfig;
+import io.github.nucleuspowered.nucleus.services.INucleusServiceCollection;
 import org.spongepowered.api.data.key.Keys;
 import org.spongepowered.api.entity.living.player.Player;
 import org.spongepowered.api.event.Listener;
@@ -26,7 +27,7 @@ public class VanishSpongeWorkaroundListener implements ListenerBase.Conditional 
     }
 
     @Override
-    public boolean shouldEnable() {
-        return getServiceUnchecked(VanishConfigAdapter.class).getNodeOrDefault().isAttemptSpongeWorkaroundVanish();
+    public boolean shouldEnable(INucleusServiceCollection serviceCollection) {
+        return serviceCollection.moduleDataProvider().getModuleConfig(VanishConfig.class).isAttemptSpongeWorkaroundVanish();
     }
 }

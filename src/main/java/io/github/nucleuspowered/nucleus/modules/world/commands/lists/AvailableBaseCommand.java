@@ -4,16 +4,14 @@
  */
 package io.github.nucleuspowered.nucleus.modules.world.commands.lists;
 
-import io.github.nucleuspowered.nucleus.Nucleus;
 import io.github.nucleuspowered.nucleus.Util;
-import io.github.nucleuspowered.nucleus.internal.command.AbstractCommand;
-import io.github.nucleuspowered.nucleus.internal.messages.MessageProvider;
+import io.github.nucleuspowered.nucleus.internal.command.ICommandContext;
+import io.github.nucleuspowered.nucleus.internal.command.ICommandExecutor;
+import io.github.nucleuspowered.nucleus.internal.command.ICommandResult;
 import org.spongepowered.api.CatalogType;
 import org.spongepowered.api.Sponge;
-import org.spongepowered.api.command.CommandResult;
+import org.spongepowered.api.command.CommandException;
 import org.spongepowered.api.command.CommandSource;
-import org.spongepowered.api.command.args.CommandContext;
-import org.spongepowered.api.event.cause.Cause;
 import org.spongepowered.api.text.Text;
 import org.spongepowered.api.util.annotation.NonnullByDefault;
 
@@ -21,7 +19,7 @@ import java.util.List;
 import java.util.stream.Collectors;
 
 @NonnullByDefault
-public abstract class AvailableBaseCommand extends AbstractCommand<CommandSource> {
+public abstract class AvailableBaseCommand implements ICommandExecutor<CommandSource> {
 
     private final Class<? extends CatalogType> catalogType;
     private final String titleKey;
@@ -31,17 +29,17 @@ public abstract class AvailableBaseCommand extends AbstractCommand<CommandSource
         this.titleKey = titleKey;
     }
 
-    @Override
-    protected CommandResult executeCommand(CommandSource src, CommandContext args, Cause cause) {
-        MessageProvider mp = Nucleus.getNucleus().getMessageProvider();
+    @Override public ICommandResult execute(ICommandContext<? extends CommandSource> context) throws CommandException {
 
         List<Text> types = Sponge.getRegistry().getAllOf(this.catalogType).stream()
-                .map(x -> mp.getTextMessageWithFormat("command.world.presets.item", x.getId(), x.getName()))
+                .map(x -> context.getMessage("command.world.presets.item", x.getId(), x.getName()))
                 .collect(Collectors.toList());
 
-        Util.getPaginationBuilder(src).title(mp.getTextMessageWithTextFormat(this.titleKey))
-                .contents(types).sendTo(src);
+        Util.getPaginationBuilder(context.getCommandSourceUnchecked())
+                .title(context.getMessage(this.titleKey))
+                .contents(types)
+                .sendTo(context.getCommandSourceUnchecked());
 
-        return CommandResult.success();
+        return context.successResult();
     }
 }

@@ -7,66 +7,59 @@ package io.github.nucleuspowered.nucleus.modules.message.commands;
 import io.github.nucleuspowered.nucleus.argumentparsers.MessageTargetArgument;
 import io.github.nucleuspowered.nucleus.argumentparsers.NicknameArgument;
 import io.github.nucleuspowered.nucleus.argumentparsers.SelectorArgument;
-import io.github.nucleuspowered.nucleus.internal.annotations.command.NotifyIfAFK;
-import io.github.nucleuspowered.nucleus.internal.annotations.command.Permissions;
-import io.github.nucleuspowered.nucleus.internal.annotations.command.RegisterCommand;
-import io.github.nucleuspowered.nucleus.internal.command.AbstractCommand;
+import io.github.nucleuspowered.nucleus.internal.command.ICommandContext;
+import io.github.nucleuspowered.nucleus.internal.command.ICommandExecutor;
+import io.github.nucleuspowered.nucleus.internal.command.ICommandResult;
 import io.github.nucleuspowered.nucleus.internal.command.NucleusParameters;
-import io.github.nucleuspowered.nucleus.internal.docgen.annotations.EssentialsEquivalent;
-import io.github.nucleuspowered.nucleus.internal.permissions.PermissionInformation;
-import io.github.nucleuspowered.nucleus.internal.permissions.SuggestedLevel;
+import io.github.nucleuspowered.nucleus.internal.command.annotation.Command;
+import io.github.nucleuspowered.nucleus.internal.command.annotation.CommandModifier;
+import io.github.nucleuspowered.nucleus.internal.command.annotation.EssentialsEquivalent;
+import io.github.nucleuspowered.nucleus.internal.command.annotation.NotifyIfAFK;
+import io.github.nucleuspowered.nucleus.internal.command.requirements.CommandModifiers;
+import io.github.nucleuspowered.nucleus.modules.message.MessagePermissions;
 import io.github.nucleuspowered.nucleus.modules.message.services.MessageHandler;
-import org.spongepowered.api.command.CommandResult;
+import io.github.nucleuspowered.nucleus.services.INucleusServiceCollection;
+import org.spongepowered.api.command.CommandException;
 import org.spongepowered.api.command.CommandSource;
-import org.spongepowered.api.command.args.CommandContext;
 import org.spongepowered.api.command.args.CommandElement;
 import org.spongepowered.api.command.args.GenericArguments;
 import org.spongepowered.api.entity.living.player.Player;
-import org.spongepowered.api.event.cause.Cause;
 import org.spongepowered.api.text.Text;
 import org.spongepowered.api.util.annotation.NonnullByDefault;
 
-import java.util.HashMap;
-import java.util.Map;
-
-/**
- * Messages a player.
- */
-@Permissions(suggestedLevel = SuggestedLevel.USER, supportsSelectors = true)
-@RegisterCommand(value = { "message", "m", "msg", "whisper", "w", "t" }, rootAliasRegister = { "tell" })
 @EssentialsEquivalent({"msg", "tell", "m", "t", "whisper"})
 @NonnullByDefault
 @NotifyIfAFK(MessageCommand.TO)
-public class MessageCommand extends AbstractCommand<CommandSource> {
+@Command(
+        aliases = { "message", "m", "msg", "whisper", "w", "t" },
+        basePermission = MessagePermissions.BASE_MESSAGE,
+        commandDescriptionKey = "message",
+        modifiers = {
+                @CommandModifier(value = CommandModifiers.HAS_COOLDOWN, exemptPermission = MessagePermissions.EXEMPT_COOLDOWN_MESSAGE),
+                @CommandModifier(value = CommandModifiers.HAS_WARMUP, exemptPermission = MessagePermissions.EXEMPT_WARMUP_MESSAGE),
+                @CommandModifier(value = CommandModifiers.HAS_COST, exemptPermission = MessagePermissions.EXEMPT_COST_MESSAGE)
+        }
+)
+public class MessageCommand implements ICommandExecutor<CommandSource> {
     final static String TO = "to";
 
-    private final MessageHandler handler = getServiceUnchecked(MessageHandler.class);
-
     @Override
-    protected Map<String, PermissionInformation> permissionSuffixesToRegister() {
-        Map<String, PermissionInformation> mp = new HashMap<>();
-        mp.put("color", PermissionInformation.getWithTranslation("permission.message.color", SuggestedLevel.ADMIN));
-        mp.put("colour", PermissionInformation.getWithTranslation("permission.message.colour", SuggestedLevel.ADMIN));
-        mp.put("style", PermissionInformation.getWithTranslation("permission.message.style", SuggestedLevel.ADMIN));
-        mp.put("magic", PermissionInformation.getWithTranslation("permission.message.magic", SuggestedLevel.ADMIN));
-        mp.put("url", PermissionInformation.getWithTranslation("permission.message.urls", SuggestedLevel.ADMIN));
-        return mp;
-    }
-
-    @Override
-    public CommandElement[] getArguments() {
+    public CommandElement[] parameters(INucleusServiceCollection serviceCollection) {
         return new CommandElement[] {
             GenericArguments.onlyOne(GenericArguments.firstParsing(
-                    new MessageTargetArgument(Text.of(TO)),
+                    new MessageTargetArgument(serviceCollection.messageProvider(), Text.of(TO)),
                     new SelectorArgument(new NicknameArgument(Text.of(TO), NicknameArgument.Target.PLAYER_CONSOLE), Player.class)
             )),
             NucleusParameters.MESSAGE
         };
     }
 
-    @Override
-    public CommandResult executeCommand(CommandSource src, CommandContext args, Cause cause) {
-        boolean b = this.handler.sendMessage(src, args.<CommandSource>getOne(TO).get(), args.<String>getOne(NucleusParameters.Keys.MESSAGE).get());
-        return b ? CommandResult.success() : CommandResult.empty();
+    @Override public ICommandResult execute(ICommandContext<? extends CommandSource> context) throws CommandException {
+        boolean b = context.getServiceCollection()
+                .getServiceUnchecked(MessageHandler.class)
+                .sendMessage(context.getCommandSource(),
+                        context.requireOne(TO, CommandSource.class),
+                        context.requireOne(NucleusParameters.Keys.MESSAGE, String.class));
+        return b ? context.successResult() : context.failResult();
     }
 }

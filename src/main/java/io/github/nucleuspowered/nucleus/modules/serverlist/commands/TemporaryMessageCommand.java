@@ -4,22 +4,19 @@
  */
 package io.github.nucleuspowered.nucleus.modules.serverlist.commands;
 
-import io.github.nucleuspowered.nucleus.Nucleus;
-import io.github.nucleuspowered.nucleus.Util;
 import io.github.nucleuspowered.nucleus.argumentparsers.BoundedIntegerArgument;
-import io.github.nucleuspowered.nucleus.internal.annotations.RunAsync;
-import io.github.nucleuspowered.nucleus.internal.annotations.command.Permissions;
-import io.github.nucleuspowered.nucleus.internal.annotations.command.RegisterCommand;
-import io.github.nucleuspowered.nucleus.internal.command.AbstractCommand;
+import io.github.nucleuspowered.nucleus.internal.command.ICommandContext;
+import io.github.nucleuspowered.nucleus.internal.command.ICommandExecutor;
+import io.github.nucleuspowered.nucleus.internal.command.ICommandResult;
 import io.github.nucleuspowered.nucleus.internal.command.NucleusParameters;
-import io.github.nucleuspowered.nucleus.internal.command.ReturnMessageException;
+import io.github.nucleuspowered.nucleus.internal.command.annotation.Command;
+import io.github.nucleuspowered.nucleus.modules.serverlist.ServerListPermissions;
 import io.github.nucleuspowered.nucleus.modules.serverlist.services.ServerListService;
-import org.spongepowered.api.command.CommandResult;
+import io.github.nucleuspowered.nucleus.services.INucleusServiceCollection;
+import org.spongepowered.api.command.CommandException;
 import org.spongepowered.api.command.CommandSource;
-import org.spongepowered.api.command.args.CommandContext;
 import org.spongepowered.api.command.args.CommandElement;
 import org.spongepowered.api.command.args.GenericArguments;
-import org.spongepowered.api.event.cause.Cause;
 import org.spongepowered.api.text.Text;
 import org.spongepowered.api.util.annotation.NonnullByDefault;
 
@@ -27,15 +24,19 @@ import java.time.Instant;
 import java.time.temporal.ChronoUnit;
 import java.util.Optional;
 
-@Permissions(prefix = "serverlist")
-@RunAsync
-@RegisterCommand(value = { "message", "m" }, subcommandOf = ServerListCommand.class)
 @NonnullByDefault
-public class TemporaryMessageCommand extends AbstractCommand<CommandSource> {
+@Command(
+        aliases = { "message", "m" },
+        basePermission = ServerListPermissions.BASE_SERVERLIST_MESSAGE,
+        commandDescriptionKey = "serverlist.message",
+        async = true,
+        parentCommand = ServerListCommand.class
+)
+public class TemporaryMessageCommand implements ICommandExecutor<CommandSource> {
 
     private final String line = "line";
 
-    @Override public CommandElement[] getArguments() {
+    @Override public CommandElement[] parameters(INucleusServiceCollection serviceCollection) {
         return new CommandElement[] {
             GenericArguments.flags()
                 .flag("r", "-remove")
@@ -45,32 +46,32 @@ public class TemporaryMessageCommand extends AbstractCommand<CommandSource> {
         };
     }
 
-    @Override protected CommandResult executeCommand(CommandSource src, CommandContext args, Cause cause) throws Exception {
+    @Override public ICommandResult execute(ICommandContext<? extends CommandSource> context) throws CommandException {
         // Get the temporary message item.
-        ServerListService mod = getServiceUnchecked(ServerListService.class);
+        ServerListService mod = context.getServiceCollection().getServiceUnchecked(ServerListService.class);
 
-        if (args.hasAny("r")) {
+        if (context.hasAny("r")) {
             if (mod.getMessage().isPresent()) {
                 // Remove
                 mod.clearMessage();
 
                 // Send message.
-                src.sendMessage(Nucleus.getNucleus().getMessageProvider().getTextMessageWithFormat("command.serverlist.message.removed"));
-                return CommandResult.success();
+                context.sendMessage("command.serverlist.message.removed");
+                return context.successResult();
             }
 
-            throw ReturnMessageException.fromKey("command.serverlist.message.noremoved");
+            return context.errorResult("command.serverlist.message.noremoved");
         }
 
         // Which line?
-        boolean linetwo = args.<Integer>getOne(this.line).map(x -> x == 2).orElse(false);
+        boolean linetwo = context.getOne(this.line, Integer.class).map(x -> x == 2).orElse(false);
 
-        Optional<String> onMessage = args.getOne(NucleusParameters.Keys.MESSAGE);
+        Optional<String> onMessage = context.getOne(NucleusParameters.Keys.MESSAGE, String.class);
 
         if (!onMessage.isPresent()) {
             boolean isValid = mod.getExpiry().map(x -> x.isAfter(Instant.now())).orElse(false);
             if (!isValid) {
-                throw ReturnMessageException.fromKey("command.serverlist.message.isempty");
+                return context.errorResult("command.serverlist.message.isempty");
             }
 
             if (linetwo) {
@@ -83,19 +84,19 @@ public class TemporaryMessageCommand extends AbstractCommand<CommandSource> {
 
             if (newMessage.isPresent()) {
                 // Send message
-                src.sendMessage(Nucleus.getNucleus().getMessageProvider().getTextMessageWithFormat("command.serverlist.message.set"));
-                src.sendMessage(newMessage.get());
+                context.sendMessage("command.serverlist.message.set");
+                context.sendMessageText(newMessage.get());
             } else {
-                src.sendMessage(Nucleus.getNucleus().getMessageProvider().getTextMessageWithFormat("command.serverlist.message.empty"));
+                context.sendMessage("command.serverlist.message.empty");
             }
 
-            return CommandResult.success();
+            return context.successResult();
         }
 
         String nMessage = onMessage.get();
 
         // If the expiry is null or before now, and there is no timespan, then it's an hour.
-        Instant endTime = args.<Long>getOne(NucleusParameters.Keys.DURATION).map(x -> Instant.now().plus(x, ChronoUnit.SECONDS))
+        Instant endTime = context.getOne(NucleusParameters.Keys.DURATION, Long.class).map(x -> Instant.now().plus(x, ChronoUnit.SECONDS))
                 .orElseGet(() -> mod.getExpiry().map(x -> x.isBefore(Instant.now()) ? x.plusSeconds(3600) : x)
                 .orElseGet(() -> Instant.now().plusSeconds(3600)));
 
@@ -110,14 +111,13 @@ public class TemporaryMessageCommand extends AbstractCommand<CommandSource> {
 
         if (newMessage.isPresent()) {
             // Send message
-            src.sendMessage(Nucleus.getNucleus().getMessageProvider().getTextMessageWithFormat("command.serverlist.message.set"));
-            src.sendMessage(newMessage.get());
-            src.sendMessage(Nucleus.getNucleus().getMessageProvider()
-                    .getTextMessageWithFormat("command.serverlist.message.expiry", Util.getTimeToNow(endTime)));
-            return CommandResult.success();
+            context.sendMessage("command.serverlist.message.set");
+            context.sendMessageText(newMessage.get());
+            context.sendMessage("command.serverlist.message.expiry", context.getTimeToNowString(endTime));
+            return context.successResult();
         }
 
 
-        throw ReturnMessageException.fromKey("command.serverlist.message.notset");
+        return context.errorResult("command.serverlist.message.notset");
     }
 }

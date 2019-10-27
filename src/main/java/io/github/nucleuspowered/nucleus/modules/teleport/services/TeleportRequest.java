@@ -4,6 +4,7 @@
  */
 package io.github.nucleuspowered.nucleus.modules.teleport.services;
 
+import io.github.nucleuspowered.nucleus.services.INucleusServiceCollection;
 import org.spongepowered.api.Sponge;
 import org.spongepowered.api.entity.Transform;
 import org.spongepowered.api.entity.living.player.Player;
@@ -23,7 +24,9 @@ public class TeleportRequest extends TeleportTask {
     private boolean forcedExpired;
     private boolean expired;
 
-    public TeleportRequest(UUID toTeleport,
+    public TeleportRequest(
+            INucleusServiceCollection serviceCollection,
+            UUID toTeleport,
             UUID target,
             Instant expiry,
             double cost,
@@ -34,7 +37,7 @@ public class TeleportRequest extends TeleportTask {
             boolean silentSource,
             @Nullable Transform<World> requestLocation,
             @Nullable Consumer<Player> successCallback) {
-        super(toTeleport, target, cost, warmup, safe, silentSource, silentTarget, requestLocation, requester, successCallback);
+        super(serviceCollection, toTeleport, target, cost, warmup, safe, silentSource, silentTarget, requestLocation, requester, successCallback);
         this.expiry = expiry;
     }
 

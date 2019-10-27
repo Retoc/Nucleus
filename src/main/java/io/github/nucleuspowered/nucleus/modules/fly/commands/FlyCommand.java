@@ -4,53 +4,66 @@
  */
 package io.github.nucleuspowered.nucleus.modules.fly.commands;
 
-import io.github.nucleuspowered.nucleus.Nucleus;
-import io.github.nucleuspowered.nucleus.internal.annotations.command.Permissions;
-import io.github.nucleuspowered.nucleus.internal.annotations.command.RegisterCommand;
-import io.github.nucleuspowered.nucleus.internal.command.AbstractCommand;
+import io.github.nucleuspowered.nucleus.internal.command.ICommandContext;
+import io.github.nucleuspowered.nucleus.internal.command.ICommandExecutor;
+import io.github.nucleuspowered.nucleus.internal.command.ICommandResult;
 import io.github.nucleuspowered.nucleus.internal.command.NucleusParameters;
-import io.github.nucleuspowered.nucleus.internal.docgen.annotations.EssentialsEquivalent;
+import io.github.nucleuspowered.nucleus.internal.command.annotation.Command;
+import io.github.nucleuspowered.nucleus.internal.command.annotation.CommandModifier;
+import io.github.nucleuspowered.nucleus.internal.command.annotation.EssentialsEquivalent;
+import io.github.nucleuspowered.nucleus.internal.command.requirements.CommandModifiers;
 import io.github.nucleuspowered.nucleus.modules.fly.FlyKeys;
-import org.spongepowered.api.command.CommandResult;
+import io.github.nucleuspowered.nucleus.modules.fly.FlyPermissions;
+import io.github.nucleuspowered.nucleus.services.INucleusServiceCollection;
+import org.spongepowered.api.command.CommandException;
 import org.spongepowered.api.command.CommandSource;
-import org.spongepowered.api.command.args.CommandContext;
 import org.spongepowered.api.command.args.CommandElement;
 import org.spongepowered.api.data.key.Keys;
 import org.spongepowered.api.entity.living.player.Player;
 import org.spongepowered.api.util.annotation.NonnullByDefault;
 
-@Permissions(supportsSelectors = true, supportsOthers = true)
-@RegisterCommand("fly")
 @EssentialsEquivalent("fly")
 @NonnullByDefault
-public class FlyCommand extends AbstractCommand.SimpleTargetOtherPlayer {
+@Command(
+        aliases = "fly",
+        basePermission = FlyPermissions.BASE_FLY,
+        commandDescriptionKey = "fly",
+        modifiers = {
+                @CommandModifier(value = CommandModifiers.HAS_COOLDOWN, exemptPermission = FlyPermissions.EXEMPT_COOLDOWN_FLY),
+                @CommandModifier(value = CommandModifiers.HAS_WARMUP, exemptPermission = FlyPermissions.EXEMPT_WARMUP_FLY),
+                @CommandModifier(value = CommandModifiers.HAS_COST, exemptPermission = FlyPermissions.EXEMPT_COST_FLY)
+        }
+)
+public class FlyCommand implements ICommandExecutor<CommandSource> { // extends AbstractCommand.SimpleTargetOtherPlayer {
 
-    @Override public CommandElement[] additionalArguments() {
+    @Override public CommandElement[] parameters(INucleusServiceCollection serviceCollection) {
         return new CommandElement[] {
+                serviceCollection.commandElementSupplier().createOtherUserPermissionElement(true, FlyPermissions.OTHERS_FLY),
                 NucleusParameters.OPTIONAL_ONE_TRUE_FALSE
         };
     }
 
-    @Override protected CommandResult executeWithPlayer(CommandSource src, Player pl, CommandContext args, boolean isSelf) {
-        boolean fly = args.<Boolean>getOne(NucleusParameters.Keys.BOOL).orElse(!pl.get(Keys.CAN_FLY).orElse(false));
+    @Override public ICommandResult execute(ICommandContext<? extends CommandSource> context) throws CommandException {
+        Player player = context.getPlayerFromArgs();
+        boolean fly = context.getOne(NucleusParameters.Keys.BOOL, Boolean.class).orElse(!player.get(Keys.CAN_FLY).orElse(false));
 
-        if (!setFlying(pl, fly)) {
-            src.sendMessages(Nucleus.getNucleus().getMessageProvider().getTextMessageWithFormat("command.fly.error"));
-            return CommandResult.empty();
+        if (!setFlying(player, fly)) {
+            return context.errorResult("command.fly.error");
         }
 
-        getOrCreateUser(pl.getUniqueId()).thenAccept(x -> x.set(FlyKeys.FLY_TOGGLE, fly));
-        if (pl != src) {
-            src.sendMessages(
-                    Nucleus.getNucleus().getMessageProvider().getTextMessageWithFormat(fly ? "command.fly.player.on" : "command.fly.player.off", pl.getName()));
+        context.getServiceCollection().storageManager()
+                .getOrCreateUser(player.getUniqueId()).thenAccept(x -> x.set(FlyKeys.FLY_TOGGLE, fly));
+        if (!context.is(player)) {
+            context.sendMessage(fly ? "command.fly.player.on" : "command.fly.player.off", player.getName());
         }
 
-        pl.sendMessage(Nucleus.getNucleus().getMessageProvider().getTextMessageWithFormat(fly ? "command.fly.on" : "command.fly.off"));
-        return CommandResult.success();
+        context.sendMessage(fly ? "command.fly.on" : "command.fly.off");
+        return context.successResult();
     }
 
     private boolean setFlying(Player pl, boolean fly) {
         // Only if we don't want to fly, offer IS_FLYING as false.
         return !(!fly && !pl.offer(Keys.IS_FLYING, false).isSuccessful()) && pl.offer(Keys.CAN_FLY, fly).isSuccessful();
     }
+
 }

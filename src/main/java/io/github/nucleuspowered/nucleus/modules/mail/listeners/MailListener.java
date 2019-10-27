@@ -7,8 +7,12 @@ package io.github.nucleuspowered.nucleus.modules.mail.listeners;
 import io.github.nucleuspowered.nucleus.Nucleus;
 import io.github.nucleuspowered.nucleus.internal.interfaces.ListenerBase;
 import io.github.nucleuspowered.nucleus.modules.mail.services.MailHandler;
+import io.github.nucleuspowered.nucleus.services.IMessageProviderService;
+import io.github.nucleuspowered.nucleus.services.INucleusServiceCollection;
 import org.spongepowered.api.Sponge;
+import org.spongepowered.api.entity.living.player.Player;
 import org.spongepowered.api.event.Listener;
+import org.spongepowered.api.event.filter.Getter;
 import org.spongepowered.api.event.network.ClientConnectionEvent;
 import org.spongepowered.api.text.Text;
 import org.spongepowered.api.text.action.TextActions;
@@ -17,27 +21,36 @@ import org.spongepowered.api.text.format.TextStyles;
 
 import java.util.concurrent.TimeUnit;
 
+import javax.inject.Inject;
+
 public class MailListener implements ListenerBase {
 
-    private MailHandler handler = getServiceUnchecked(MailHandler.class);
+    private final MailHandler handler;
+    private final IMessageProviderService messageProvider;
+
+    @Inject
+    public MailListener(INucleusServiceCollection serviceCollection) {
+        this.messageProvider = serviceCollection.messageProvider();
+        this.handler = serviceCollection.getServiceUnchecked(MailHandler.class);
+    }
 
     @Listener
-    public void onPlayerJoin(ClientConnectionEvent.Join event) {
+    public void onPlayerJoin(ClientConnectionEvent.Join event, @Getter("getTargetEntity") Player player) {
         Sponge.getScheduler().createAsyncExecutor(Nucleus.getNucleus()).schedule(() -> {
             int mailCount = this.handler.getMailInternal(event.getTargetEntity()).size();
             if (mailCount > 0) {
-                event.getTargetEntity().sendMessage(Nucleus.getNucleus().getMessageProvider().getTextMessageWithFormat("mail.login", String.valueOf(mailCount)));
-                event.getTargetEntity().sendMessage(Text.builder()
+                this.messageProvider.sendMessageTo(player, "mail.login", String.valueOf(mailCount));
+                player.sendMessage(Text.builder()
                         .append(Text.builder("/mail").color(TextColors.AQUA).style(TextStyles.UNDERLINE).onClick(TextActions.runCommand("/mail"))
                                 .onHover(TextActions.showText(Text.of("Click here to read your mail."))).build())
                         .append(Text.builder().append(Text.of(TextColors.YELLOW, " ")).append(
-                                Nucleus.getNucleus().getMessageProvider().getTextMessageWithFormat("mail.toread"))
+                                this.messageProvider.getMessageFor(player, "mail.toread"))
                                 .append(Text.of(" ")).build())
                         .append(Text.builder("/mail clear").color(TextColors.AQUA).style(TextStyles.UNDERLINE)
                                 .onClick(TextActions.runCommand("/mail clear"))
                                 .onHover(TextActions.showText(Text.of("Click here to delete your mail."))).build())
                         .append(Text.builder().append(Text.of(TextColors.YELLOW, " ")).append(
-                                Nucleus.getNucleus().getMessageProvider().getTextMessageWithFormat("mail.toclear")).build())
+                                this.messageProvider.getMessageFor(player, "mail.toclear")).build())
                         .build());
             }
         } , 1, TimeUnit.SECONDS);

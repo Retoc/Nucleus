@@ -11,21 +11,19 @@ import com.google.common.collect.Maps;
 import com.google.common.collect.Multimap;
 import com.google.common.collect.Sets;
 import io.github.nucleuspowered.nucleus.Nucleus;
-import io.github.nucleuspowered.nucleus.Util;
 import io.github.nucleuspowered.nucleus.api.service.NucleusAFKService;
 import io.github.nucleuspowered.nucleus.api.util.NoExceptionAutoClosable;
-import io.github.nucleuspowered.nucleus.internal.CommandPermissionHandler;
 import io.github.nucleuspowered.nucleus.internal.annotations.APIService;
 import io.github.nucleuspowered.nucleus.internal.interfaces.Reloadable;
 import io.github.nucleuspowered.nucleus.internal.interfaces.ServiceBase;
-import io.github.nucleuspowered.nucleus.internal.permissions.ServiceChangeListener;
-import io.github.nucleuspowered.nucleus.internal.text.NucleusTextTemplateImpl;
-import io.github.nucleuspowered.nucleus.internal.traits.MessageProviderTrait;
-import io.github.nucleuspowered.nucleus.modules.afk.commands.AFKCommand;
+import io.github.nucleuspowered.nucleus.modules.afk.AFKPermissions;
 import io.github.nucleuspowered.nucleus.modules.afk.config.AFKConfig;
-import io.github.nucleuspowered.nucleus.modules.afk.config.AFKConfigAdapter;
 import io.github.nucleuspowered.nucleus.modules.afk.events.AFKEvents;
+import io.github.nucleuspowered.nucleus.services.INucleusServiceCollection;
+import io.github.nucleuspowered.nucleus.services.IPermissionService;
+import io.github.nucleuspowered.nucleus.services.impl.texttemplatefactory.NucleusTextTemplateImpl;
 import io.github.nucleuspowered.nucleus.util.CauseStackHelper;
+import io.github.nucleuspowered.nucleus.util.PermissionMessageChannel;
 import io.github.nucleuspowered.nucleus.util.Tuples;
 import org.spongepowered.api.Sponge;
 import org.spongepowered.api.data.key.Keys;
@@ -53,14 +51,14 @@ import java.util.stream.Collectors;
 
 import javax.annotation.Nullable;
 import javax.annotation.concurrent.GuardedBy;
+import javax.inject.Inject;
 
 @APIService(NucleusAFKService.class)
-public class AFKHandler implements NucleusAFKService, Reloadable, ServiceBase, MessageProviderTrait {
+public class AFKHandler implements NucleusAFKService, Reloadable, ServiceBase {
 
     private final Map<UUID, AFKData> data = Maps.newConcurrentMap();
-    private final AFKConfigAdapter afkConfigAdapter;
-    private final CommandPermissionHandler afkPermissionHandler;
-    private AFKConfig config;
+    private final INucleusServiceCollection serviceCollection;
+    private AFKConfig config = new AFKConfig();
 
     @GuardedBy("lock")
     private final Set<UUID> activity = Sets.newHashSet();
@@ -70,15 +68,12 @@ public class AFKHandler implements NucleusAFKService, Reloadable, ServiceBase, M
     private final Object lock = new Object();
     private final Object lock2 = new Object();
 
-    private final String exempttoggle = "exempt.toggle";
-    private final String exemptkick = "exempt.kick";
-
     private final String afkOption = "nucleus.afk.toggletime";
     private final String afkKickOption = "nucleus.afk.kicktime";
 
-    public AFKHandler() {
-        this.afkPermissionHandler = Nucleus.getNucleus().getPermissionRegistry().getPermissionsForNucleusCommand(AFKCommand.class);
-        this.afkConfigAdapter = Nucleus.getNucleus().getInternalServiceManager().getServiceUnchecked(AFKConfigAdapter.class);
+    @Inject
+    public AFKHandler(INucleusServiceCollection serviceCollection) {
+        this.serviceCollection = serviceCollection;
     }
 
     public void stageUserActivityUpdate(Player player) {
@@ -122,7 +117,7 @@ public class AFKHandler implements NucleusAFKService, Reloadable, ServiceBase, M
                 NucleusTextTemplateImpl message = this.config.getMessages().getKickMessage();
                 TextRepresentable t;
                 if (message == null || message.isEmpty()) {
-                    t = Nucleus.getNucleus().getMessageProvider().getTextMessageWithTextFormat("afk.kickreason");
+                    t = this.serviceCollection.messageProvider().getMessageForDefault("afk.kickreason");
                 } else {
                     t = message;
                 }
@@ -134,7 +129,7 @@ public class AFKHandler implements NucleusAFKService, Reloadable, ServiceBase, M
                     if (this.config.isBroadcastOnKick()) {
                         mc = MessageChannel.TO_ALL;
                     } else {
-                        mc = MessageChannel.permission(this.afkPermissionHandler.getPermissionWithSuffix("notify"));
+                        mc = new PermissionMessageChannel(serviceCollection.permissionService(), AFKPermissions.AFK_NOTIFY);
                     }
 
                     AFKEvents.Kick events = new AFKEvents.Kick(player, messageToServer.getForCommandSource(player), mc);
@@ -202,8 +197,8 @@ public class AFKHandler implements NucleusAFKService, Reloadable, ServiceBase, M
     }
 
     @Override
-    public void onReload() {
-        this.config = this.afkConfigAdapter.getNodeOrDefault();
+    public void onReload(INucleusServiceCollection serviceCollection) {
+        this.config = serviceCollection.moduleDataProvider().getModuleConfig(AFKConfig.class);
     }
 
     private AFKData updateActivity(UUID uuid, AFKData data) {
@@ -235,9 +230,10 @@ public class AFKHandler implements NucleusAFKService, Reloadable, ServiceBase, M
         if (message.isPresent()) {
             event.getChannel().send(event.getTargetEntity(), message.get(), ChatTypes.SYSTEM);
         } else {
-            sendMessageTo(event.getTargetEntity(), key);
+            this.serviceCollection.messageProvider().sendMessageTo(event.getTargetEntity(), key);
             if (consoleKey != null) {
-                sendMessageTo(Sponge.getServer().getConsole(), consoleKey, event.getTargetEntity().getName());
+                this.serviceCollection.messageProvider()
+                        .sendMessageTo(Sponge.getServer().getConsole(), consoleKey, event.getTargetEntity().getName());
             }
         }
     }
@@ -389,18 +385,19 @@ public class AFKHandler implements NucleusAFKService, Reloadable, ServiceBase, M
             synchronized (this) {
                 if (!this.cacheValid) {
                     // Get the subject.
+                    IPermissionService service = AFKHandler.this.serviceCollection.permissionService();
                     Sponge.getServer().getPlayer(this.uuid).ifPresent(x -> {
-                        if (!ServiceChangeListener.isOpOnly() && AFKHandler.this.afkPermissionHandler.testSuffix(x, AFKHandler.this.exempttoggle)) {
+                        if (!service.isOpOnly() && service.hasPermission(x, AFKPermissions.AFK_EXEMPT_TOGGLE)) {
                             this.timeToAfk = -1;
                         } else {
-                            this.timeToAfk = Util.getPositiveLongOptionFromSubject(x,
+                            this.timeToAfk = service.getPositiveLongOptionFromSubject(x,
                                     AFKHandler.this.afkOption).orElseGet(() -> AFKHandler.this.config.getAfkTime()) * 1000;
                         }
 
-                        if (AFKHandler.this.afkPermissionHandler.testSuffix(x, AFKHandler.this.exemptkick)) {
+                        if (service.hasPermission(x, AFKPermissions.AFK_EXEMPT_KICK)) {
                             this.timeToKick = -1;
                         } else {
-                            this.timeToKick = Util.getPositiveLongOptionFromSubject(x,
+                            this.timeToKick = service.getPositiveLongOptionFromSubject(x,
                                     AFKHandler.this.afkKickOption).orElseGet(() -> AFKHandler.this.config.getAfkTimeToKick()) * 1000;
                         }
 

@@ -4,45 +4,43 @@
  */
 package io.github.nucleuspowered.nucleus.modules.world.commands;
 
-import io.github.nucleuspowered.nucleus.Nucleus;
-import io.github.nucleuspowered.nucleus.internal.annotations.command.NoModifiers;
-import io.github.nucleuspowered.nucleus.internal.annotations.command.Permissions;
-import io.github.nucleuspowered.nucleus.internal.annotations.command.RegisterCommand;
-import io.github.nucleuspowered.nucleus.internal.command.AbstractCommand;
+import io.github.nucleuspowered.nucleus.internal.command.ICommandContext;
+import io.github.nucleuspowered.nucleus.internal.command.ICommandExecutor;
+import io.github.nucleuspowered.nucleus.internal.command.ICommandResult;
 import io.github.nucleuspowered.nucleus.internal.command.NucleusParameters;
-import io.github.nucleuspowered.nucleus.internal.command.ReturnMessageException;
-import io.github.nucleuspowered.nucleus.internal.permissions.SuggestedLevel;
-import org.spongepowered.api.command.CommandResult;
+import io.github.nucleuspowered.nucleus.internal.command.annotation.Command;
+import io.github.nucleuspowered.nucleus.modules.world.WorldPermissions;
+import io.github.nucleuspowered.nucleus.services.INucleusServiceCollection;
+import org.spongepowered.api.command.CommandException;
 import org.spongepowered.api.command.CommandSource;
-import org.spongepowered.api.command.args.CommandContext;
 import org.spongepowered.api.command.args.CommandElement;
-import org.spongepowered.api.event.cause.Cause;
 import org.spongepowered.api.util.annotation.NonnullByDefault;
 import org.spongepowered.api.world.storage.WorldProperties;
 
-@NoModifiers
 @NonnullByDefault
-@Permissions(prefix = "world", suggestedLevel = SuggestedLevel.ADMIN)
-@RegisterCommand(value = { "enable", "en" }, subcommandOf = WorldCommand.class)
-public class EnableWorldCommand extends AbstractCommand<CommandSource> {
+@Command(
+        aliases = {"enable", "en"},
+        basePermission = WorldPermissions.BASE_WORLD_ENABLE,
+        commandDescriptionKey = "world.enable",
+        parentCommand = WorldCommand.class
+)
+public class EnableWorldCommand implements ICommandExecutor<CommandSource> {
 
     @Override
-    public CommandElement[] getArguments() {
+    public CommandElement[] parameters(INucleusServiceCollection serviceCollection) {
         return new CommandElement[] {
                 NucleusParameters.WORLD_PROPERTIES_DISABLED_ONLY
         };
     }
 
-    @Override
-    public CommandResult executeCommand(CommandSource src, CommandContext args, Cause cause) throws Exception {
-        WorldProperties worldProperties = args.<WorldProperties>getOne(NucleusParameters.Keys.WORLD).get();
+    @Override public ICommandResult execute(ICommandContext<? extends CommandSource> context) throws CommandException {
+        WorldProperties worldProperties = context.requireOne(NucleusParameters.Keys.WORLD, WorldProperties.class);
         if (worldProperties.isEnabled()) {
-            throw new ReturnMessageException(
-                    Nucleus.getNucleus().getMessageProvider().getTextMessageWithFormat("command.world.enable.alreadyenabled", worldProperties.getWorldName()));
+            return context.errorResult("command.world.enable.alreadyenabled", worldProperties.getWorldName());
         }
 
         worldProperties.setEnabled(true);
-        src.sendMessage(Nucleus.getNucleus().getMessageProvider().getTextMessageWithFormat("command.world.enable.success", worldProperties.getWorldName()));
-        return CommandResult.success();
+        context.sendMessage("command.world.enable.success", worldProperties.getWorldName());
+        return context.successResult();
     }
 }

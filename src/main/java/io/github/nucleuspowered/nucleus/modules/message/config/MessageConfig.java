@@ -5,8 +5,9 @@
 package io.github.nucleuspowered.nucleus.modules.message.config;
 
 import io.github.nucleuspowered.neutrino.annotations.Default;
-import io.github.nucleuspowered.nucleus.internal.text.NucleusTextTemplateFactory;
-import io.github.nucleuspowered.nucleus.internal.text.NucleusTextTemplateImpl;
+import io.github.nucleuspowered.nucleus.services.INucleusTextTemplateFactory;
+import io.github.nucleuspowered.nucleus.services.ITextStyleService;
+import io.github.nucleuspowered.nucleus.services.impl.texttemplatefactory.NucleusTextTemplateImpl;
 import ninja.leaping.configurate.objectmapping.Setting;
 import ninja.leaping.configurate.objectmapping.serialize.ConfigSerializable;
 
@@ -33,37 +34,37 @@ public class MessageConfig {
     @Setting(value = "socialspy")
     private SocialSpy socialSpy = new SocialSpy();
 
-    public NucleusTextTemplateImpl getHelpOpPrefix() {
+    public NucleusTextTemplateImpl getHelpOpPrefix(INucleusTextTemplateFactory textTemplateFactory) {
         if (this.helpOpPrefix == null) {
             // set default
-            this.helpOpPrefix = NucleusTextTemplateFactory.createFromAmpersandString(HELP_OP_DEFAULT);
+            this.helpOpPrefix = textTemplateFactory.createFromAmpersandString(HELP_OP_DEFAULT);
         }
 
         return this.helpOpPrefix;
     }
 
-    public NucleusTextTemplateImpl getMessageReceiverPrefix() {
+    public NucleusTextTemplateImpl getMessageReceiverPrefix(INucleusTextTemplateFactory textTemplateFactory) {
         if (this.messageReceiverPrefix == null) {
             // set default
-            this.messageReceiverPrefix = NucleusTextTemplateFactory.createFromAmpersandString(MESSAGE_RECEIVER_DEFAULT);
+            this.messageReceiverPrefix = textTemplateFactory.createFromAmpersandString(MESSAGE_RECEIVER_DEFAULT);
         }
 
         return this.messageReceiverPrefix;
     }
 
-    public NucleusTextTemplateImpl getMessageSenderPrefix() {
+    public NucleusTextTemplateImpl getMessageSenderPrefix(INucleusTextTemplateFactory textTemplateFactory) {
         if (this.messageSenderPrefix == null) {
             // set default
-            this.messageSenderPrefix = NucleusTextTemplateFactory.createFromAmpersandString(MESSAGE_SENDER_DEFAULT);
+            this.messageSenderPrefix = textTemplateFactory.createFromAmpersandString(MESSAGE_SENDER_DEFAULT);
         }
 
         return this.messageSenderPrefix;
     }
 
-    public NucleusTextTemplateImpl getMessageSocialSpyPrefix() {
+    public NucleusTextTemplateImpl getMessageSocialSpyPrefix(INucleusTextTemplateFactory textTemplateFactory) {
         if (this.socialSpy.messageSocialSpyPrefix == null) {
             // set default
-            this.socialSpy.messageSocialSpyPrefix = NucleusTextTemplateFactory.createFromAmpersandString(MESSAGE_SOCIAL_SPY_DEFAULT);
+            this.socialSpy.messageSocialSpyPrefix = textTemplateFactory.createFromAmpersandString(MESSAGE_SOCIAL_SPY_DEFAULT);
         }
 
         return this.socialSpy.messageSocialSpyPrefix;

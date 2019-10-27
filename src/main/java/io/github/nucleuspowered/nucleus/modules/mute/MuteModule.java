@@ -7,10 +7,10 @@ package io.github.nucleuspowered.nucleus.modules.mute;
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.Lists;
 import io.github.nucleuspowered.nucleus.Util;
-import io.github.nucleuspowered.nucleus.internal.qsml.module.ConfigurableModule;
-import io.github.nucleuspowered.nucleus.internal.text.Tokens;
-import io.github.nucleuspowered.nucleus.internal.traits.InternalServiceManagerTrait;
-import io.github.nucleuspowered.nucleus.internal.traits.MessageProviderTrait;
+import io.github.nucleuspowered.nucleus.modules.mute.config.MuteConfig;
+import io.github.nucleuspowered.nucleus.quickstart.module.ConfigurableModule;
+import io.github.nucleuspowered.nucleus.services.INucleusServiceCollection;
+import io.github.nucleuspowered.nucleus.services.impl.messagetoken.Tokens;
 import io.github.nucleuspowered.nucleus.modules.mute.commands.CheckMuteCommand;
 import io.github.nucleuspowered.nucleus.modules.mute.config.MuteConfigAdapter;
 import io.github.nucleuspowered.nucleus.modules.mute.data.MuteData;
@@ -21,46 +21,27 @@ import org.spongepowered.api.text.Text;
 import org.spongepowered.api.text.action.TextActions;
 import org.spongepowered.api.text.format.TextColors;
 import uk.co.drnaylor.quickstart.annotations.ModuleData;
+import uk.co.drnaylor.quickstart.holders.DiscoveryModuleHolder;
 
 import java.util.Map;
 import java.util.Optional;
+import java.util.function.Supplier;
+
+import javax.inject.Inject;
 
 @ModuleData(id = MuteModule.ID, name = "Mute")
-public class MuteModule extends ConfigurableModule<MuteConfigAdapter> implements MessageProviderTrait, InternalServiceManagerTrait {
+public class MuteModule extends ConfigurableModule<MuteConfig, MuteConfigAdapter> {
 
     public static final String ID = "mute";
+
+    @Inject
+    public MuteModule(Supplier<DiscoveryModuleHolder<?, ?>> moduleHolder, INucleusServiceCollection collection) {
+        super(moduleHolder, collection);
+    }
 
     @Override
     public MuteConfigAdapter createAdapter() {
         return new MuteConfigAdapter();
-    }
-
-    @Override
-    public void performEnableTasks() {
-        createSeenModule(CheckMuteCommand.class, (c, u) -> {
-
-            // If we have a ban service, then check for a ban.
-            MuteHandler jh = getServiceUnchecked(MuteHandler.class);
-            if (jh.isMuted(u)) {
-                MuteData jd = jh.getPlayerMuteData(u).get();
-                // Lightweight checkban.
-                Text.Builder m;
-                if (jd.getRemainingTime().isPresent()) {
-                    m = getMessageFor(c, "seen.ismuted.temp",
-                            Util.getTimeStringFromSeconds(jd.getRemainingTime().get().getSeconds())).toBuilder();
-                } else {
-                    m = getMessageFor(c, "seen.ismuted.perm").toBuilder();
-                }
-
-                return Lists.newArrayList(
-                        m.onClick(TextActions.runCommand("/checkmute " + u.getName()))
-                                .onHover(TextActions.showText(
-                                        getMessageFor(c.getLocale(), "standard.clicktoseemore"))).build(),
-                            getMessageFor(c, "standard.reason", jd.getReason()));
-            }
-
-            return Lists.newArrayList(getMessageFor(c, "seen.notmuted"));
-        });
     }
 
     @Override protected Map<String, Tokens.Translator> tokensToRegister() {
@@ -75,7 +56,7 @@ public class MuteModule extends ConfigurableModule<MuteConfigAdapter> implements
 
                     @Override protected boolean condition(CommandSource commandSource) {
                         return commandSource instanceof Player &&
-                                getServiceUnchecked(MuteHandler.class).isMuted((Player) commandSource);
+                                serviceCollection.getServiceUnchecked(MuteHandler.class).isMuted((Player) commandSource);
                     }
                 })
                 .build();

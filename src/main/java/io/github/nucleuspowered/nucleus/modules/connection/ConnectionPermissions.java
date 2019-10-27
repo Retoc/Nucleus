@@ -5,8 +5,8 @@
 package io.github.nucleuspowered.nucleus.modules.connection;
 
 import io.github.nucleuspowered.nucleus.annotationprocessor.RegisterPermissions;
-import io.github.nucleuspowered.nucleus.internal.permissions.PermissionMetadata;
-import io.github.nucleuspowered.nucleus.internal.permissions.SuggestedLevel;
+import io.github.nucleuspowered.nucleus.services.impl.permission.PermissionMetadata;
+import io.github.nucleuspowered.nucleus.services.impl.permission.SuggestedLevel;
 
 @RegisterPermissions
 public class ConnectionPermissions {
@@ -15,6 +15,6 @@ public class ConnectionPermissions {
     }
 
     @PermissionMetadata(descriptionKey = "permission.connection.joinfullserver", level = SuggestedLevel.MOD)
-    public static final String CONNECTION_JOINFULLSERVER = "connection.joinfullserver";
+    public static final String CONNECTION_JOINFULLSERVER = "nucleus.connection.joinfullserver";
 
 }

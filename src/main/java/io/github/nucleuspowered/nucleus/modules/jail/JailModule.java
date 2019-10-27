@@ -8,8 +8,10 @@ import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.Lists;
 import io.github.nucleuspowered.nucleus.Nucleus;
 import io.github.nucleuspowered.nucleus.Util;
-import io.github.nucleuspowered.nucleus.internal.qsml.module.ConfigurableModule;
-import io.github.nucleuspowered.nucleus.internal.text.Tokens;
+import io.github.nucleuspowered.nucleus.modules.jail.config.JailConfig;
+import io.github.nucleuspowered.nucleus.quickstart.module.ConfigurableModule;
+import io.github.nucleuspowered.nucleus.services.INucleusServiceCollection;
+import io.github.nucleuspowered.nucleus.services.impl.messagetoken.Tokens;
 import io.github.nucleuspowered.nucleus.modules.jail.commands.CheckJailCommand;
 import io.github.nucleuspowered.nucleus.modules.jail.config.JailConfigAdapter;
 import io.github.nucleuspowered.nucleus.modules.jail.data.JailData;
@@ -20,44 +22,27 @@ import org.spongepowered.api.text.Text;
 import org.spongepowered.api.text.action.TextActions;
 import org.spongepowered.api.text.format.TextColors;
 import uk.co.drnaylor.quickstart.annotations.ModuleData;
+import uk.co.drnaylor.quickstart.holders.DiscoveryModuleHolder;
 
 import java.util.Map;
 import java.util.Optional;
+import java.util.function.Supplier;
+
+import javax.inject.Inject;
 
 @ModuleData(id = JailModule.ID, name = "Jail")
-public class JailModule extends ConfigurableModule<JailConfigAdapter> {
+public class JailModule extends ConfigurableModule<JailConfig, JailConfigAdapter> {
 
     public static final String ID = "jail";
+
+    @Inject
+    public JailModule(Supplier<DiscoveryModuleHolder<?, ?>> moduleHolder, INucleusServiceCollection collection) {
+        super(moduleHolder, collection);
+    }
 
     @Override
     public JailConfigAdapter createAdapter() {
         return new JailConfigAdapter();
-    }
-
-    @Override
-    public void performEnableTasks() {
-        createSeenModule(CheckJailCommand.class, (c, u) -> {
-
-            // If we have a ban service, then check for a ban.
-            JailHandler jh = Nucleus.getNucleus().getInternalServiceManager().getServiceUnchecked(JailHandler.class);
-            if (jh.isPlayerJailed(u)) {
-                JailData jd = jh.getPlayerJailDataInternal(u).get();
-                Text.Builder m;
-                if (jd.getRemainingTime().isPresent()) {
-                    m = getMessageFor(c.getLocale(), "seen.isjailed.temp",
-                                    Util.getTimeStringFromSeconds(jd.getRemainingTime().get().getSeconds())).toBuilder();
-                } else {
-                    m = getMessageFor(c.getLocale(), "seen.isjailed.perm").toBuilder();
-                }
-
-                return Lists.newArrayList(
-                        m.onClick(TextActions.runCommand("/nucleus:checkjail " + u.getName()))
-                                .onHover(TextActions.showText(getMessageFor(c.getLocale(), "standard.clicktoseemore"))).build(),
-                        getMessageFor(c.getLocale(), "standard.reason", jd.getReason()));
-            }
-
-            return Lists.newArrayList(getMessageFor(c.getLocale(), "seen.notjailed"));
-        });
     }
 
     @Override
@@ -73,12 +58,12 @@ public class JailModule extends ConfigurableModule<JailConfigAdapter> {
 
                     @Override protected boolean condition(CommandSource commandSource) {
                         return commandSource instanceof Player &&
-                                getServiceUnchecked(JailHandler.class).isPlayerJailed((Player) commandSource);
+                                serviceCollection.getServiceUnchecked(JailHandler.class).isPlayerJailed((Player) commandSource);
                     }
                 })
                 .put("jail", (source, variableString, variables) -> {
                     if (source instanceof Player) {
-                        return getServiceUnchecked(JailHandler.class).getPlayerJailData((Player) source).map(x -> Text.of(x.getJailName()));
+                        return serviceCollection.getServiceUnchecked(JailHandler.class).getPlayerJailData((Player) source).map(x -> Text.of(x.getJailName()));
                     }
 
                     return Optional.empty();

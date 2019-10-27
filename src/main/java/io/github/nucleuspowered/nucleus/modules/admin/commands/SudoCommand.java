@@ -4,42 +4,33 @@
  */
 package io.github.nucleuspowered.nucleus.modules.admin.commands;
 
-import io.github.nucleuspowered.nucleus.Nucleus;
-import io.github.nucleuspowered.nucleus.internal.annotations.command.NoModifiers;
-import io.github.nucleuspowered.nucleus.internal.annotations.command.Permissions;
-import io.github.nucleuspowered.nucleus.internal.annotations.command.RegisterCommand;
-import io.github.nucleuspowered.nucleus.internal.command.AbstractCommand;
+import io.github.nucleuspowered.nucleus.internal.command.ICommandContext;
+import io.github.nucleuspowered.nucleus.internal.command.ICommandExecutor;
+import io.github.nucleuspowered.nucleus.internal.command.ICommandResult;
 import io.github.nucleuspowered.nucleus.internal.command.NucleusParameters;
-import io.github.nucleuspowered.nucleus.internal.command.ReturnMessageException;
-import io.github.nucleuspowered.nucleus.internal.docgen.annotations.EssentialsEquivalent;
-import io.github.nucleuspowered.nucleus.internal.permissions.PermissionInformation;
-import io.github.nucleuspowered.nucleus.internal.permissions.SuggestedLevel;
-import io.github.nucleuspowered.nucleus.util.CauseStackHelper;
+import io.github.nucleuspowered.nucleus.internal.command.annotation.Command;
+import io.github.nucleuspowered.nucleus.internal.command.annotation.EssentialsEquivalent;
+import io.github.nucleuspowered.nucleus.modules.admin.AdminPermissions;
+import io.github.nucleuspowered.nucleus.services.INucleusServiceCollection;
 import org.spongepowered.api.Sponge;
-import org.spongepowered.api.command.CommandResult;
+import org.spongepowered.api.command.CommandException;
 import org.spongepowered.api.command.CommandSource;
-import org.spongepowered.api.command.args.CommandContext;
 import org.spongepowered.api.command.args.CommandElement;
 import org.spongepowered.api.entity.living.player.Player;
 import org.spongepowered.api.event.CauseStackManager;
-import org.spongepowered.api.event.cause.Cause;
-import org.spongepowered.api.event.cause.EventContext;
 import org.spongepowered.api.event.cause.EventContextKeys;
 import org.spongepowered.api.text.Text;
 import org.spongepowered.api.util.annotation.NonnullByDefault;
 
-import java.util.HashMap;
-import java.util.Map;
-
-@NoModifiers
-@Permissions
-@RegisterCommand("sudo")
+@Command(aliases = {"sudo"},
+        basePermission = AdminPermissions.BASE_SUDO,
+        commandDescriptionKey = "sudo")
 @EssentialsEquivalent("sudo")
 @NonnullByDefault
-public class SudoCommand extends AbstractCommand<CommandSource> {
+public class SudoCommand implements ICommandExecutor<CommandSource> {
 
     @Override
-    public CommandElement[] getArguments() {
+    public CommandElement[] parameters(INucleusServiceCollection serviceCollection) {
         return new CommandElement[]{
                 NucleusParameters.ONE_PLAYER,
                 NucleusParameters.COMMAND
@@ -47,43 +38,35 @@ public class SudoCommand extends AbstractCommand<CommandSource> {
     }
 
     @Override
-    public Map<String, PermissionInformation> permissionSuffixesToRegister() {
-        Map<String, PermissionInformation> m = new HashMap<>();
-        m.put("exempt.target", PermissionInformation.getWithTranslation("permission.sudo.exempt", SuggestedLevel.ADMIN));
-        return m;
-    }
-
-    @Override
-    public CommandResult executeCommand(CommandSource src, CommandContext args, Cause cause) throws Exception {
-        Player pl = args.<Player>getOne(NucleusParameters.Keys.PLAYER).get();
-        String cmd = args.<String>getOne(NucleusParameters.Keys.COMMAND).get();
-        if (pl.equals(src) || this.permissions.testSuffix(pl, "exempt.target", src, false)) {
-            src.sendMessage(Nucleus.getNucleus().getMessageProvider().getTextMessageWithFormat("command.sudo.noperms"));
-            return CommandResult.empty();
+    public ICommandResult execute(ICommandContext<? extends CommandSource> context) throws CommandException {
+        Player pl = context.requireOne(NucleusParameters.Keys.PLAYER, Player.class);
+        String cmd = context.requireOne(NucleusParameters.Keys.COMMAND, String.class);
+        if (context.is(pl) || (!context.isConsoleAndBypass() && context.testPermissionFor(pl, AdminPermissions.SUDO_EXEMPT))) {
+            return context.errorResult("command.sudo.noperms");
         }
 
         if (cmd.startsWith("c:")) {
             if (cmd.equals("c:")) {
-                src.sendMessage(Nucleus.getNucleus().getMessageProvider().getTextMessageWithFormat("command.sudo.chatfail"));
-                return CommandResult.empty();
+                return context.errorResult("command.sudo.chatfail");
             }
 
             Text rawMessage = Text.of(cmd.split(":", 2)[1]);
-            try (CauseStackManager.StackFrame c = CauseStackHelper.createFrameWithCauses(
-                    EventContext.builder()
-                        .add(EventContextKeys.PLAYER_SIMULATED, pl.getProfile())
-                        .build(), pl, src)) {
-                if (pl.simulateChat(rawMessage, Sponge.getCauseStackManager().getCurrentCause()).isCancelled()) {
-                    throw ReturnMessageException.fromKey("command.sudo.chatcancelled");
+            try (CauseStackManager.StackFrame frame = Sponge.getCauseStackManager().pushCauseFrame()) {
+                frame.pushCause(context.getCommandSource());
+                frame.pushCause(pl); // on top
+                frame.addContext(EventContextKeys.PLAYER_SIMULATED, pl.getProfile());
+
+                if (pl.simulateChat(rawMessage, frame.getCurrentCause()).isCancelled()) {
+                    return context.errorResult("command.sudo.chatcancelled");
                 }
             }
 
-            return CommandResult.success();
+            return context.successResult();
         }
 
-        src.sendMessage(Nucleus.getNucleus().getMessageProvider().getTextMessageWithFormat("command.sudo.force", pl.getName(), cmd));
+        context.sendMessage("command.sudo.force", pl.getName(), cmd);
         Sponge.getCommandManager().process(pl, cmd);
-        return CommandResult.success();
+        return context.successResult();
     }
 
 }

@@ -4,20 +4,26 @@
  */
 package io.github.nucleuspowered.nucleus.modules.afk.runnables;
 
-import io.github.nucleuspowered.nucleus.Nucleus;
 import io.github.nucleuspowered.nucleus.internal.interfaces.TaskBase;
 import io.github.nucleuspowered.nucleus.modules.afk.services.AFKHandler;
+import io.github.nucleuspowered.nucleus.services.INucleusServiceCollection;
 import org.spongepowered.api.scheduler.Task;
 import org.spongepowered.api.util.annotation.NonnullByDefault;
 
 import java.time.Duration;
 import java.time.temporal.ChronoUnit;
 
-@SuppressWarnings("ALL")
+import javax.inject.Inject;
+
 @NonnullByDefault
 public class AFKRefreshPermsTask implements TaskBase {
 
-    private final AFKHandler handler = Nucleus.getNucleus().getInternalServiceManager().getServiceUnchecked(AFKHandler.class);
+    private final AFKHandler handler;
+
+    @Inject
+    public AFKRefreshPermsTask(INucleusServiceCollection serviceCollection) {
+        this.handler = serviceCollection.getServiceUnchecked(AFKHandler.class);
+    }
 
     @Override public boolean isAsync() {
         return true;

@@ -5,90 +5,83 @@
 package io.github.nucleuspowered.nucleus.modules.world.commands;
 
 import com.flowpowered.math.vector.Vector3d;
-import io.github.nucleuspowered.nucleus.Nucleus;
-import io.github.nucleuspowered.nucleus.internal.annotations.command.Permissions;
-import io.github.nucleuspowered.nucleus.internal.annotations.command.RegisterCommand;
-import io.github.nucleuspowered.nucleus.internal.command.AbstractCommand;
+import io.github.nucleuspowered.nucleus.internal.command.ICommandContext;
+import io.github.nucleuspowered.nucleus.internal.command.ICommandExecutor;
+import io.github.nucleuspowered.nucleus.internal.command.ICommandResult;
 import io.github.nucleuspowered.nucleus.internal.command.NucleusParameters;
-import io.github.nucleuspowered.nucleus.internal.command.ReturnMessageException;
-import io.github.nucleuspowered.nucleus.internal.docgen.annotations.EssentialsEquivalent;
-import io.github.nucleuspowered.nucleus.internal.permissions.PermissionInformation;
-import io.github.nucleuspowered.nucleus.internal.permissions.SuggestedLevel;
+import io.github.nucleuspowered.nucleus.internal.command.annotation.Command;
+import io.github.nucleuspowered.nucleus.internal.command.annotation.CommandModifier;
+import io.github.nucleuspowered.nucleus.internal.command.annotation.EssentialsEquivalent;
+import io.github.nucleuspowered.nucleus.internal.command.requirements.CommandModifiers;
 import io.github.nucleuspowered.nucleus.modules.spawn.SpawnKeys;
 import io.github.nucleuspowered.nucleus.modules.spawn.SpawnModule;
+import io.github.nucleuspowered.nucleus.modules.world.WorldPermissions;
+import io.github.nucleuspowered.nucleus.services.INucleusServiceCollection;
 import org.spongepowered.api.Sponge;
-import org.spongepowered.api.command.CommandResult;
+import org.spongepowered.api.command.CommandException;
 import org.spongepowered.api.command.CommandSource;
-import org.spongepowered.api.command.args.CommandContext;
 import org.spongepowered.api.command.args.CommandElement;
-import org.spongepowered.api.command.args.GenericArguments;
 import org.spongepowered.api.entity.Transform;
 import org.spongepowered.api.entity.living.player.Player;
-import org.spongepowered.api.event.cause.Cause;
 import org.spongepowered.api.world.World;
 import org.spongepowered.api.world.storage.WorldProperties;
 
-import java.util.HashMap;
-import java.util.Map;
-
-@SuppressWarnings("ALL")
-@Permissions(prefix = "world", suggestedLevel = SuggestedLevel.ADMIN)
-@RegisterCommand(value = {"teleport", "tp"}, subcommandOf = WorldCommand.class)
 @EssentialsEquivalent(value = "world", notes = "The world command in Essentials was just a warp command.")
-public class TeleportWorldCommand extends AbstractCommand<CommandSource> {
+@Command(
+        aliases = {"teleport", "tp"},
+        basePermission = WorldPermissions.BASE_WORLD_TELEPORT,
+        commandDescriptionKey = "world.teleport",
+        parentCommand = WorldCommand.class,
+        modifiers = {
+                @CommandModifier(value = CommandModifiers.HAS_COOLDOWN, exemptPermission = WorldPermissions.EXEMPT_COOLDOWN_WORLD_TELEPORT),
+                @CommandModifier(value = CommandModifiers.HAS_WARMUP, exemptPermission = WorldPermissions.EXEMPT_WARMUP_WORLD_TELEPORT),
+                @CommandModifier(value = CommandModifiers.HAS_COST, exemptPermission = WorldPermissions.EXEMPT_COST_WORLD_TELEPORT)
+        }
+)
+public class TeleportWorldCommand implements ICommandExecutor<CommandSource> {
 
     @Override
-    protected Map<String, PermissionInformation> permissionSuffixesToRegister() {
-        return new HashMap<String, PermissionInformation>() {{
-            put("others", PermissionInformation.getWithTranslation("permission.world.teleport.other", SuggestedLevel.ADMIN));
-        }};
-    }
-
-    @Override
-    public CommandElement[] getArguments() {
+    public CommandElement[] parameters(INucleusServiceCollection serviceCollection) {
         return new CommandElement[] {
             NucleusParameters.WORLD_PROPERTIES_ENABLED_ONLY,
-            GenericArguments.optional(
-                    requirePermissionArg(NucleusParameters.ONE_PLAYER, this.permissions.getPermissionWithSuffix("others")
-            ))
+            serviceCollection.commandElementSupplier()
+                .createOnlyOtherUserPermissionElement(true, WorldPermissions.WORLD_TELEPORT_OTHER)
         };
     }
 
-    @Override
-    public CommandResult executeCommand(final CommandSource src, CommandContext args, Cause cause) throws Exception {
-        Player player = getUserFromArgs(Player.class, src, NucleusParameters.Keys.PLAYER, args, "command.world.player");
-        WorldProperties worldProperties = args.<WorldProperties>getOne(NucleusParameters.Keys.WORLD).get();
+    @Override public ICommandResult execute(ICommandContext<? extends CommandSource> context) throws CommandException {
+        Player player = context.getPlayerFromArgs(NucleusParameters.Keys.PLAYER, "command.world.player");
+        WorldProperties worldProperties = context.requireOne(NucleusParameters.Keys.WORLD, WorldProperties.class);
         if (!worldProperties.isEnabled()) {
-            throw new ReturnMessageException(Nucleus.getNucleus().getMessageProvider().getTextMessageWithFormat("command.world.teleport.notenabled",
-                    worldProperties.getWorldName()));
+            return context.errorResult("command.world.teleport.notenabled", worldProperties.getWorldName());
         }
 
         World world = Sponge.getServer().loadWorld(worldProperties.getUniqueId())
-            .orElseThrow(() -> ReturnMessageException.fromKey(
-                    "command.world.teleport.failed", worldProperties.getWorldName()
-            ));
+            .orElseThrow(() -> context.createException("command.world.teleport.failed", worldProperties.getWorldName()));
 
         Vector3d pos = worldProperties.getSpawnPosition().toDouble();
         if (!player.transferToWorld(world, pos)) {
-            throw ReturnMessageException.fromKey(
-                    "command.world.teleport.failed", worldProperties.getWorldName());
+            return context.errorResult("command.world.teleport.failed", worldProperties.getWorldName());
         }
 
         // Rotate.
-        if (Nucleus.getNucleus().isModuleLoaded(SpawnModule.ID)) {
-            Nucleus.getNucleus().getStorageManager().getWorldService()
+        if (context.getServiceCollection().moduleDataProvider().isLoaded(SpawnModule.ID)) {
+            context.getServiceCollection()
+                    .storageManager()
+                    .getWorldService()
                     .getOnThread(worldProperties.getUniqueId())
                     .flatMap(x -> x.get(SpawnKeys.WORLD_SPAWN_ROTATION))
-                    .ifPresent(y -> new Transform<World>(world, pos, y));
+                    .ifPresent(y -> new Transform<>(world, pos, y));
         }
-        if (src instanceof Player && ((Player) src).getUniqueId().equals(player.getUniqueId())) {
-            src.sendMessage(Nucleus.getNucleus().getMessageProvider().getTextMessageWithFormat("command.world.teleport.success", worldProperties.getWorldName()));
+        if (context.is(player)) {
+            context.sendMessage("command.world.teleport.success", worldProperties.getWorldName());
         } else {
-            src.sendMessage(Nucleus.getNucleus().getMessageProvider().getTextMessageWithFormat("command.world.teleport.successplayer",
-                    Nucleus.getNucleus().getNameUtil().getSerialisedName(player), worldProperties.getWorldName()));
-            player.sendMessage(Nucleus.getNucleus().getMessageProvider().getTextMessageWithFormat("command.world.teleport.success", worldProperties.getWorldName()));
+            context.sendMessage("command.world.teleport.successplayer",
+                    context.getServiceCollection().playerDisplayNameService().getDisplayName(player),
+                    worldProperties.getWorldName());
+            context.sendMessageTo(player, "command.world.teleport.success", worldProperties.getWorldName());
         }
 
-        return CommandResult.success();
+        return context.successResult();
     }
 }

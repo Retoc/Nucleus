@@ -13,12 +13,14 @@ import io.github.nucleuspowered.nucleus.api.nucleusdata.MuteInfo;
 import io.github.nucleuspowered.nucleus.api.service.NucleusMuteService;
 import io.github.nucleuspowered.nucleus.internal.annotations.APIService;
 import io.github.nucleuspowered.nucleus.internal.interfaces.ServiceBase;
-import io.github.nucleuspowered.nucleus.internal.traits.IDataManagerTrait;
-import io.github.nucleuspowered.nucleus.internal.traits.MessageProviderTrait;
 import io.github.nucleuspowered.nucleus.modules.mute.MuteKeys;
 import io.github.nucleuspowered.nucleus.modules.mute.data.MuteData;
 import io.github.nucleuspowered.nucleus.modules.mute.events.MuteEvent;
-import io.github.nucleuspowered.nucleus.storage.dataobjects.modular.IUserDataObject;
+import io.github.nucleuspowered.nucleus.services.IMessageProviderService;
+import io.github.nucleuspowered.nucleus.services.IMessageTokenService;
+import io.github.nucleuspowered.nucleus.services.INucleusServiceCollection;
+import io.github.nucleuspowered.nucleus.services.IStorageManager;
+import io.github.nucleuspowered.nucleus.services.impl.storage.dataobjects.modular.IUserDataObject;
 import io.github.nucleuspowered.nucleus.util.CauseStackHelper;
 import org.spongepowered.api.Sponge;
 import org.spongepowered.api.entity.living.player.Player;
@@ -31,18 +33,28 @@ import org.spongepowered.api.text.Text;
 import org.spongepowered.api.util.Identifiable;
 
 import javax.annotation.Nullable;
+import javax.inject.Inject;
+
 import java.time.Duration;
 import java.time.Instant;
 import java.util.*;
 
 @APIService(NucleusMuteService.class)
-public class MuteHandler implements ContextCalculator<Subject>, NucleusMuteService, MessageProviderTrait, IDataManagerTrait, ServiceBase {
+public class MuteHandler implements ContextCalculator<Subject>, NucleusMuteService, ServiceBase {
 
+    private final IMessageProviderService messageProviderService;
+    private final IStorageManager storageManager;
     private final Map<UUID, Boolean> muteContextCache = Maps.newHashMap();
     private final Context mutedContext = new Context(NucleusMuteService.MUTED_CONTEXT, "true");
 
     private boolean globalMuteEnabled = false;
     private final List<UUID> voicedUsers = Lists.newArrayList();
+
+    @Inject
+    public MuteHandler(INucleusServiceCollection serviceCollection) {
+        this.messageProviderService = serviceCollection.messageProvider();
+        this.storageManager = serviceCollection.storageManager();
+    }
 
     public void onMute(Player user) {
         this.getPlayerMuteData(user).ifPresent(x -> onMute(x, user));
@@ -50,10 +62,10 @@ public class MuteHandler implements ContextCalculator<Subject>, NucleusMuteServi
 
     public void onMute(MuteData md, Player user) {
         if (md.getRemainingTime().isPresent()) {
-            sendMessageTo(user, "mute.playernotify.time",
-                    Util.getTimeStringFromSeconds(md.getRemainingTime().get().getSeconds()));
+            this.messageProviderService.sendMessageTo(user, "mute.playernotify.time",
+                    this.messageProviderService.getTimeString(user.getLocale(), md.getRemainingTime().get().getSeconds()));
         } else {
-            sendMessageTo(user, "mute.playernotify.standard");
+            this.messageProviderService.sendMessageTo(user, "mute.playernotify.standard");
         }
     }
 
@@ -67,13 +79,13 @@ public class MuteHandler implements ContextCalculator<Subject>, NucleusMuteServi
 
     // Internal
     public Optional<MuteData> getPlayerMuteData(User user) {
-        Optional<MuteData> nu = getOrCreateUserOnThread(user.getUniqueId()).get(MuteKeys.MUTE_DATA);
+        Optional<MuteData> nu = this.storageManager.getOrCreateUserOnThread(user.getUniqueId()).get(MuteKeys.MUTE_DATA);
         this.muteContextCache.put(user.getUniqueId(), nu.isPresent());
         return nu;
     }
 
     @Override public boolean mutePlayer(User user, String reason, @Nullable Duration duration, Cause cause) {
-        UUID first = cause.first(User.class).map(Identifiable::getUniqueId).orElse(Util.consoleFakeUUID);
+        UUID first = cause.first(User.class).map(Identifiable::getUniqueId).orElse(Util.CONSOLE_FAKE_UUID);
         return mutePlayer(user, new MuteData(first, reason, duration), cause);
     }
 
@@ -85,7 +97,7 @@ public class MuteHandler implements ContextCalculator<Subject>, NucleusMuteServi
         Preconditions.checkNotNull(user);
         Preconditions.checkNotNull(data);
 
-        Optional<IUserDataObject> nu = getUserOnThread(user.getUniqueId());
+        Optional<IUserDataObject> nu = this.storageManager.getUserOnThread(user.getUniqueId());
         if (!nu.isPresent()) {
             return false;
         }
@@ -98,7 +110,7 @@ public class MuteHandler implements ContextCalculator<Subject>, NucleusMuteServi
         }
 
         u.set(MuteKeys.MUTE_DATA, data);
-        saveUser(user.getUniqueId(), u);
+        this.storageManager.saveUser(user.getUniqueId(), u);
         this.muteContextCache.put(user.getUniqueId(), true);
         Sponge.getEventManager().post(new MuteEvent.Muted(
                 cause,
@@ -118,11 +130,11 @@ public class MuteHandler implements ContextCalculator<Subject>, NucleusMuteServi
 
     public boolean unmutePlayer(User user, Cause cause, boolean expired) {
         if (isMuted(user)) {
-            Optional<IUserDataObject> o = getUserOnThread(user.getUniqueId());
+            Optional<IUserDataObject> o = this.storageManager.getUserOnThread(user.getUniqueId());
             if (o.isPresent()) {
                 IUserDataObject udo = o.get();
                 udo.remove(MuteKeys.MUTE_DATA);
-                saveUser(user.getUniqueId(), udo);
+                this.storageManager.saveUser(user.getUniqueId(), udo);
                 this.muteContextCache.put(user.getUniqueId(), false);
                 Sponge.getEventManager().post(new MuteEvent.Unmuted(
                         cause,
@@ -130,7 +142,7 @@ public class MuteHandler implements ContextCalculator<Subject>, NucleusMuteServi
                         expired));
 
                 user.getPlayer().ifPresent(x ->
-                    x.sendMessage(NucleusPlugin.getNucleus().getMessageProvider().getTextMessageWithFormat("mute.elapsed")));
+                        this.messageProviderService.sendMessageTo(x, "mute.elapsed"));
                 return true;
             }
         }

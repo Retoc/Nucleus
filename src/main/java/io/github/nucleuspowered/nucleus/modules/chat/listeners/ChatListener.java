@@ -4,47 +4,33 @@
  */
 package io.github.nucleuspowered.nucleus.modules.chat.listeners;
 
-import com.google.common.collect.Maps;
-import io.github.nucleuspowered.nucleus.NameUtil;
-import io.github.nucleuspowered.nucleus.Nucleus;
 import io.github.nucleuspowered.nucleus.Util;
 import io.github.nucleuspowered.nucleus.api.EventContexts;
 import io.github.nucleuspowered.nucleus.api.chat.NucleusNoFormatChannel;
 import io.github.nucleuspowered.nucleus.api.service.NucleusMessageTokenService;
-import io.github.nucleuspowered.nucleus.internal.PermissionRegistry;
 import io.github.nucleuspowered.nucleus.internal.interfaces.ListenerBase;
 import io.github.nucleuspowered.nucleus.internal.interfaces.Reloadable;
-import io.github.nucleuspowered.nucleus.internal.messages.MessageProvider;
-import io.github.nucleuspowered.nucleus.internal.permissions.PermissionInformation;
-import io.github.nucleuspowered.nucleus.internal.permissions.SuggestedLevel;
-import io.github.nucleuspowered.nucleus.internal.services.PermissionResolver;
-import io.github.nucleuspowered.nucleus.internal.text.TextParsingUtils;
-import io.github.nucleuspowered.nucleus.modules.chat.ChatModule;
+import io.github.nucleuspowered.nucleus.modules.chat.ChatPermissions;
 import io.github.nucleuspowered.nucleus.modules.chat.config.ChatConfig;
-import io.github.nucleuspowered.nucleus.modules.chat.config.ChatConfigAdapter;
 import io.github.nucleuspowered.nucleus.modules.chat.config.ChatTemplateConfig;
-import io.github.nucleuspowered.nucleus.modules.chat.util.TemplateUtil;
+import io.github.nucleuspowered.nucleus.modules.chat.services.ChatService;
+import io.github.nucleuspowered.nucleus.services.INucleusServiceCollection;
+import io.github.nucleuspowered.nucleus.services.IPermissionService;
+import io.github.nucleuspowered.nucleus.services.ITextStyleService;
 import org.spongepowered.api.entity.living.player.Player;
 import org.spongepowered.api.event.Listener;
 import org.spongepowered.api.event.Order;
 import org.spongepowered.api.event.message.MessageChannelEvent;
 import org.spongepowered.api.event.message.MessageEvent;
-import org.spongepowered.api.service.permission.Subject;
 import org.spongepowered.api.text.Text;
 import org.spongepowered.api.text.TextTemplate;
 import org.spongepowered.api.text.channel.MessageChannel;
 import org.spongepowered.api.text.serializer.TextSerializers;
 import org.spongepowered.api.text.transform.SimpleTextFormatter;
 import org.spongepowered.api.text.transform.SimpleTextTemplateApplier;
-import org.spongepowered.api.util.Tuple;
-
-import java.util.Arrays;
-import java.util.HashMap;
-import java.util.Map;
-import java.util.function.BiFunction;
-import java.util.function.Function;
 
 import javax.annotation.Nullable;
+import javax.inject.Inject;
 
 /**
  * A listener that modifies all chat messages. Uses the
@@ -53,74 +39,18 @@ import javax.annotation.Nullable;
  */
 public class ChatListener implements Reloadable, ListenerBase.Conditional {
 
-    private static final String prefix = PermissionRegistry.PERMISSIONS_PREFIX + "chat.";
+    private final ChatService chatService;
+    private final ITextStyleService textStyleService;
+    private final IPermissionService permissionService;
 
-    // Order is important here!
-    private static final Map<String, PermissionInformation> permissionToDesc = Maps.newHashMap();
-    private static final Map<String, Tuple<String[], Function<String, String>>> replacements = createReplacements();
+    private ChatConfig chatConfig;
 
-    private static Map<String, Tuple<String[], Function<String, String>>> createReplacements() {
-        Map<String, Tuple<String[], Function<String, String>>> t = new HashMap<>();
-
-        MessageProvider mp = Nucleus.getNucleus().getMessageProvider();
-
-        BiFunction<String, String, String> fss = (key, s) -> s.replaceAll("[&]+[" + key.toLowerCase() + key.toUpperCase() + "]", "");
-        NameUtil.getColours().forEach((key, value) -> {
-            t.put("&" + key, Tuple.of(
-                new String[]{ prefix + "colour." + value.getName(), prefix + "color." + value.getName() },
-                s -> fss.apply(key.toString(), s)));
-
-            permissionToDesc.put(prefix + "colour." + value.getName(),
-                    PermissionInformation.getWithTranslation("permission.chat.colourspec",
-                            SuggestedLevel.ADMIN,
-                            value.getName().toLowerCase(), key.toString()));
-            permissionToDesc.put(prefix + "color." + value.getName(),
-                    PermissionInformation.getWithTranslation("permission.chat.colorspec",
-                            SuggestedLevel.ADMIN,
-                            value.getName().toLowerCase(), key.toString()));
-        });
-
-        NameUtil.getStyleKeys().entrySet().stream().filter(x -> x.getKey() != 'k').forEach((k) -> {
-            t.put("&" + k.getKey(), Tuple.of(new String[] { prefix + "style." + k.getValue().toLowerCase() },
-                    s -> fss.apply(k.getKey().toString(), s)));
-            permissionToDesc.put(prefix + "style." + k.getValue().toLowerCase(),
-                    PermissionInformation.getWithTranslation("permission.chat.stylespec",
-                            SuggestedLevel.ADMIN,
-                            k.getValue().toLowerCase(), k.toString()));
-        });
-
-        t.put("&k", Tuple.of(new String[] { prefix + "magic" }, s -> s.replaceAll("[&]+[kK]", "")));
-
-        return t;
-    }
-
-    public static String stripPermissionless(Subject source, String message) {
-        if (message.contains("&")) {
-            String m = message.toLowerCase();
-            PermissionResolver resolver = Nucleus.getNucleus().getPermissionResolver();
-            for (Map.Entry<String, Tuple<String[], Function<String, String>>> r : replacements.entrySet()) {
-                if (m.contains(r.getKey()) && Arrays.stream(r.getValue().getFirst()).noneMatch(x -> resolver.hasPermission(source, x))) {
-                    message = r.getValue().getSecond().apply(message);
-                }
-            }
-        }
-
-        return message;
-    }
-
-    // --- Listener Proper
-    private ChatConfig chatConfig = null;
-    private final TemplateUtil templateUtil = Nucleus.getNucleus().getInternalServiceManager().getServiceUnchecked(TemplateUtil.class);
-
-    @Override
-    public Map<String, PermissionInformation> getPermissions() {
-        Map<String, PermissionInformation> mp = new HashMap<>();
-        mp.put(prefix + "color", PermissionInformation.getWithTranslation("permission.chat.color", SuggestedLevel.ADMIN));
-        mp.put(prefix + "style", PermissionInformation.getWithTranslation("permission.chat.style", SuggestedLevel.ADMIN));
-        mp.put(prefix + "magic", PermissionInformation.getWithTranslation("permission.chat.magic", SuggestedLevel.ADMIN));
-        mp.put(prefix + "url", PermissionInformation.getWithTranslation("permission.chat.urls", SuggestedLevel.ADMIN));
-        permissionToDesc.putAll(mp);
-        return mp;
+    @Inject
+    public ChatListener(INucleusServiceCollection serviceCollection) {
+        this.chatService = serviceCollection.getServiceUnchecked(ChatService.class);
+        this.textStyleService = serviceCollection.textStyleService();
+        this.chatConfig = serviceCollection.moduleDataProvider().getModuleConfig(ChatConfig.class);
+        this.permissionService = serviceCollection.permissionService();
     }
 
     // We do this first so that other plugins can alter it later if needs be.
@@ -183,7 +113,7 @@ public class ChatListener implements Reloadable, ListenerBase.Conditional {
 
         final ChatTemplateConfig ctc;
         if (this.chatConfig.isUseGroupTemplates()) {
-            ctc = this.templateUtil.getTemplateNow(player);
+            ctc = this.chatService.getTemplateNow(player);
         } else {
             ctc = this.chatConfig.getDefaultTemplate();
         }
@@ -203,8 +133,9 @@ public class ChatListener implements Reloadable, ListenerBase.Conditional {
         event.getFormatter().setBody(this.chatConfig.isModifyMainMessage() ? useMessage(player, rawMessage, ctc) : rawMessage);
     }
 
-    @Override public boolean shouldEnable() {
-        return Nucleus.getNucleus().getConfigValue(ChatModule.ID, ChatConfigAdapter.class, ChatConfig::isModifychat).orElse(false);
+    @Override
+    public boolean shouldEnable(INucleusServiceCollection serviceCollection) {
+        return serviceCollection.moduleDataProvider().getModuleConfig(ChatConfig.class).isModifychat();
     }
 
     private Text useMessage(Player player, Text rawMessage, ChatTemplateConfig chatTemplateConfig) {
@@ -213,23 +144,23 @@ public class ChatListener implements Reloadable, ListenerBase.Conditional {
             m = m.replaceAll("&9&n([A-Za-z0-9-.]+)(&r)?", "$1");
         }
 
-        m = stripPermissionless(player, m);
+        m = this.textStyleService.stripPermissionless(ChatPermissions.CHAT_COLOR, ChatPermissions.CHAT_STYLE, player, m);
 
         Text result;
-        if (hasPermission(player, prefix + "url")) {
-            result = TextParsingUtils.addUrls(m, !this.chatConfig.isRemoveBlueUnderline());
+        if (this.permissionService.hasPermission(player, ChatPermissions.CHAT_URLS)) {
+            result = this.textStyleService.addUrls(m, !this.chatConfig.isRemoveBlueUnderline());
         } else {
             result = TextSerializers.FORMATTING_CODE.deserialize(m);
         }
 
-        String chatcol = Util.getOptionFromSubject(player, "chatcolour", "chatcolor").orElseGet(chatTemplateConfig::getChatcolour);
-        String chatstyle = Util.getOptionFromSubject(player, "chatstyle").orElseGet(chatTemplateConfig::getChatstyle);
+        String chatcol = this.permissionService.getOptionFromSubject(player, "chatcolour", "chatcolor").orElseGet(chatTemplateConfig::getChatcolour);
+        String chatstyle = this.permissionService.getOptionFromSubject(player, "chatstyle").orElseGet(chatTemplateConfig::getChatstyle);
 
-        NameUtil nu = Nucleus.getNucleus().getNameUtil();
-        return Text.of(nu.getColourFromString(chatcol), nu.getTextStyleFromString(chatstyle), result);
+        return Text.of(this.textStyleService.getColourFromString(chatcol), this.textStyleService.getTextStyleFromString(chatstyle), result);
     }
 
-    @Override public void onReload() {
-        this.chatConfig = Nucleus.getNucleus().getInternalServiceManager().getServiceUnchecked(ChatConfigAdapter.class).getNodeOrDefault();
+    @Override
+    public void onReload(INucleusServiceCollection serviceCollection) {
+        this.chatConfig = serviceCollection.moduleDataProvider().getModuleConfig(ChatConfig.class);
     }
 }

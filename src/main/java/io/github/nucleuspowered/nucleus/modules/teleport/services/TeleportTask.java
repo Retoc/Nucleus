@@ -4,14 +4,13 @@
  */
 package io.github.nucleuspowered.nucleus.modules.teleport.services;
 
-import io.github.nucleuspowered.nucleus.Nucleus;
 import io.github.nucleuspowered.nucleus.Util;
 import io.github.nucleuspowered.nucleus.api.teleport.TeleportResult;
 import io.github.nucleuspowered.nucleus.api.teleport.TeleportResults;
 import io.github.nucleuspowered.nucleus.api.teleport.TeleportScanners;
 import io.github.nucleuspowered.nucleus.internal.interfaces.CancellableTask;
-import io.github.nucleuspowered.nucleus.internal.traits.MessageProviderTrait;
-import io.github.nucleuspowered.nucleus.modules.core.services.SafeTeleportService;
+import io.github.nucleuspowered.nucleus.services.INucleusServiceCollection;
+import io.github.nucleuspowered.nucleus.services.INucleusTeleportService;
 import org.spongepowered.api.Sponge;
 import org.spongepowered.api.command.CommandSource;
 import org.spongepowered.api.entity.Transform;
@@ -19,7 +18,6 @@ import org.spongepowered.api.entity.living.player.Player;
 import org.spongepowered.api.entity.living.player.User;
 import org.spongepowered.api.event.CauseStackManager;
 import org.spongepowered.api.scheduler.Task;
-import org.spongepowered.api.world.Location;
 import org.spongepowered.api.world.World;
 
 import java.util.UUID;
@@ -27,20 +25,23 @@ import java.util.function.Consumer;
 
 import javax.annotation.Nullable;
 
-public class TeleportTask implements CancellableTask, MessageProviderTrait {
+public class TeleportTask implements CancellableTask {
 
-    protected final UUID toTeleport;
+    final UUID toTeleport;
     protected final UUID target;
     protected final double cost;
     protected final boolean safe;
     protected final int warmup;
-    @Nullable protected final UUID requester;
-    protected final boolean silentSource;
-    protected final boolean silentTarget;
-    @Nullable protected final Transform<World> requestLocation;
-    @Nullable protected Consumer<Player> successCallback;
+    @Nullable private final UUID requester;
+    private final boolean silentSource;
+    private final boolean silentTarget;
+    @Nullable private final Transform<World> requestLocation;
+    @Nullable private Consumer<Player> successCallback;
+    private final INucleusServiceCollection serviceCollection;
 
-    public TeleportTask(UUID toTeleport,
+    public TeleportTask(
+            INucleusServiceCollection serviceCollection,
+            UUID toTeleport,
             UUID target,
             double cost,
             int warmup,
@@ -60,11 +61,12 @@ public class TeleportTask implements CancellableTask, MessageProviderTrait {
         this.requester = requester;
         this.successCallback = successCallback;
         this.requestLocation = requestLocation;
+        this.serviceCollection = serviceCollection;
     }
 
     @Override
     public void onCancel() {
-        PlayerTeleporterService.onCancel(this.requester, this.toTeleport, this.cost);
+        PlayerTeleporterService.onCancel(this.serviceCollection, this.requester, this.toTeleport, this.cost);
     }
 
     @Override
@@ -80,9 +82,7 @@ public class TeleportTask implements CancellableTask, MessageProviderTrait {
         CommandSource receiver = source != null && source.isOnline() ? source.getPlayer().get() : Sponge.getServer().getConsole();
         if (teleportingPlayer != null && targetPlayer != null) {
             // If safe, get the teleport mode
-            SafeTeleportService tpHandler =
-                    Nucleus.getNucleus().getInternalServiceManager().getServiceUnchecked(SafeTeleportService.class);
-
+            INucleusTeleportService tpHandler = this.serviceCollection.teleportService();
             try (CauseStackManager.StackFrame frame = Sponge.getCauseStackManager().pushCauseFrame()) {
                 if (source == null) {
                     frame.pushCause(Sponge.getServer().getConsole());
@@ -100,7 +100,9 @@ public class TeleportTask implements CancellableTask, MessageProviderTrait {
 
                 if (!result.isSuccessful()) {
                     if (!this.silentSource) {
-                        sendMessageTo(receiver, result == TeleportResults.FAIL_NO_LOCATION ? "teleport.nosafe" : "teleport.cancelled");
+                        this.serviceCollection.messageProvider()
+                                .sendMessageTo(receiver, result == TeleportResults.FAIL_NO_LOCATION ?
+                                        "teleport.nosafe" : "teleport.cancelled");
                     }
 
                     onCancel();
@@ -108,12 +110,13 @@ public class TeleportTask implements CancellableTask, MessageProviderTrait {
                 }
 
                 if (!this.toTeleport.equals(this.requester) && !this.silentSource) {
-                    sendMessageTo(receiver, "teleport.success.source", teleportingPlayer.getName(), targetPlayer.getName());
+                    this.serviceCollection.messageProvider()
+                        .sendMessageTo(receiver, "teleport.success.source", teleportingPlayer.getName(), targetPlayer.getName());
                 }
 
-                sendMessageTo(teleportingPlayer, "teleport.to.success", targetPlayer.getName());
+                this.serviceCollection.messageProvider().sendMessageTo(teleportingPlayer, "teleport.to.success", targetPlayer.getName());
                 if (!this.silentTarget) {
-                    sendMessageTo(targetPlayer,"teleport.from.success", teleportingPlayer.getName());
+                    this.serviceCollection.messageProvider().sendMessageTo(targetPlayer,"teleport.from.success", teleportingPlayer.getName());
                 }
 
                 if (this.successCallback != null && source != null) {
@@ -122,7 +125,7 @@ public class TeleportTask implements CancellableTask, MessageProviderTrait {
             }
         } else {
             if (!this.silentSource) {
-                sendMessageTo(receiver, "teleport.fail.offline");
+                this.serviceCollection.messageProvider().sendMessageTo(receiver, "teleport.fail.offline");
             }
 
             onCancel();

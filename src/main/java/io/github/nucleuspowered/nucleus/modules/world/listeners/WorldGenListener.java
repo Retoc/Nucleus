@@ -8,7 +8,8 @@ import io.github.nucleuspowered.nucleus.Nucleus;
 import io.github.nucleuspowered.nucleus.internal.interfaces.ListenerBase;
 import io.github.nucleuspowered.nucleus.modules.world.WorldKeys;
 import io.github.nucleuspowered.nucleus.modules.world.services.WorldHelper;
-import io.github.nucleuspowered.nucleus.storage.dataobjects.modular.IWorldDataObject;
+import io.github.nucleuspowered.nucleus.services.INucleusServiceCollection;
+import io.github.nucleuspowered.nucleus.services.impl.storage.dataobjects.modular.IWorldDataObject;
 import org.spongepowered.api.GameState;
 import org.spongepowered.api.Sponge;
 import org.spongepowered.api.event.Listener;
@@ -21,7 +22,16 @@ import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.TimeUnit;
 
+import javax.inject.Inject;
+
 public class WorldGenListener implements ListenerBase {
+
+    private final INucleusServiceCollection serviceCollection;
+
+    @Inject
+    public WorldGenListener(INucleusServiceCollection serviceCollection) {
+        this.serviceCollection = serviceCollection;
+    }
 
     @Listener
     public void onStart(GameStartedServerEvent event) {
@@ -36,9 +46,9 @@ public class WorldGenListener implements ListenerBase {
     }
 
     private void onWorldLoad(final World world) {
-        WorldHelper worldHelper = getServiceUnchecked(WorldHelper.class);
+        WorldHelper worldHelper = this.serviceCollection.getServiceUnchecked(WorldHelper.class);
         final CompletableFuture<Optional<IWorldDataObject>> cfo =
-                Nucleus.getNucleus().getStorageManager().getWorldService().get(world.getUniqueId());
+                this.serviceCollection.storageManager().getWorldService().get(world.getUniqueId());
 
         // avoiding main thread loading
         Task.builder()
@@ -62,7 +72,8 @@ public class WorldGenListener implements ListenerBase {
                                             worldDataObject.getOrDefault(WorldKeys.WORLD_PREGEN_TICK_FREQUENCY),
                                             true
                                     )) {
-                                        sendMessageTo(Sponge.getServer().getConsole(), "command.world.gen.started", world.getName());
+                                        this.serviceCollection.messageProvider()
+                                                .sendMessageTo(Sponge.getServer().getConsole(), "command.world.gen.started", world.getName());
                                     }
                                 }
                             }

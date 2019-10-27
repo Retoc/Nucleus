@@ -5,7 +5,7 @@
 package io.github.nucleuspowered.nucleus.internal.command;
 
 import io.github.nucleuspowered.nucleus.Nucleus;
-import io.github.nucleuspowered.nucleus.internal.messages.MessageProvider;
+import io.github.nucleuspowered.nucleus.services.impl.messageprovider.legacy.MessageProvider;
 import org.spongepowered.api.command.CommandException;
 import org.spongepowered.api.command.CommandPermissionException;
 import org.spongepowered.api.text.Text;

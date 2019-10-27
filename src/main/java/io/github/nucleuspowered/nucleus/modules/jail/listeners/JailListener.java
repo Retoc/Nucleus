@@ -5,21 +5,23 @@
 package io.github.nucleuspowered.nucleus.modules.jail.listeners;
 
 import io.github.nucleuspowered.nucleus.Nucleus;
-import io.github.nucleuspowered.nucleus.Util;
 import io.github.nucleuspowered.nucleus.api.EventContexts;
 import io.github.nucleuspowered.nucleus.api.events.NucleusSendToSpawnEvent;
 import io.github.nucleuspowered.nucleus.api.events.NucleusTeleportEvent;
 import io.github.nucleuspowered.nucleus.api.nucleusdata.NamedLocation;
-import io.github.nucleuspowered.nucleus.internal.CommandPermissionHandler;
 import io.github.nucleuspowered.nucleus.internal.interfaces.ListenerBase;
 import io.github.nucleuspowered.nucleus.internal.interfaces.Reloadable;
 import io.github.nucleuspowered.nucleus.modules.core.events.NucleusOnLoginEvent;
 import io.github.nucleuspowered.nucleus.modules.fly.FlyKeys;
-import io.github.nucleuspowered.nucleus.modules.jail.commands.JailCommand;
-import io.github.nucleuspowered.nucleus.modules.jail.config.JailConfigAdapter;
+import io.github.nucleuspowered.nucleus.modules.jail.JailPermissions;
+import io.github.nucleuspowered.nucleus.modules.jail.config.JailConfig;
 import io.github.nucleuspowered.nucleus.modules.jail.data.JailData;
 import io.github.nucleuspowered.nucleus.modules.jail.services.JailHandler;
-import io.github.nucleuspowered.nucleus.storage.dataobjects.modular.IUserDataObject;
+import io.github.nucleuspowered.nucleus.services.IMessageProviderService;
+import io.github.nucleuspowered.nucleus.services.INucleusServiceCollection;
+import io.github.nucleuspowered.nucleus.services.IPermissionService;
+import io.github.nucleuspowered.nucleus.services.IPlayerDisplayNameService;
+import io.github.nucleuspowered.nucleus.services.impl.storage.dataobjects.modular.IUserDataObject;
 import io.github.nucleuspowered.nucleus.util.PermissionMessageChannel;
 import org.spongepowered.api.Sponge;
 import org.spongepowered.api.command.CommandSource;
@@ -47,19 +49,18 @@ import javax.inject.Inject;
 
 public class JailListener implements Reloadable, ListenerBase {
 
-    private final JailHandler handler = Nucleus.getNucleus().getInternalServiceManager().getServiceUnchecked(JailHandler.class);
-    private final String notify;
-    private final String teleport;
-    private final String teleportto;
-
+    private final IPermissionService permissionService;
+    private final IMessageProviderService messageProviderService;
+    private final IPlayerDisplayNameService playerDisplayNameService;
+    private final JailHandler handler;
     private List<String> allowedCommands;
 
     @Inject
-    public JailListener() {
-        CommandPermissionHandler cph = Nucleus.getNucleus().getPermissionRegistry().getPermissionsForNucleusCommand(JailCommand.class);
-        this.notify = cph.getPermissionWithSuffix("notify");
-        this.teleport = cph.getPermissionWithSuffix("teleportjailed");
-        this.teleportto = cph.getPermissionWithSuffix("teleporttojailed");
+    public JailListener(INucleusServiceCollection serviceCollection) {
+        this.permissionService = serviceCollection.permissionService();
+        this.messageProviderService = serviceCollection.messageProvider();
+        this.playerDisplayNameService = serviceCollection.playerDisplayNameService();
+        this.handler = serviceCollection.getServiceUnchecked(JailHandler.class);
     }
 
     // fires after spawn login event
@@ -75,7 +76,7 @@ public class JailListener implements Reloadable, ListenerBase {
         // Send them back to where they should be.
         Optional<NamedLocation> owl = this.handler.getWarpLocation(user);
         if (!owl.isPresent()) {
-            new PermissionMessageChannel(this.notify)
+            new PermissionMessageChannel(this.permissionService, JailPermissions.JAIL_NOTIFY)
                     .send(Text.of(TextColors.RED, "WARNING: No jail is defined. Jailed players are going free!"));
             this.handler.unjailPlayer(user);
             return;
@@ -117,17 +118,19 @@ public class JailListener implements Reloadable, ListenerBase {
                 NamedLocation owl = this.handler.getWarpLocation(user).get();
                 JailData jd = data.get();
                 Optional<Duration> timeLeft = jd.getRemainingTime();
-                Text message = timeLeft.map(duration -> Nucleus.getNucleus().getMessageProvider()
-                        .getTextMessageWithFormat("command.jail.jailedfor", owl.getName(),
-                                Nucleus.getNucleus().getNameUtil().getNameFromUUID(jd.getJailerInternal()),
-                                Util.getTimeStringFromSeconds(duration.getSeconds())))
-                        .orElseGet(() -> Nucleus.getNucleus().getMessageProvider()
-                                .getTextMessageWithFormat("command.jail.jailedperm", owl.getName(),
-                                        Nucleus.getNucleus().getNameUtil().getNameFromUUID(jd.getJailerInternal()), "",
-                                        ""));
+                Text message = timeLeft.map(duration ->
+                        this.messageProviderService.getMessageFor(
+                                user.getLocale(),
+                                "command.jail.jailedfor",
+                                owl.getName(),
+                                this.playerDisplayNameService.getDisplayName(jd.getJailerInternal()),
+                                this.messageProviderService.getTimeString(user.getLocale(), duration.getSeconds()))
+                )
+                        .orElseGet(() -> this.messageProviderService.getMessageFor(user, "command.jail.jailedperm", owl.getName(),
+                                this.playerDisplayNameService.getDisplayName(jd.getJailerInternal()), "", ""));
 
                 user.sendMessage(message);
-                user.sendMessage(Nucleus.getNucleus().getMessageProvider().getTextMessageWithFormat("standard.reasoncoloured", jd.getReason()));
+                this.messageProviderService.sendMessageTo(user, "standard.reasoncoloured", jd.getReason());
             }
         }
 
@@ -155,10 +158,10 @@ public class JailListener implements Reloadable, ListenerBase {
     public void onRequestSent(NucleusTeleportEvent.Request event, @Root Player cause, @Getter("getTargetEntity") Player player) {
         if (this.handler.isPlayerJailed(cause)) {
             event.setCancelled(true);
-            event.setCancelMessage(Nucleus.getNucleus().getMessageProvider().getTextMessageWithFormat("jail.teleportcause.isjailed"));
+            event.setCancelMessage(this.messageProviderService.getMessageFor(cause.getLocale(), "jail.teleportcause.isjailed"));
         } else if (this.handler.isPlayerJailed(player)) {
             event.setCancelled(true);
-            event.setCancelMessage(Nucleus.getNucleus().getMessageProvider().getTextMessageWithFormat("jail.teleporttarget.isjailed", player.getName()));
+            event.setCancelMessage(this.messageProviderService.getMessageFor(cause.getLocale(),"jail.teleporttarget.isjailed", player.getName()));
         }
     }
 
@@ -166,16 +169,14 @@ public class JailListener implements Reloadable, ListenerBase {
     public void onAboutToTeleport(NucleusTeleportEvent.AboutToTeleport event, @Root CommandSource cause, @Getter("getTargetEntity") Player player) {
         if (event.getCause().getContext().get(EventContexts.IS_JAILING_ACTION).orElse(false)) {
             if (this.handler.isPlayerJailed(player)) {
-                if (!hasPermission(cause, this.teleport)) {
+                if (!this.permissionService.hasPermission(cause, JailPermissions.JAIL_TELEPORTJAILED)) {
                     event.setCancelled(true);
                     event.setCancelMessage(
-                            Nucleus.getNucleus().getMessageProvider()
-                                    .getTextMessageWithFormat("jail.abouttoteleporttarget.isjailed", player.getName()));
-                } else if (!hasPermission(cause, this.teleportto)) {
+                            this.messageProviderService.getMessageFor(cause, "jail.abouttoteleporttarget.isjailed", player.getName()));
+                } else if (!this.permissionService.hasPermission(cause, JailPermissions.JAIL_TELEPORTTOJAILED)) {
                     event.setCancelled(true);
                     event.setCancelMessage(
-                            Nucleus.getNucleus().getMessageProvider().getTextMessageWithFormat("jail.abouttoteleportcause.targetisjailed",
-                                    player.getName()));
+                            this.messageProviderService.getMessageFor(cause,"jail.abouttoteleportcause.targetisjailed", player.getName()));
                 }
             }
         }
@@ -213,12 +214,13 @@ public class JailListener implements Reloadable, ListenerBase {
     public void onSendToSpawn(NucleusSendToSpawnEvent event, @Getter("getTargetUser") User user) {
         if (this.handler.checkJail(user, false)) {
             event.setCancelled(true);
-            event.setCancelReason(Nucleus.getNucleus().getMessageProvider().getMessageWithFormat("jail.isjailed"));
+            event.setCancelReason(this.messageProviderService.getMessageString(event.getCause().first(CommandSource.class)
+                    .orElseGet(Sponge.getServer()::getConsole), "jail.isjailed"));
         }
     }
 
-    @Override public void onReload() {
-        this.allowedCommands = Nucleus.getNucleus().getInternalServiceManager()
-                .getServiceUnchecked(JailConfigAdapter.class).getNodeOrDefault().getAllowedCommands();
+    @Override
+    public void onReload(INucleusServiceCollection serviceCollection) {
+        this.allowedCommands = serviceCollection.moduleDataProvider().getModuleConfig(JailConfig.class).getAllowedCommands();
     }
 }

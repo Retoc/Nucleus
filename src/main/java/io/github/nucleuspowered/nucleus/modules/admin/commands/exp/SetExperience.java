@@ -6,34 +6,32 @@ package io.github.nucleuspowered.nucleus.modules.admin.commands.exp;
 
 import io.github.nucleuspowered.nucleus.argumentparsers.ExperienceLevelArgument;
 import io.github.nucleuspowered.nucleus.argumentparsers.PositiveIntegerArgument;
-import io.github.nucleuspowered.nucleus.internal.annotations.command.NoModifiers;
-import io.github.nucleuspowered.nucleus.internal.annotations.command.Permissions;
-import io.github.nucleuspowered.nucleus.internal.annotations.command.RegisterCommand;
-import io.github.nucleuspowered.nucleus.internal.command.AbstractCommand;
+import io.github.nucleuspowered.nucleus.internal.command.ICommandContext;
+import io.github.nucleuspowered.nucleus.internal.command.ICommandExecutor;
+import io.github.nucleuspowered.nucleus.internal.command.ICommandResult;
 import io.github.nucleuspowered.nucleus.internal.command.NucleusParameters;
-import io.github.nucleuspowered.nucleus.modules.admin.commands.ExperienceCommand;
-import org.spongepowered.api.command.CommandResult;
+import io.github.nucleuspowered.nucleus.internal.command.annotation.Command;
+import io.github.nucleuspowered.nucleus.modules.admin.AdminPermissions;
+import io.github.nucleuspowered.nucleus.services.INucleusServiceCollection;
+import org.spongepowered.api.command.CommandException;
 import org.spongepowered.api.command.CommandSource;
-import org.spongepowered.api.command.args.CommandContext;
 import org.spongepowered.api.command.args.CommandElement;
 import org.spongepowered.api.command.args.GenericArguments;
 import org.spongepowered.api.data.DataTransactionResult;
 import org.spongepowered.api.data.key.Keys;
 import org.spongepowered.api.entity.living.player.Player;
-import org.spongepowered.api.event.cause.Cause;
 import org.spongepowered.api.text.Text;
 import org.spongepowered.api.util.annotation.NonnullByDefault;
 
 import java.util.Optional;
 
-@NoModifiers
-@Permissions(prefix = "exp")
-@RegisterCommand(value = "set", subcommandOf = ExperienceCommand.class)
+@Command(aliases = "set", parentCommand = ExperienceCommand.class,
+        basePermission = AdminPermissions.BASE_EXP_SET, commandDescriptionKey = "exp.set")
 @NonnullByDefault
-public class SetExperience extends AbstractCommand<CommandSource> {
+public class SetExperience implements ICommandExecutor<CommandSource> {
 
     @Override
-    public CommandElement[] getArguments() {
+    public CommandElement[] parameters(INucleusServiceCollection serviceCollection) {
         return new CommandElement[] {
                 NucleusParameters.OPTIONAL_ONE_PLAYER,
                 GenericArguments.firstParsing(
@@ -44,17 +42,18 @@ public class SetExperience extends AbstractCommand<CommandSource> {
     }
 
     @Override
-    public CommandResult executeCommand(CommandSource src, CommandContext args, Cause cause) throws Exception {
-        Player pl = this.getUserFromArgs(Player.class, src, NucleusParameters.Keys.PLAYER, args);
-        if (!ExperienceCommand.checkGameMode(pl, src)) {
-            return CommandResult.empty();
+    public ICommandResult execute(ICommandContext<? extends CommandSource> context) throws CommandException {
+        Player pl = context.getPlayerFromArgs();
+        Optional<ICommandResult> r = ExperienceCommand.checkGameMode(context, pl);
+        if (r.isPresent()) {
+            return r.get();
         }
 
-        Optional<Integer> l = args.getOne(ExperienceCommand.levelKey);
+        Optional<Integer> l = context.getOne(ExperienceCommand.levelKey, int.class);
         DataTransactionResult dtr;
         dtr = l.map(integer -> pl.offer(Keys.EXPERIENCE_LEVEL, integer))
-                .orElseGet(() -> pl.offer(Keys.TOTAL_EXPERIENCE, args.<Integer>getOne(ExperienceCommand.experienceKey).get()));
+                .orElseGet(() -> pl.offer(Keys.TOTAL_EXPERIENCE, context.requireOne(ExperienceCommand.experienceKey, int.class)));
 
-        return ExperienceCommand.tellUserAboutExperience(src, pl, dtr.isSuccessful());
+        return ExperienceCommand.tellUserAboutExperience(context, pl, dtr.isSuccessful());
     }
 }

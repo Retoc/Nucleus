@@ -5,8 +5,8 @@
 package io.github.nucleuspowered.nucleus.modules.chat;
 
 import io.github.nucleuspowered.nucleus.annotationprocessor.RegisterPermissions;
-import io.github.nucleuspowered.nucleus.internal.permissions.PermissionMetadata;
-import io.github.nucleuspowered.nucleus.internal.permissions.SuggestedLevel;
+import io.github.nucleuspowered.nucleus.services.impl.permission.PermissionMetadata;
+import io.github.nucleuspowered.nucleus.services.impl.permission.SuggestedLevel;
 
 @RegisterPermissions
 public class ChatPermissions {
@@ -15,27 +15,27 @@ public class ChatPermissions {
     }
 
     @PermissionMetadata(descriptionKey = "permission.chat.color", level = SuggestedLevel.ADMIN, isPrefix = true)
-    public static final String CHAT_COLOR = "chat.color";
+    public static final String CHAT_COLOR = "nucleus.chat.color";
 
     @PermissionMetadata(descriptionKey = "permission.chat.magic", level = SuggestedLevel.ADMIN)
-    public static final String CHAT_MAGIC = "chat.magic";
+    public static final String CHAT_MAGIC = "nucleus.chat.magic";
 
     @PermissionMetadata(descriptionKey = "permission.chat.style", level = SuggestedLevel.ADMIN, isPrefix = true)
-    public static final String CHAT_STYLE = "chat.style";
+    public static final String CHAT_STYLE = "nucleus.chat.style";
 
     @PermissionMetadata(descriptionKey = "permission.chat.urls", level = SuggestedLevel.ADMIN)
-    public static final String CHAT_URLS = "chat.url";
+    public static final String CHAT_URLS = "nucleus.chat.url";
 
     @PermissionMetadata(descriptionKey = "permission.base", replacements = { "me" }, level = SuggestedLevel.USER)
-    public static final String BASE_ME = "me.base";
+    public static final String BASE_ME = "nucleus.me.base";
 
     @PermissionMetadata(descriptionKey = "permission.exempt.cooldown", replacements = { "me" }, level = SuggestedLevel.ADMIN)
-    public static final String EXEMPT_COOLDOWN_ME = "me.exempt.cooldown";
+    public static final String EXEMPT_COOLDOWN_ME = "nucleus.me.exempt.cooldown";
 
     @PermissionMetadata(descriptionKey = "permission.exempt.cost", replacements = { "me" }, level = SuggestedLevel.ADMIN)
-    public static final String EXEMPT_COST_ME = "me.exempt.cost";
+    public static final String EXEMPT_COST_ME = "nucleus.me.exempt.cost";
 
     @PermissionMetadata(descriptionKey = "permission.exempt.warmup", replacements = { "me" }, level = SuggestedLevel.ADMIN)
-    public static final String EXEMPT_WARMUP_ME = "me.exempt.warmup";
+    public static final String EXEMPT_WARMUP_ME = "nucleus.me.exempt.warmup";
 
 }

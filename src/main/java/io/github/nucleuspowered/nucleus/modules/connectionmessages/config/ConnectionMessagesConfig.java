@@ -5,7 +5,7 @@
 package io.github.nucleuspowered.nucleus.modules.connectionmessages.config;
 
 import io.github.nucleuspowered.neutrino.annotations.Default;
-import io.github.nucleuspowered.nucleus.internal.text.NucleusTextTemplateImpl;
+import io.github.nucleuspowered.nucleus.services.impl.texttemplatefactory.NucleusTextTemplateImpl;
 import ninja.leaping.configurate.objectmapping.Setting;
 import ninja.leaping.configurate.objectmapping.serialize.ConfigSerializable;
 

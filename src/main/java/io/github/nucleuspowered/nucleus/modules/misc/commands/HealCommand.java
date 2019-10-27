@@ -4,36 +4,55 @@
  */
 package io.github.nucleuspowered.nucleus.modules.misc.commands;
 
-import io.github.nucleuspowered.nucleus.Nucleus;
-import io.github.nucleuspowered.nucleus.internal.annotations.command.Permissions;
-import io.github.nucleuspowered.nucleus.internal.annotations.command.RegisterCommand;
-import io.github.nucleuspowered.nucleus.internal.command.AbstractCommand;
-import io.github.nucleuspowered.nucleus.internal.docgen.annotations.EssentialsEquivalent;
-import org.spongepowered.api.command.CommandResult;
+import io.github.nucleuspowered.nucleus.internal.command.ICommandContext;
+import io.github.nucleuspowered.nucleus.internal.command.ICommandExecutor;
+import io.github.nucleuspowered.nucleus.internal.command.ICommandResult;
+import io.github.nucleuspowered.nucleus.internal.command.annotation.Command;
+import io.github.nucleuspowered.nucleus.internal.command.annotation.CommandModifier;
+import io.github.nucleuspowered.nucleus.internal.command.annotation.EssentialsEquivalent;
+import io.github.nucleuspowered.nucleus.internal.command.requirements.CommandModifiers;
+import io.github.nucleuspowered.nucleus.modules.misc.MiscPermissions;
+import io.github.nucleuspowered.nucleus.services.INucleusServiceCollection;
+import org.spongepowered.api.command.CommandException;
 import org.spongepowered.api.command.CommandSource;
-import org.spongepowered.api.command.args.CommandContext;
+import org.spongepowered.api.command.args.CommandElement;
 import org.spongepowered.api.data.key.Keys;
 import org.spongepowered.api.entity.living.player.Player;
 import org.spongepowered.api.util.annotation.NonnullByDefault;
 
-@Permissions(supportsOthers = true)
-@RegisterCommand("heal")
 @EssentialsEquivalent("heal")
 @NonnullByDefault
-public class HealCommand extends AbstractCommand.SimpleTargetOtherPlayer {
+@Command(
+        aliases = {"heal"},
+        basePermission = MiscPermissions.BASE_HEAL,
+        commandDescriptionKey = "heal",
+        modifiers = {
+                @CommandModifier(value = CommandModifiers.HAS_COOLDOWN, exemptPermission = MiscPermissions.EXEMPT_COOLDOWN_HEAL),
+                @CommandModifier(value = CommandModifiers.HAS_WARMUP, exemptPermission = MiscPermissions.EXEMPT_WARMUP_HEAL),
+                @CommandModifier(value = CommandModifiers.HAS_COST, exemptPermission = MiscPermissions.EXEMPT_COST_HEAL)
+        }
+)
+public class HealCommand implements ICommandExecutor<CommandSource> { // extends AbstractCommand.SimpleTargetOtherPlayer {
 
-    @Override protected CommandResult executeWithPlayer(CommandSource src, Player pl, CommandContext args, boolean isSelf) {
+    @Override public CommandElement[] parameters(INucleusServiceCollection serviceCollection) {
+        return new CommandElement[] {
+                serviceCollection.commandElementSupplier()
+                        .createOnlyOtherUserPermissionElement(true, MiscPermissions.OTHERS_HEAL)
+        };
+    }
+
+    @Override public ICommandResult execute(ICommandContext<? extends CommandSource> context) throws CommandException {
+        Player pl = context.getPlayerFromArgs();
         if (pl.offer(Keys.HEALTH, pl.get(Keys.MAX_HEALTH).get()).isSuccessful()) {
             pl.offer(Keys.FIRE_TICKS, 0);
-            pl.sendMessages(Nucleus.getNucleus().getMessageProvider().getTextMessageWithFormat("command.heal.success.self"));
-            if (!isSelf) {
-                src.sendMessages(Nucleus.getNucleus().getMessageProvider().getTextMessageWithFormat("command.heal.success.other", pl.getName()));
+            context.sendMessageTo(pl, "command.heal.success.self");
+            if (!context.is(pl)) {
+                context.sendMessage("command.heal.success.other", pl.getName());
             }
 
-            return CommandResult.success();
+            return context.successResult();
         } else {
-            src.sendMessages(Nucleus.getNucleus().getMessageProvider().getTextMessageWithFormat("command.heal.error"));
-            return CommandResult.empty();
+            return context.errorResult("command.heal.error");
         }
     }
 }

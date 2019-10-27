@@ -5,8 +5,8 @@
 package io.github.nucleuspowered.nucleus.modules.kick;
 
 import io.github.nucleuspowered.nucleus.annotationprocessor.RegisterPermissions;
-import io.github.nucleuspowered.nucleus.internal.permissions.PermissionMetadata;
-import io.github.nucleuspowered.nucleus.internal.permissions.SuggestedLevel;
+import io.github.nucleuspowered.nucleus.services.impl.permission.PermissionMetadata;
+import io.github.nucleuspowered.nucleus.services.impl.permission.SuggestedLevel;
 
 @RegisterPermissions
 public class KickPermissions {
@@ -15,18 +15,18 @@ public class KickPermissions {
     }
 
     @PermissionMetadata(descriptionKey = "permission.base", replacements = { "kick" }, level = SuggestedLevel.MOD)
-    public static final String BASE_KICK = "kick.base";
+    public static final String BASE_KICK = "nucleus.kick.base";
 
     @PermissionMetadata(descriptionKey = "permission.kick.exempt.target", level = SuggestedLevel.MOD)
-    public static final String KICK_EXEMPT_TARGET = "kick.exempt.target";
+    public static final String KICK_EXEMPT_TARGET = "nucleus.kick.exempt.target";
 
     @PermissionMetadata(descriptionKey = "permission.kick.notify", level = SuggestedLevel.MOD)
-    public static final String KICK_NOTIFY = "kick.notify";
+    public static final String KICK_NOTIFY = "nucleus.kick.notify";
 
     @PermissionMetadata(descriptionKey = "permission.base", replacements = { "kickall" }, level = SuggestedLevel.MOD)
-    public static final String BASE_KICKALL = "kickall.base";
+    public static final String BASE_KICKALL = "nucleus.kickall.base";
 
     @PermissionMetadata(descriptionKey = "permission.kickall.whitelist", level = SuggestedLevel.ADMIN)
-    public static final String KICKALL_WHITELIST = "kickall.whitelist";
+    public static final String KICKALL_WHITELIST = "nucleus.kickall.whitelist";
 
 }

@@ -26,9 +26,6 @@ public class SpawnConfig {
     @Setting(value = "global-spawn", comment = "config.spawn.global.base")
     private GlobalSpawnConfig globalSpawn = new GlobalSpawnConfig();
 
-    @Setting(value = "per-world-permissions", comment = "config.spawn.worlds")
-    private boolean perWorldPerms = false;
-
     @Setting(value = "affect-bed-spawn", comment = "config.spawn.bedspawn")
     private boolean redirectBedSpawn = true;
 
@@ -49,10 +46,6 @@ public class SpawnConfig {
 
     public GlobalSpawnConfig getGlobalSpawn() {
         return this.globalSpawn;
-    }
-
-    public boolean isPerWorldPerms() {
-        return this.perWorldPerms;
     }
 
     public boolean isRedirectBedSpawn() {

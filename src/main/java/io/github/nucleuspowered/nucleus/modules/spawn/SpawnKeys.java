@@ -7,8 +7,8 @@ package io.github.nucleuspowered.nucleus.modules.spawn;
 import com.flowpowered.math.vector.Vector3d;
 import io.github.nucleuspowered.nucleus.configurate.datatypes.LocationNode;
 import io.github.nucleuspowered.nucleus.internal.TypeTokens;
-import io.github.nucleuspowered.nucleus.storage.dataobjects.modular.IGeneralDataObject;
-import io.github.nucleuspowered.nucleus.storage.dataobjects.modular.IWorldDataObject;
+import io.github.nucleuspowered.nucleus.services.impl.storage.dataobjects.modular.IGeneralDataObject;
+import io.github.nucleuspowered.nucleus.services.impl.storage.dataobjects.modular.IWorldDataObject;
 import io.github.nucleuspowered.storage.dataobjects.keyed.DataKey;
 
 public class SpawnKeys {

@@ -9,16 +9,13 @@ import static io.github.nucleuspowered.nucleus.PluginInfo.NAME;
 import static io.github.nucleuspowered.nucleus.PluginInfo.VERSION;
 
 import io.github.nucleuspowered.nucleus.Nucleus;
-import io.github.nucleuspowered.nucleus.internal.annotations.RunAsync;
-import io.github.nucleuspowered.nucleus.internal.annotations.command.NoCommandPrefix;
-import io.github.nucleuspowered.nucleus.internal.annotations.command.NoModifiers;
-import io.github.nucleuspowered.nucleus.internal.annotations.command.Permissions;
-import io.github.nucleuspowered.nucleus.internal.annotations.command.RegisterCommand;
-import io.github.nucleuspowered.nucleus.internal.command.AbstractCommand;
-import org.spongepowered.api.command.CommandResult;
+import io.github.nucleuspowered.nucleus.internal.command.ICommandContext;
+import io.github.nucleuspowered.nucleus.internal.command.ICommandExecutor;
+import io.github.nucleuspowered.nucleus.internal.command.ICommandResult;
+import io.github.nucleuspowered.nucleus.internal.command.annotation.Command;
+import io.github.nucleuspowered.nucleus.modules.core.CorePermissions;
+import org.spongepowered.api.command.CommandException;
 import org.spongepowered.api.command.CommandSource;
-import org.spongepowered.api.command.args.CommandContext;
-import org.spongepowered.api.event.cause.Cause;
 import org.spongepowered.api.text.Text;
 import org.spongepowered.api.text.format.TextColors;
 import org.spongepowered.api.util.annotation.NonnullByDefault;
@@ -28,19 +25,20 @@ import java.util.Set;
 
 import javax.annotation.Nullable;
 
-@RunAsync
-@Permissions
-@NoModifiers
-@RegisterCommand({ "nucleus" })
-@NoCommandPrefix
+@Command(
+        aliases = "nucleus",
+        basePermission = CorePermissions.BASE_NUCLEUS,
+        commandDescriptionKey = "nucleus",
+        prefixAliasesWithN = false
+)
 @NonnullByDefault
-public class NucleusCommand extends AbstractCommand<CommandSource> {
+public class NucleusCommand implements ICommandExecutor<CommandSource> {
 
     private final Text version = Text.of(TextColors.GREEN, NAME + " version " + VERSION + " (built from commit " + GIT_HASH + ")");
     @Nullable private Text modules = null;
 
     @Override
-    public CommandResult executeCommand(CommandSource src, CommandContext args, Cause cause) {
+    public ICommandResult execute(ICommandContext<? extends CommandSource> context) throws CommandException {
         if (this.modules == null) {
             Text.Builder tb = Text.builder("Modules: ").color(TextColors.GREEN);
 
@@ -58,8 +56,8 @@ public class NucleusCommand extends AbstractCommand<CommandSource> {
             this.modules = tb.append(Text.of(TextColors.GREEN, ".")).build();
         }
 
-        src.sendMessage(this.version);
-        src.sendMessage(this.modules);
-        return CommandResult.success();
+        context.getCommandSource().sendMessage(this.version);
+        context.getCommandSource().sendMessage(this.modules);
+        return context.successResult();
     }
 }

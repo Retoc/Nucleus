@@ -15,13 +15,6 @@ public class CauseStackHelper {
 
     private CauseStackHelper() {}
 
-    public static <T, X extends Throwable> T createFrameWithCausesAndContextWithReturn(ThrownFunction<Cause, T, X> function,
-            EventContext context, Object... causeStack) throws X {
-        try (CauseStackManager.StackFrame csf = createFrameWithCauses(context, causeStack)) {
-            return function.apply(Sponge.getCauseStackManager().getCurrentCause());
-        }
-    }
-
     public static <T, X extends Throwable> T createFrameWithCausesWithReturn(ThrownFunction<Cause, T, X> function, Object... causeStack) throws X {
         try (CauseStackManager.StackFrame csf = createFrameWithCauses(causeStack)) {
             return function.apply(Sponge.getCauseStackManager().getCurrentCause());

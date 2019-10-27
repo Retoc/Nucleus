@@ -5,8 +5,8 @@
 package io.github.nucleuspowered.nucleus.modules.ignore;
 
 import io.github.nucleuspowered.nucleus.annotationprocessor.RegisterPermissions;
-import io.github.nucleuspowered.nucleus.internal.permissions.PermissionMetadata;
-import io.github.nucleuspowered.nucleus.internal.permissions.SuggestedLevel;
+import io.github.nucleuspowered.nucleus.services.impl.permission.PermissionMetadata;
+import io.github.nucleuspowered.nucleus.services.impl.permission.SuggestedLevel;
 
 @RegisterPermissions
 public class IgnorePermissions {
@@ -15,15 +15,15 @@ public class IgnorePermissions {
     }
 
     @PermissionMetadata(descriptionKey = "permission.base", replacements = { "ignore" }, level = SuggestedLevel.USER)
-    public static final String BASE_IGNORE = "ignore.base";
+    public static final String BASE_IGNORE = "nucleus.ignore.base";
 
     @PermissionMetadata(descriptionKey = "permission.ignore.chat", level = SuggestedLevel.MOD)
-    public static final String IGNORE_CHAT = "ignore.exempt.chat";
+    public static final String IGNORE_CHAT = "nucleus.ignore.exempt.chat";
 
     @PermissionMetadata(descriptionKey = "permission.base", replacements = { "ignorelist" }, level = SuggestedLevel.USER)
-    public static final String BASE_IGNORELIST = "ignorelist.base";
+    public static final String BASE_IGNORELIST = "nucleus.ignorelist.base";
 
     @PermissionMetadata(descriptionKey = "permission.others", replacements = { "ignorelist" }, level = SuggestedLevel.ADMIN)
-    public static final String OTHERS_IGNORELIST = "ignorelist.others";
+    public static final String OTHERS_IGNORELIST = "nucleus.ignorelist.others";
 
 }

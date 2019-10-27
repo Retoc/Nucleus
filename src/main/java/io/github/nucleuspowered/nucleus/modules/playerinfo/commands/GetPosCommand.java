@@ -5,86 +5,72 @@
 package io.github.nucleuspowered.nucleus.modules.playerinfo.commands;
 
 import com.flowpowered.math.vector.Vector3i;
-import io.github.nucleuspowered.nucleus.Nucleus;
-import io.github.nucleuspowered.nucleus.internal.annotations.command.Permissions;
-import io.github.nucleuspowered.nucleus.internal.annotations.command.RegisterCommand;
-import io.github.nucleuspowered.nucleus.internal.command.AbstractCommand;
-import io.github.nucleuspowered.nucleus.internal.command.ReturnMessageException;
-import io.github.nucleuspowered.nucleus.internal.docgen.annotations.EssentialsEquivalent;
-import io.github.nucleuspowered.nucleus.internal.permissions.PermissionInformation;
-import io.github.nucleuspowered.nucleus.internal.permissions.SuggestedLevel;
+import io.github.nucleuspowered.nucleus.internal.command.ICommandContext;
+import io.github.nucleuspowered.nucleus.internal.command.ICommandExecutor;
+import io.github.nucleuspowered.nucleus.internal.command.ICommandResult;
+import io.github.nucleuspowered.nucleus.internal.command.annotation.Command;
+import io.github.nucleuspowered.nucleus.internal.command.annotation.CommandModifier;
+import io.github.nucleuspowered.nucleus.internal.command.requirements.CommandModifiers;
+import io.github.nucleuspowered.nucleus.modules.playerinfo.PlayerInfoPermissions;
+import io.github.nucleuspowered.nucleus.services.INucleusServiceCollection;
 import org.spongepowered.api.Sponge;
-import org.spongepowered.api.command.CommandResult;
+import org.spongepowered.api.command.CommandException;
 import org.spongepowered.api.command.CommandSource;
-import org.spongepowered.api.command.args.CommandContext;
 import org.spongepowered.api.command.args.CommandElement;
-import org.spongepowered.api.command.args.GenericArguments;
-import org.spongepowered.api.entity.living.player.Player;
 import org.spongepowered.api.entity.living.player.User;
-import org.spongepowered.api.event.cause.Cause;
-import org.spongepowered.api.text.Text;
 import org.spongepowered.api.text.action.TextActions;
 import org.spongepowered.api.util.annotation.NonnullByDefault;
 import org.spongepowered.api.world.Location;
 import org.spongepowered.api.world.World;
 
-import java.util.Map;
-
-@Permissions(suggestedLevel = SuggestedLevel.USER, supportsOthers = true)
-@RegisterCommand({"getpos", "coords", "position", "whereami", "getlocation", "getloc"})
-@EssentialsEquivalent({"getpos", "coords", "position", "whereami", "getlocation", "getloc"})
 @NonnullByDefault
-public class GetPosCommand extends AbstractCommand<CommandSource> {
+@Command(
+        aliases = {"getpos", "coords", "position", "whereami", "getlocation", "getloc"},
+        basePermission = PlayerInfoPermissions.BASE_GETPOS,
+        commandDescriptionKey = "getpos",
+        modifiers = {
+                @CommandModifier(value = CommandModifiers.HAS_COOLDOWN, exemptPermission = PlayerInfoPermissions.EXEMPT_COOLDOWN_GETPOS),
+                @CommandModifier(value = CommandModifiers.HAS_WARMUP, exemptPermission = PlayerInfoPermissions.EXEMPT_WARMUP_GETPOS),
+                @CommandModifier(value = CommandModifiers.HAS_COST, exemptPermission = PlayerInfoPermissions.EXEMPT_COST_GETPOS)
+        }
+)
+public class GetPosCommand implements ICommandExecutor<CommandSource> {
 
-    private final String playerKey = "subject";
-
-    @Override
-    protected Map<String, PermissionInformation> permissionSuffixesToRegister() {
-        Map<String, PermissionInformation> mspi = super.permissionSuffixesToRegister();
-        mspi.put("others", PermissionInformation.getWithTranslation("permission.getpos.others", SuggestedLevel.MOD));
-        return mspi;
-    }
-
-    @Override public CommandElement[] getArguments() {
+    @Override public CommandElement[] parameters(INucleusServiceCollection serviceCollection) {
         return new CommandElement[] {
-            GenericArguments.optionalWeak(requirePermissionArg(GenericArguments.user(Text.of(this.playerKey)), this.permissions.getOthers()))
+                serviceCollection.commandElementSupplier().createOnlyOtherUserPermissionElement(false, PlayerInfoPermissions.GETPOS_OTHERS)
         };
     }
 
-    @Override protected CommandResult executeCommand(CommandSource src, CommandContext args, Cause cause) throws Exception {
-        User user = this.getUserFromArgs(User.class, src, this.playerKey, args);
+    @Override public ICommandResult execute(ICommandContext<? extends CommandSource> context) throws CommandException {
+        User user = context.getUserFromArgs();
         Location<World> location;
         if (user.isOnline()) {
             location = user.getPlayer().get().getLocation();
         } else {
             World w =
                     user.getWorldUniqueId().flatMap(x -> Sponge.getServer().getWorld(x))
-                            .orElseThrow(() -> ReturnMessageException.fromKey("command.getpos.location.nolocation", user.getName()));
+                            .orElseThrow(() -> context.createException("command.getpos.location.nolocation", user.getName()));
             location = new Location<>(
                     w,
                     user.getPosition()
             );
         }
 
-        boolean isSelf = src instanceof Player && ((Player) src).getUniqueId().equals(user.getUniqueId());
+        boolean isSelf = context.is(user);
         Vector3i blockPos = location.getBlockPosition();
         if (isSelf) {
-            src.sendMessage(
-                    Nucleus.getNucleus().getMessageProvider()
-                    .getTextMessageWithFormat(
+            context.sendMessage(
                             "command.getpos.location.self",
                             location.getExtent().getName(),
                             String.valueOf(blockPos.getX()),
                             String.valueOf(blockPos.getY()),
                             String.valueOf(blockPos.getZ())
-                    )
             );
         } else {
-            src.sendMessage(
-                    Nucleus.getNucleus().getMessageProvider()
-                    .getTextMessageWithFormat(
+            context.getMessage(
                             "command.getpos.location.other",
-                            Nucleus.getNucleus().getNameUtil().getSerialisedName(user),
+                            context.getDisplayName(user.getUniqueId()),
                             location.getExtent().getName(),
                             String.valueOf(blockPos.getX()),
                             String.valueOf(blockPos.getY()),
@@ -95,11 +81,11 @@ public class GetPosCommand extends AbstractCommand<CommandSource> {
                         String.valueOf(blockPos.getX()),
                         String.valueOf(blockPos.getY()),
                         String.valueOf(blockPos.getZ()))))
-                        .onHover(TextActions.showText(Nucleus.getNucleus().getMessageProvider().getTextMessageWithFormat("command.getpos.hover")))
-                        .build()
-            );
+                        .onHover(TextActions.showText(
+                                context.getMessage("command.getpos.hover")))
+                        .build();
         }
 
-        return CommandResult.success();
+        return context.successResult();
     }
 }

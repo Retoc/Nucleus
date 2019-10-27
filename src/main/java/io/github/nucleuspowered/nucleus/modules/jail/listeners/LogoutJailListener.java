@@ -4,12 +4,10 @@
  */
 package io.github.nucleuspowered.nucleus.modules.jail.listeners;
 
-import io.github.nucleuspowered.nucleus.Nucleus;
 import io.github.nucleuspowered.nucleus.internal.interfaces.ListenerBase;
-import io.github.nucleuspowered.nucleus.modules.jail.JailModule;
 import io.github.nucleuspowered.nucleus.modules.jail.config.JailConfig;
-import io.github.nucleuspowered.nucleus.modules.jail.config.JailConfigAdapter;
 import io.github.nucleuspowered.nucleus.modules.jail.services.JailHandler;
+import io.github.nucleuspowered.nucleus.services.INucleusServiceCollection;
 import org.spongepowered.api.entity.living.player.Player;
 import org.spongepowered.api.event.Listener;
 import org.spongepowered.api.event.filter.Getter;
@@ -19,9 +17,16 @@ import java.time.Duration;
 import java.time.Instant;
 import java.util.Optional;
 
+import javax.inject.Inject;
+
 public class LogoutJailListener implements ListenerBase.Conditional {
 
-    private final JailHandler handler = getServiceUnchecked(JailHandler.class);
+    private final JailHandler handler;
+
+    @Inject
+    public LogoutJailListener(INucleusServiceCollection serviceCollection) {
+        this.handler = serviceCollection.getServiceUnchecked(JailHandler.class);
+    }
 
     @Listener
     public void onLogout(ClientConnectionEvent.Disconnect event, @Getter("getTargetEntity") Player player) {
@@ -33,8 +38,8 @@ public class LogoutJailListener implements ListenerBase.Conditional {
             });
     }
 
-    @Override public boolean shouldEnable() {
-        return Nucleus.getNucleus().getConfigValue(JailModule.ID, JailConfigAdapter.class, JailConfig::isJailOnlineOnly).orElse(false);
+    @Override public boolean shouldEnable(INucleusServiceCollection serviceCollection) {
+        return serviceCollection.moduleDataProvider().getModuleConfig(JailConfig.class).isJailOnlineOnly();
     }
 
 }

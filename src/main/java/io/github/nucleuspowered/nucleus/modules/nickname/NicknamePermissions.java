@@ -5,8 +5,8 @@
 package io.github.nucleuspowered.nucleus.modules.nickname;
 
 import io.github.nucleuspowered.nucleus.annotationprocessor.RegisterPermissions;
-import io.github.nucleuspowered.nucleus.internal.permissions.PermissionMetadata;
-import io.github.nucleuspowered.nucleus.internal.permissions.SuggestedLevel;
+import io.github.nucleuspowered.nucleus.services.impl.permission.PermissionMetadata;
+import io.github.nucleuspowered.nucleus.services.impl.permission.SuggestedLevel;
 
 @RegisterPermissions
 public class NicknamePermissions {
@@ -14,28 +14,40 @@ public class NicknamePermissions {
         throw new AssertionError("Nope");
     }
 
-    @PermissionMetadata(descriptionKey = "permission.base", replacements = { "delnick" }, level = SuggestedLevel.ADMIN)
-    public static final String BASE_DELNICK = "nick.base";
+    @PermissionMetadata(descriptionKey = "permission.base", replacements = { "nick, delnick" }, level = SuggestedLevel.ADMIN)
+    public static final String BASE_NICK = "nucleus.nick.base";
 
-    @PermissionMetadata(descriptionKey = "permission.exempt.cooldown", replacements = { "delnick" }, level = SuggestedLevel.ADMIN)
-    public static final String EXEMPT_COOLDOWN_DELNICK = "nick.exempt.cooldown";
+    @PermissionMetadata(descriptionKey = "permission.others", replacements = { "nick, delnick" }, level = SuggestedLevel.ADMIN)
+    public static final String OTHERS_NICK = "nucleus.nick.others";
 
-    @PermissionMetadata(descriptionKey = "permission.exempt.cost", replacements = { "delnick" }, level = SuggestedLevel.ADMIN)
-    public static final String EXEMPT_COST_DELNICK = "nick.exempt.cost";
+    @PermissionMetadata(descriptionKey = "permission.exempt.cooldown", replacements = { "nick" }, level = SuggestedLevel.ADMIN)
+    public static final String EXEMPT_COOLDOWN_NICK = "nucleus.nick.exempt.cooldown";
 
-    @PermissionMetadata(descriptionKey = "permission.exempt.warmup", replacements = { "delnick" }, level = SuggestedLevel.ADMIN)
-    public static final String EXEMPT_WARMUP_DELNICK = "nick.exempt.warmup";
+    @PermissionMetadata(descriptionKey = "permission.exempt.cost", replacements = { "nick" }, level = SuggestedLevel.ADMIN)
+    public static final String EXEMPT_COST_NICK = "nucleus.nick.exempt.cost";
+
+    @PermissionMetadata(descriptionKey = "permission.exempt.warmup", replacements = { "nick" }, level = SuggestedLevel.ADMIN)
+    public static final String EXEMPT_WARMUP_NICK = "nucleus.nick.exempt.warmup";
 
     @PermissionMetadata(descriptionKey = "permission.base", replacements = { "realname" }, level = SuggestedLevel.USER)
-    public static final String BASE_REALNAME = "realname.base";
+    public static final String BASE_REALNAME = "nucleus.realname.base";
+
+    @PermissionMetadata(descriptionKey = "permission.nick.colour", level = SuggestedLevel.ADMIN)
+    public static final String NICKNAME_COLOUR = "nucleus.nick.colour";
+
+    @PermissionMetadata(descriptionKey = "permission.nick.color", level = SuggestedLevel.ADMIN)
+    public static final String NICKNAME_COLOR = "nucleus.nick.color";
+
+    @PermissionMetadata(descriptionKey = "permission.nick.style", level = SuggestedLevel.ADMIN)
+    public static final String NICKNAME_STYLE = "nucleus.nick.style";
 
     @PermissionMetadata(descriptionKey = "permission.exempt.cooldown", replacements = { "realname" }, level = SuggestedLevel.ADMIN)
-    public static final String EXEMPT_COOLDOWN_REALNAME = "realname.exempt.cooldown";
+    public static final String EXEMPT_COOLDOWN_REALNAME = "nucleus.realname.exempt.cooldown";
 
     @PermissionMetadata(descriptionKey = "permission.exempt.cost", replacements = { "realname" }, level = SuggestedLevel.ADMIN)
-    public static final String EXEMPT_COST_REALNAME = "realname.exempt.cost";
+    public static final String EXEMPT_COST_REALNAME = "nucleus.realname.exempt.cost";
 
     @PermissionMetadata(descriptionKey = "permission.exempt.warmup", replacements = { "realname" }, level = SuggestedLevel.ADMIN)
-    public static final String EXEMPT_WARMUP_REALNAME = "realname.exempt.warmup";
+    public static final String EXEMPT_WARMUP_REALNAME = "nucleus.realname.exempt.warmup";
 
 }

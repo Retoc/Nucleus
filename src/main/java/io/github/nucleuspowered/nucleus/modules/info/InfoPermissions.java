@@ -5,8 +5,8 @@
 package io.github.nucleuspowered.nucleus.modules.info;
 
 import io.github.nucleuspowered.nucleus.annotationprocessor.RegisterPermissions;
-import io.github.nucleuspowered.nucleus.internal.permissions.PermissionMetadata;
-import io.github.nucleuspowered.nucleus.internal.permissions.SuggestedLevel;
+import io.github.nucleuspowered.nucleus.services.impl.permission.PermissionMetadata;
+import io.github.nucleuspowered.nucleus.services.impl.permission.SuggestedLevel;
 
 @RegisterPermissions
 public class InfoPermissions {
@@ -15,15 +15,15 @@ public class InfoPermissions {
     }
 
     @PermissionMetadata(descriptionKey = "permission.base", replacements = { "info" }, level = SuggestedLevel.USER)
-    public static final String BASE_INFO = "info.base";
+    public static final String BASE_INFO = "nucleus.info.base";
 
     @PermissionMetadata(descriptionKey = "permission.info.list", level = SuggestedLevel.ADMIN)
-    public static final String INFO_LIST = "info.list";
+    public static final String INFO_LIST = "nucleus.info.list";
 
     @PermissionMetadata(descriptionKey = "permission.base", replacements = { "motd" }, level = SuggestedLevel.USER)
-    public static final String BASE_MOTD = "motd.base";
+    public static final String BASE_MOTD = "nucleus.motd.base";
 
     @PermissionMetadata(descriptionKey = "permission.motd.join", level = SuggestedLevel.USER)
-    public static final String MOTD_JOIN = "motd.login";
+    public static final String MOTD_JOIN = "nucleus.motd.login";
 
 }

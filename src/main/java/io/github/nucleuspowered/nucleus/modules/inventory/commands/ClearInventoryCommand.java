@@ -4,81 +4,75 @@
  */
 package io.github.nucleuspowered.nucleus.modules.inventory.commands;
 
-import io.github.nucleuspowered.nucleus.Nucleus;
 import io.github.nucleuspowered.nucleus.Util;
-import io.github.nucleuspowered.nucleus.internal.annotations.command.NoModifiers;
-import io.github.nucleuspowered.nucleus.internal.annotations.command.Permissions;
-import io.github.nucleuspowered.nucleus.internal.annotations.command.RegisterCommand;
-import io.github.nucleuspowered.nucleus.internal.command.AbstractCommand;
+import io.github.nucleuspowered.nucleus.internal.command.ICommandContext;
+import io.github.nucleuspowered.nucleus.internal.command.ICommandExecutor;
+import io.github.nucleuspowered.nucleus.internal.command.ICommandResult;
 import io.github.nucleuspowered.nucleus.internal.command.NucleusParameters;
-import io.github.nucleuspowered.nucleus.internal.command.ReturnMessageException;
-import io.github.nucleuspowered.nucleus.internal.docgen.annotations.EssentialsEquivalent;
+import io.github.nucleuspowered.nucleus.internal.command.annotation.Command;
+import io.github.nucleuspowered.nucleus.internal.command.annotation.EssentialsEquivalent;
+import io.github.nucleuspowered.nucleus.modules.inventory.InventoryPermissions;
 import io.github.nucleuspowered.nucleus.modules.inventory.events.ClearInventoryEvent;
+import io.github.nucleuspowered.nucleus.services.INucleusServiceCollection;
 import org.spongepowered.api.Sponge;
-import org.spongepowered.api.command.CommandResult;
+import org.spongepowered.api.command.CommandException;
 import org.spongepowered.api.command.CommandSource;
-import org.spongepowered.api.command.args.CommandContext;
 import org.spongepowered.api.command.args.CommandElement;
 import org.spongepowered.api.command.args.GenericArguments;
-import org.spongepowered.api.entity.living.player.Player;
 import org.spongepowered.api.entity.living.player.User;
-import org.spongepowered.api.event.cause.Cause;
 import org.spongepowered.api.util.annotation.NonnullByDefault;
 
-@RegisterCommand({"clear", "clearinv", "clearinventory", "ci", "clearinvent"})
-@NoModifiers
 @NonnullByDefault
-@Permissions(supportsOthers = true)
+@Command(
+        aliases = {"clear", "clearinv", "clearinventory", "ci", "clearinvent"},
+        basePermission = InventoryPermissions.BASE_CLEAR,
+        commandDescriptionKey = "clear"
+)
 @EssentialsEquivalent({"clearinventory", "ci", "clean", "clearinvent"})
-public class ClearInventoryCommand extends AbstractCommand<CommandSource> {
+public class ClearInventoryCommand implements ICommandExecutor<CommandSource> {
 
     @Override
-    public CommandElement[] getArguments() {
+    public CommandElement[] parameters(INucleusServiceCollection serviceCollection) {
         return new CommandElement[] {
             GenericArguments.flags().flag("a", "-all").buildWith(
                 GenericArguments.optional(
-                        requirePermissionArg(
+                        serviceCollection.commandElementSupplier().createPermissionParameter(
                                 NucleusParameters.ONE_USER,
-                                this.permissions.getPermissionWithSuffix("others")
+                                InventoryPermissions.OTHERS_CLEAR
                         ))
             )
         };
     }
 
-    @Override protected CommandResult executeCommand(CommandSource source, CommandContext args, Cause cause) throws Exception {
-        User user = this.getUserFromArgs(User.class, source, NucleusParameters.Keys.USER, args);
-        boolean all = args.hasAny("a");
+    @Override
+    public ICommandResult execute(ICommandContext<? extends CommandSource> context) throws CommandException {
+        User user = context.getUserFromArgs();
+        boolean all = context.hasAny("a");
+        User target;
         if (user.getPlayer().isPresent()) {
-            Player target = user.getPlayer().get();
-            if (Sponge.getEventManager().post(new ClearInventoryEvent.Pre(Sponge.getCauseStackManager().getCurrentCause(), target, all))) {
-                source.sendMessage(Nucleus.getNucleus().getMessageProvider().getTextMessageWithFormat("command.clearinventory.cancelled", target.getName()));
-                return CommandResult.empty();
-            }
-            if (all) {
-                target.getInventory().clear();
-            } else {
-                Util.getStandardInventory(target).clear();
-            }
-            Sponge.getEventManager().post(new ClearInventoryEvent.Post(Sponge.getCauseStackManager().getCurrentCause(), target, all));
-            source.sendMessage(Nucleus.getNucleus().getMessageProvider().getTextMessageWithFormat("command.clearinventory.success", target.getName()));
-            return CommandResult.success();
+            target = user.getPlayer().get();
         } else {
-            try {
-                if (Sponge.getEventManager().post(new ClearInventoryEvent.Pre(Sponge.getCauseStackManager().getCurrentCause(), user, all))) {
-                    source.sendMessage(Nucleus.getNucleus().getMessageProvider().getTextMessageWithFormat("command.clearinventory.cancelled", user.getName()));
-                    return CommandResult.empty();
-                }
-                if (all) {
-                    user.getInventory().clear();
-                } else {
-                    Util.getStandardInventory(user).clear();
-                }
-                Sponge.getEventManager().post(new ClearInventoryEvent.Post(Sponge.getCauseStackManager().getCurrentCause(), user, all));
-                source.sendMessage(Nucleus.getNucleus().getMessageProvider().getTextMessageWithFormat("command.clearinventory.success", user.getName()));
-                return CommandResult.success();
-            } catch (UnsupportedOperationException e) {
-                throw ReturnMessageException.fromKey("command.clearinventory.offlinenotsupported");
-            }
+            target = user;
         }
+
+        try {
+            return clear(context, target, all);
+        } catch (UnsupportedOperationException ex) {
+            return context.errorResult("command.clearinventory.offlinenotsupported");
+        }
+    }
+
+    private ICommandResult clear(ICommandContext<? extends CommandSource> context, User target, boolean all) {
+        if (Sponge.getEventManager().post(new ClearInventoryEvent.Pre(Sponge.getCauseStackManager().getCurrentCause(), target, all))) {
+            return context.errorResult("command.clearinventory.cancelled", target.getName());
+        }
+        if (all) {
+            target.getInventory().clear();
+        } else {
+            Util.getStandardInventory(target).clear();
+        }
+        Sponge.getEventManager().post(new ClearInventoryEvent.Post(Sponge.getCauseStackManager().getCurrentCause(), target, all));
+        context.sendMessage("command.clearinventory.success", target.getName());
+        return context.successResult();
     }
 }

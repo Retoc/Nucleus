@@ -4,16 +4,16 @@
  */
 package io.github.nucleuspowered.nucleus.modules.back.listeners;
 
-import io.github.nucleuspowered.nucleus.Nucleus;
-import io.github.nucleuspowered.nucleus.api.NucleusAPI;
 import io.github.nucleuspowered.nucleus.api.service.NucleusJailService;
-import io.github.nucleuspowered.nucleus.internal.CommandPermissionHandler;
 import io.github.nucleuspowered.nucleus.internal.interfaces.ListenerBase;
 import io.github.nucleuspowered.nucleus.internal.interfaces.Reloadable;
-import io.github.nucleuspowered.nucleus.modules.back.commands.BackCommand;
+import io.github.nucleuspowered.nucleus.modules.back.BackPermissions;
 import io.github.nucleuspowered.nucleus.modules.back.config.BackConfig;
 import io.github.nucleuspowered.nucleus.modules.back.config.BackConfigAdapter;
 import io.github.nucleuspowered.nucleus.modules.back.services.BackHandler;
+import io.github.nucleuspowered.nucleus.services.INucleusServiceCollection;
+import io.github.nucleuspowered.nucleus.services.IPermissionService;
+import org.spongepowered.api.Sponge;
 import org.spongepowered.api.entity.living.Living;
 import org.spongepowered.api.entity.living.player.Player;
 import org.spongepowered.api.event.Listener;
@@ -23,35 +23,38 @@ import org.spongepowered.api.event.filter.Getter;
 import org.spongepowered.api.event.filter.type.Exclude;
 
 import javax.annotation.Nullable;
+import javax.inject.Inject;
 
 public class BackListeners implements Reloadable, ListenerBase {
 
-    public static final String ON_TELEPORT = "targets.teleport";
-    public static final String ON_DEATH = "targets.death";
-    public static final String ON_PORTAL = "targets.portal";
-    public static final String SAME_DIMENSION = "exempt.samedimension";
-
-    private final BackHandler handler = Nucleus.getNucleus().getInternalServiceManager().getServiceUnchecked(BackHandler.class);
+    private final BackHandler handler;
+    private final IPermissionService permissionService;
     private BackConfig backConfig = new BackConfig();
-    @Nullable private final NucleusJailService njs = NucleusAPI.getJailService().orElse(null);
+    @Nullable private final NucleusJailService jailService;
 
-    private CommandPermissionHandler s = Nucleus.getNucleus().getPermissionRegistry().getPermissionsForNucleusCommand(BackCommand.class);
+    @Inject
+    public BackListeners(INucleusServiceCollection serviceCollection) {
+        this.jailService = Sponge.getServiceManager().provide(NucleusJailService.class).orElse(null);
+        this.handler = serviceCollection.getServiceUnchecked(BackHandler.class);
+        this.permissionService = serviceCollection.permissionService();
+    }
 
-    @Override public void onReload() {
-        this.backConfig = Nucleus.getNucleus().getInternalServiceManager().getServiceUnchecked(BackConfigAdapter.class).getNodeOrDefault();
+    @Override
+    public void onReload(INucleusServiceCollection serviceCollection) {
+        this.backConfig = serviceCollection.getServiceUnchecked(BackConfigAdapter.class).getNodeOrDefault();
     }
 
     @Listener
     @Exclude(MoveEntityEvent.Teleport.Portal.class) // Don't set /back on a portal.
     public void onTeleportPlayer(MoveEntityEvent.Teleport event, @Getter("getTargetEntity") Player pl) {
-        if (this.backConfig.isOnTeleport() && check(event) && getLogBack(pl) && this.s.testSuffix(pl, ON_TELEPORT)) {
+        if (this.backConfig.isOnTeleport() && check(event) && getLogBack(pl) && this.permissionService.hasPermission(pl, BackPermissions.BACK_ONTELEPORT)) {
             this.handler.setLastLocation(pl, event.getFromTransform());
         }
     }
 
     @Listener
     public void onPortalPlayer(MoveEntityEvent.Teleport.Portal event, @Getter("getTargetEntity") Player pl) {
-        if (this.backConfig.isOnPortal() && check(event) && getLogBack(pl) && this.s.testSuffix(pl, ON_PORTAL)) {
+        if (this.backConfig.isOnPortal() && check(event) && getLogBack(pl)  && this.permissionService.hasPermission(pl, BackPermissions.BACK_ONPORTAL)) {
             this.handler.setLastLocation(pl, event.getFromTransform());
         }
     }
@@ -64,7 +67,7 @@ public class BackListeners implements Reloadable, ListenerBase {
         }
 
         Player pl = (Player)e;
-        if (this.backConfig.isOnDeath() && getLogBack(pl) && this.s.testSuffix(pl, ON_DEATH)) {
+        if (this.backConfig.isOnDeath() && getLogBack(pl) && this.permissionService.hasPermission(pl, BackPermissions.BACK_ONDEATH)) {
             this.handler.setLastLocation(pl, event.getTargetEntity().getTransform());
         }
     }
@@ -74,6 +77,6 @@ public class BackListeners implements Reloadable, ListenerBase {
     }
 
     private boolean getLogBack(Player player) {
-        return !(this.njs != null && this.njs.isPlayerJailed(player)) && this.handler.isLoggingLastLocation(player);
+        return !(this.jailService != null && this.jailService.isPlayerJailed(player)) && this.handler.isLoggingLastLocation(player);
     }
 }

@@ -4,18 +4,20 @@
  */
 package io.github.nucleuspowered.nucleus.modules.item.commands;
 
-import io.github.nucleuspowered.nucleus.Nucleus;
-import io.github.nucleuspowered.nucleus.internal.annotations.command.Permissions;
-import io.github.nucleuspowered.nucleus.internal.annotations.command.RegisterCommand;
-import io.github.nucleuspowered.nucleus.internal.command.AbstractCommand;
-import io.github.nucleuspowered.nucleus.internal.command.ReturnMessageException;
-import io.github.nucleuspowered.nucleus.internal.docgen.annotations.EssentialsEquivalent;
+import io.github.nucleuspowered.nucleus.internal.command.ICommandContext;
+import io.github.nucleuspowered.nucleus.internal.command.ICommandExecutor;
+import io.github.nucleuspowered.nucleus.internal.command.ICommandResult;
+import io.github.nucleuspowered.nucleus.internal.command.annotation.Command;
+import io.github.nucleuspowered.nucleus.internal.command.annotation.CommandModifier;
+import io.github.nucleuspowered.nucleus.internal.command.annotation.EssentialsEquivalent;
+import io.github.nucleuspowered.nucleus.internal.command.requirements.CommandModifiers;
 import io.github.nucleuspowered.nucleus.internal.interfaces.Reloadable;
-import io.github.nucleuspowered.nucleus.internal.permissions.PermissionInformation;
-import io.github.nucleuspowered.nucleus.internal.permissions.SuggestedLevel;
-import io.github.nucleuspowered.nucleus.modules.item.config.ItemConfigAdapter;
-import org.spongepowered.api.command.CommandResult;
-import org.spongepowered.api.command.args.CommandContext;
+import io.github.nucleuspowered.nucleus.modules.item.ItemPermissions;
+import io.github.nucleuspowered.nucleus.modules.item.config.ItemConfig;
+import io.github.nucleuspowered.nucleus.modules.item.config.RepairConfig;
+import io.github.nucleuspowered.nucleus.services.IMessageProviderService;
+import io.github.nucleuspowered.nucleus.services.INucleusServiceCollection;
+import org.spongepowered.api.command.CommandException;
 import org.spongepowered.api.command.args.CommandElement;
 import org.spongepowered.api.command.args.GenericArguments;
 import org.spongepowered.api.data.DataTransactionResult;
@@ -23,7 +25,6 @@ import org.spongepowered.api.data.key.Keys;
 import org.spongepowered.api.data.manipulator.mutable.item.DurabilityData;
 import org.spongepowered.api.data.type.HandTypes;
 import org.spongepowered.api.entity.living.player.Player;
-import org.spongepowered.api.event.cause.Cause;
 import org.spongepowered.api.item.ItemType;
 import org.spongepowered.api.item.inventory.Inventory;
 import org.spongepowered.api.item.inventory.ItemStack;
@@ -38,47 +39,46 @@ import org.spongepowered.api.util.annotation.NonnullByDefault;
 import java.util.ArrayList;
 import java.util.EnumMap;
 import java.util.List;
-import java.util.Map;
 
 @NonnullByDefault
-@Permissions(supportsOthers = true)
-@RegisterCommand({"repair", "mend"})
 @EssentialsEquivalent({"repair", "fix"})
-public class RepairCommand extends AbstractCommand<Player> implements Reloadable {
+@Command(
+        aliases = { "repair", "mend", "fix" },
+        basePermission = ItemPermissions.BASE_REPAIR,
+        commandDescriptionKey = "repair",
+        modifiers = {
+                @CommandModifier(value = CommandModifiers.HAS_COOLDOWN, exemptPermission = ItemPermissions.EXEMPT_COOLDOWN_REPAIR),
+                @CommandModifier(value = CommandModifiers.HAS_WARMUP, exemptPermission = ItemPermissions.EXEMPT_WARMUP_REPAIR),
+                @CommandModifier(value = CommandModifiers.HAS_COST, exemptPermission = ItemPermissions.EXEMPT_COST_REPAIR)
+        }
+)
+public class RepairCommand implements ICommandExecutor<Player>, Reloadable {
 
     private boolean whitelist = false;
     private List<ItemType> restrictions = new ArrayList<>();
 
-    @Override public void onReload() {
-        this.whitelist = Nucleus.getNucleus().getInternalServiceManager().getServiceUnchecked(ItemConfigAdapter.class)
-                .getNodeOrDefault().getRepairConfig().isWhitelist();
-        this.restrictions = Nucleus.getNucleus().getInternalServiceManager().getServiceUnchecked(ItemConfigAdapter.class)
-                .getNodeOrDefault().getRepairConfig().getRestrictions();
+    @Override
+    public void onReload(INucleusServiceCollection serviceCollection) {
+        RepairConfig config = serviceCollection.moduleDataProvider().getModuleConfig(ItemConfig.class).getRepairConfig();
+        this.whitelist = config.isWhitelist();
+        this.restrictions = config.getRestrictions();
     }
 
-    @Override public CommandElement[] getArguments() {
-        return new CommandElement[]{
+    @Override
+    public CommandElement[] parameters(INucleusServiceCollection serviceCollection) {
+        return new CommandElement[] {
                 GenericArguments.flags()
                         .flag("m", "-mainhand")
-                        .permissionFlag(this.permissions.getPermissionWithSuffix("flag.all"), "a", "-all")
-                        .permissionFlag(this.permissions.getPermissionWithSuffix("flag.hotbar"), "h", "-hotbar")
-                        .permissionFlag(this.permissions.getPermissionWithSuffix("flag.equip"), "e", "-equip")
-                        .permissionFlag(this.permissions.getPermissionWithSuffix("flag.offhand"), "o", "-offhand")
+                        .permissionFlag(ItemPermissions.REPAIR_FLAG_ALL, "a", "-all")
+                        .permissionFlag(ItemPermissions.REPAIR_FLAG_HOTBAR, "h", "-hotbar")
+                        .permissionFlag(ItemPermissions.REPAIR_FLAG_EQUIP, "e", "-equip")
+                        .permissionFlag(ItemPermissions.REPAIR_FLAG_OFFHAND, "o", "-offhand")
                         .buildWith(GenericArguments.none())
         };
     }
 
     @Override
-    protected Map<String, PermissionInformation> permissionSuffixesToRegister() {
-        Map<String, PermissionInformation> mspi = super.permissionSuffixesToRegister();
-        mspi.put("flag.all", PermissionInformation.getWithTranslation("permission.repair.flag.all", SuggestedLevel.ADMIN));
-        mspi.put("flag.hotbar", PermissionInformation.getWithTranslation("permission.repair.flag.hotbar", SuggestedLevel.ADMIN));
-        mspi.put("flag.equip", PermissionInformation.getWithTranslation("permission.repair.flag.equip", SuggestedLevel.ADMIN));
-        mspi.put("flag.offhand", PermissionInformation.getWithTranslation("permission.repair.flag.offhand", SuggestedLevel.ADMIN));
-        return mspi;
-    }
-
-    @Override protected CommandResult executeCommand(Player pl, CommandContext args, Cause cause) throws Exception {
+    public ICommandResult execute(ICommandContext<? extends Player> context) throws CommandException {
         EnumMap<ResultType, Integer> resultCount = new EnumMap<ResultType, Integer>(ResultType.class) {{
             put(ResultType.SUCCESS, 0);
             put(ResultType.ERROR, 0);
@@ -87,16 +87,17 @@ public class RepairCommand extends AbstractCommand<Player> implements Reloadable
         }};
         EnumMap<ResultType, ItemStackSnapshot> lastItem = new EnumMap<>(ResultType.class);
 
-        boolean checkRestrictions = !hasPermission(pl, this.permissions.getPermissionWithSuffix("exempt.restriction"));
+        boolean checkRestrictions = !context.testPermission(ItemPermissions.EXEMPT_REPAIR_RESTRICTION_CHECK);
 
+        Player pl = context.getIfPlayer();
         String location = "inventory";
-        if (args.hasAny("a")) {
+        if (context.hasAny("a")) {
             repairInventory(pl.getInventory(), checkRestrictions, resultCount, lastItem);
         } else {
-            boolean repairHotbar = args.hasAny("h");
-            boolean repairEquip = args.hasAny("e");
-            boolean repairOffhand = args.hasAny("o");
-            boolean repairMainhand = args.hasAny("m") || !repairHotbar && !repairEquip && !repairOffhand;
+            boolean repairHotbar = context.hasAny("h");
+            boolean repairEquip = context.hasAny("e");
+            boolean repairOffhand = context.hasAny("o");
+            boolean repairMainhand = context.hasAny("m") || !repairHotbar && !repairEquip && !repairOffhand;
 
             if (repairHotbar && !repairEquip && !repairOffhand && !repairMainhand) {
                 location = "hotbar";
@@ -143,88 +144,98 @@ public class RepairCommand extends AbstractCommand<Player> implements Reloadable
             }
         }
 
-        location = Nucleus.getNucleus().getMessageProvider().getMessageFromKey("command.repair.location." + location).orElse("inventory");
+        String key = "command.repair.location." + location;
+        IMessageProviderService messageProviderService = context.getServiceCollection().messageProvider();
+        if (messageProviderService.hasKey(key)) {
+            location = messageProviderService.getMessageString(pl, key);
+        } else {
+            location = "inventory";
+        }
 
         if (resultCount.get(ResultType.SUCCESS) == 0 && resultCount.get(ResultType.ERROR) == 0
                 && resultCount.get(ResultType.NO_DURABILITY) == 0 && resultCount.get(ResultType.RESTRICTED) == 0) {
-            throw ReturnMessageException.fromKey("command.repair.empty", pl.getName(), location);
+            return context.errorResult("command.repair.empty", pl.getName(), location);
         } else {
             // Non-repairable Message - Only used when all items processed had no durability
             if (resultCount.get(ResultType.NO_DURABILITY) > 0 && resultCount.get(ResultType.SUCCESS) == 0
                     && resultCount.get(ResultType.ERROR) == 0 && resultCount.get(ResultType.RESTRICTED) == 0) {
                 if (resultCount.get(ResultType.NO_DURABILITY) == 1) {
                     ItemStackSnapshot item = lastItem.get(ResultType.NO_DURABILITY);
-                    pl.sendMessage(Nucleus.getNucleus().getMessageProvider().getTextMessageWithTextFormat(
+                    context.sendMessage(
                             "command.repair.nodurability.single",
                             item.get(Keys.DISPLAY_NAME).orElse(Text.of(item.getTranslation().get())).toBuilder()
                                     .onHover(TextActions.showItem(item))
                                     .build(),
                             Text.of(pl.getName()),
                             Text.of(location)
-                    ));
+                    );
                 } else {
-                    pl.sendMessage(Nucleus.getNucleus().getMessageProvider().getTextMessageWithFormat(
+                    context.sendMessage(
                             "command.repair.nodurability.multiple",
                             resultCount.get(ResultType.NO_DURABILITY).toString(), pl.getName(), location
-                    ));
+                    );
                 }
             }
 
             // Success Message
             if (resultCount.get(ResultType.SUCCESS) == 1) {
                 ItemStackSnapshot item = lastItem.get(ResultType.SUCCESS);
-                pl.sendMessage(Nucleus.getNucleus().getMessageProvider().getTextMessageWithTextFormat(
+                context.sendMessage(
                         "command.repair.success.single",
                         item.get(Keys.DISPLAY_NAME).orElse(Text.of(item.getTranslation().get())).toBuilder()
                                 .onHover(TextActions.showItem(item))
                                 .build(),
-                        Text.of(pl.getName()),
-                        Text.of(location)
-                ));
+                        context.getDisplayName(),
+                        location
+                );
             } else if (resultCount.get(ResultType.SUCCESS) > 1) {
-                pl.sendMessage(Nucleus.getNucleus().getMessageProvider().getTextMessageWithFormat(
+                context.sendMessage(
                         "command.repair.success.multiple",
                         resultCount.get(ResultType.SUCCESS).toString(), pl.getName(), location
-                ));
+                );
             }
 
             // Error Message
             if (resultCount.get(ResultType.ERROR) == 1) {
                 ItemStackSnapshot item = lastItem.get(ResultType.ERROR);
-                pl.sendMessage(Nucleus.getNucleus().getMessageProvider().getTextMessageWithTextFormat(
+                context.sendMessage(
                         "command.repair.error.single",
                         item.get(Keys.DISPLAY_NAME).orElse(Text.of(item.getTranslation().get())).toBuilder()
                                 .onHover(TextActions.showItem(item))
                                 .build(),
-                        Text.of(pl.getName()),
+                        context.getDisplayName(),
                         Text.of(location)
-                ));
+                );
             } else if (resultCount.get(ResultType.ERROR) > 1) {
-                pl.sendMessage(Nucleus.getNucleus().getMessageProvider().getTextMessageWithFormat(
+                context.sendMessage(
                         "command.repair.error.multiple",
                         resultCount.get(ResultType.ERROR).toString(), pl.getName(), location
-                ));
+                );
             }
 
             // Restriction Message
             if (resultCount.get(ResultType.RESTRICTED) == 1) {
                 ItemStackSnapshot item = lastItem.get(ResultType.RESTRICTED);
-                pl.sendMessage(Nucleus.getNucleus().getMessageProvider().getTextMessageWithTextFormat(
+                context.sendMessage(
                         "command.repair.restricted.single",
                         item.get(Keys.DISPLAY_NAME).orElse(Text.of(item.getTranslation().get())).toBuilder()
                                 .onHover(TextActions.showItem(item))
                                 .build(),
-                        Text.of(pl.getName()),
+                        context.getDisplayName(),
                         Text.of(location)
-                ));
+                );
             } else if (resultCount.get(ResultType.RESTRICTED) > 1) {
-                pl.sendMessage(Nucleus.getNucleus().getMessageProvider().getTextMessageWithFormat(
+                context.sendMessage(
                         "command.repair.restricted.multiple",
                         resultCount.get(ResultType.RESTRICTED).toString(), pl.getName(), location
-                ));
+                );
             }
 
-            return CommandResult.successCount(resultCount.get(ResultType.SUCCESS));
+            if (resultCount.get(ResultType.SUCCESS) > 0) {
+                return context.successResult();
+            } else {
+                return context.failResult();
+            }
         }
     }
 
@@ -264,12 +275,12 @@ public class RepairCommand extends AbstractCommand<Player> implements Reloadable
         SUCCESS, ERROR, RESTRICTED, NO_DURABILITY
     }
 
-    private class RepairResult {
+    private static class RepairResult {
 
         private ItemStack stack;
         private ResultType type;
 
-        public RepairResult(ItemStack stack, ResultType type) {
+        RepairResult(ItemStack stack, ResultType type) {
             this.stack = stack;
             this.type = type;
         }

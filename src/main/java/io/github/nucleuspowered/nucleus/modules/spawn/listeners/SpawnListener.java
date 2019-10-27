@@ -5,37 +5,32 @@
 package io.github.nucleuspowered.nucleus.modules.spawn.listeners;
 
 import com.flowpowered.math.vector.Vector3d;
-import com.google.common.collect.Maps;
-import io.github.nucleuspowered.nucleus.Nucleus;
 import io.github.nucleuspowered.nucleus.api.EventContexts;
 import io.github.nucleuspowered.nucleus.api.catalogkeys.NucleusTeleportHelperFilters;
 import io.github.nucleuspowered.nucleus.api.teleport.TeleportScanners;
 import io.github.nucleuspowered.nucleus.configurate.datatypes.LocationNode;
-import io.github.nucleuspowered.nucleus.internal.PermissionRegistry;
 import io.github.nucleuspowered.nucleus.internal.interfaces.ListenerBase;
 import io.github.nucleuspowered.nucleus.internal.interfaces.Reloadable;
-import io.github.nucleuspowered.nucleus.internal.permissions.PermissionInformation;
-import io.github.nucleuspowered.nucleus.internal.permissions.SuggestedLevel;
-import io.github.nucleuspowered.nucleus.internal.traits.IDataManagerTrait;
-import io.github.nucleuspowered.nucleus.internal.traits.MessageProviderTrait;
 import io.github.nucleuspowered.nucleus.modules.core.CoreKeys;
-import io.github.nucleuspowered.nucleus.modules.core.services.SafeTeleportService;
 import io.github.nucleuspowered.nucleus.modules.spawn.SpawnKeys;
+import io.github.nucleuspowered.nucleus.modules.spawn.SpawnPermissions;
 import io.github.nucleuspowered.nucleus.modules.spawn.config.GlobalSpawnConfig;
 import io.github.nucleuspowered.nucleus.modules.spawn.config.SpawnConfig;
-import io.github.nucleuspowered.nucleus.modules.spawn.config.SpawnConfigAdapter;
 import io.github.nucleuspowered.nucleus.modules.spawn.events.SendToSpawnEvent;
-import io.github.nucleuspowered.nucleus.util.CauseStackHelper;
-import io.github.nucleuspowered.nucleus.storage.dataobjects.modular.IGeneralDataObject;
+import io.github.nucleuspowered.nucleus.services.IMessageProviderService;
+import io.github.nucleuspowered.nucleus.services.INucleusServiceCollection;
+import io.github.nucleuspowered.nucleus.services.IStorageManager;
+import io.github.nucleuspowered.nucleus.services.impl.storage.dataobjects.modular.IGeneralDataObject;
 import org.spongepowered.api.Sponge;
 import org.spongepowered.api.entity.Transform;
 import org.spongepowered.api.entity.living.player.Player;
 import org.spongepowered.api.entity.living.player.User;
+import org.spongepowered.api.event.CauseStackManager;
 import org.spongepowered.api.event.Listener;
 import org.spongepowered.api.event.Order;
-import org.spongepowered.api.event.cause.EventContext;
 import org.spongepowered.api.event.entity.MoveEntityEvent;
 import org.spongepowered.api.event.entity.living.humanoid.player.RespawnPlayerEvent;
+import org.spongepowered.api.event.filter.Getter;
 import org.spongepowered.api.event.network.ClientConnectionEvent;
 import org.spongepowered.api.service.user.UserStorageService;
 import org.spongepowered.api.world.Location;
@@ -43,30 +38,30 @@ import org.spongepowered.api.world.World;
 import org.spongepowered.api.world.storage.WorldProperties;
 import org.spongepowered.api.world.teleport.TeleportHelperFilters;
 
-import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
 
 import javax.annotation.Nullable;
+import javax.inject.Inject;
 
-public class SpawnListener implements Reloadable, ListenerBase, MessageProviderTrait, IDataManagerTrait {
+public class SpawnListener implements Reloadable, ListenerBase {
 
     private SpawnConfig spawnConfig;
 
-    private final String spawnExempt = PermissionRegistry.PERMISSIONS_PREFIX + "spawn.exempt.login";
+    private final INucleusServiceCollection serviceCollection;
 
-    @Override
-    public Map<String, PermissionInformation> getPermissions() {
-        Map<String, PermissionInformation> mpi = Maps.newHashMap();
-        mpi.put(this.spawnExempt, PermissionInformation.getWithTranslation("permission.spawn.exempt.login", SuggestedLevel.ADMIN));
-        return mpi;
+    @Inject
+    public SpawnListener(INucleusServiceCollection serviceCollection) {
+        this.serviceCollection = serviceCollection;
     }
 
     @Listener
     public void onJoin(ClientConnectionEvent.Login loginEvent) {
         UUID pl = loginEvent.getProfile().getUniqueId();
-        boolean first = getOrCreateUserOnThread(pl).get(CoreKeys.FIRST_JOIN).isPresent();
-        IGeneralDataObject generalDataObject = Nucleus.getNucleus().getStorageManager().getGeneralService().getOrNew().join();
+        IStorageManager storageManager = this.serviceCollection.storageManager();
+        IMessageProviderService messageProviderService = this.serviceCollection.messageProvider();
+        boolean first = storageManager.getOrCreateUserOnThread(pl).get(CoreKeys.FIRST_JOIN).isPresent();
+        IGeneralDataObject generalDataObject = storageManager.getGeneralService().getOrNew().join();
 
         try {
             if (first) {
@@ -89,20 +84,22 @@ public class SpawnListener implements Reloadable, ListenerBase, MessageProviderT
                         return;
                     }
 
-                    Nucleus.getNucleus().getLogger().warn(
-                            getMessageString("spawn.firstspawn.failed",
-                                    loginEvent.getProfile().getName().orElse(getMessageString("standard.unknown"))));
+                    this.serviceCollection.logger()
+                            .warn(
+                                    messageProviderService.getMessageString(
+                                            "spawn.firstspawn.failed",
+                                            loginEvent.getProfile().getName().orElseGet(() ->
+                                                    messageProviderService.getMessageString("standard.unknown")))
+                            );
                 }
             }
         } catch (Exception e) {
-            if (Nucleus.getNucleus().isDebugMode()) {
-                e.printStackTrace();
-            }
+            e.printStackTrace();
         }
 
         // Throw them to the default world spawn if the config suggests so.
         User user = Sponge.getServiceManager().provideUnchecked(UserStorageService.class).getOrCreate(loginEvent.getProfile());
-        if (this.spawnConfig.isSpawnOnLogin() && !hasPermission(user, this.spawnExempt)) {
+        if (this.spawnConfig.isSpawnOnLogin() && !this.serviceCollection.permissionService().hasPermission(user, SpawnPermissions.SPAWN_EXEMPT_LOGIN)) {
 
             World world = loginEvent.getFromTransform().getExtent();
             final String worldName = world.getName();
@@ -118,7 +115,7 @@ public class SpawnListener implements Reloadable, ListenerBase, MessageProviderT
             }
 
             Location<World> lw = world.getSpawnLocation().add(0.5, 0, 0.5);
-            Optional<Location<World>> safe = getServiceUnchecked(SafeTeleportService.class)
+            Optional<Location<World>> safe = this.serviceCollection.teleportService()
                     .getSafeLocation(
                             lw,
                             TeleportScanners.ASCENDING_SCAN,
@@ -127,8 +124,7 @@ public class SpawnListener implements Reloadable, ListenerBase, MessageProviderT
 
             if (safe.isPresent()) {
                 try {
-                    Optional<Vector3d> ov = Nucleus.getNucleus()
-                            .getStorageManager()
+                    Optional<Vector3d> ov = storageManager
                             .getWorldService()
                             .getOrNewOnThread(world.getUniqueId())
                             .get(SpawnKeys.WORLD_SPAWN_ROTATION);
@@ -153,8 +149,7 @@ public class SpawnListener implements Reloadable, ListenerBase, MessageProviderT
             // Are we heading TO a spawn?
             Transform<World> to = event.getToTransform();
             if (to.getLocation().getBlockPosition().equals(to.getExtent().getSpawnLocation().getBlockPosition())) {
-                Nucleus.getNucleus()
-                        .getStorageManager()
+                this.serviceCollection.storageManager()
                         .getWorldService()
                         .getOrNewOnThread(to.getExtent().getUniqueId())
                         .get(SpawnKeys.WORLD_SPAWN_ROTATION)
@@ -164,7 +159,7 @@ public class SpawnListener implements Reloadable, ListenerBase, MessageProviderT
     }
 
     @Listener(order = Order.EARLY)
-    public void onRespawn(RespawnPlayerEvent event) {
+    public void onRespawn(RespawnPlayerEvent event, @Getter("getTargetEntity") Player player) {
         if (event.isBedSpawn() && !this.spawnConfig.isRedirectBedSpawn()) {
             // Nope, we don't care.
             return;
@@ -184,29 +179,33 @@ public class SpawnListener implements Reloadable, ListenerBase, MessageProviderT
         Location<World> spawn = world.getSpawnLocation().add(0.5, 0, 0.5);
         Transform<World> to = new Transform<>(spawn);
 
-        EventContext context = EventContext.builder().add(EventContexts.SPAWN_EVENT_TYPE,SendToSpawnEvent.Type.DEATH).build();
-        SendToSpawnEvent sEvent = new SendToSpawnEvent(to, event.getTargetEntity(), CauseStackHelper.createCause(context, event.getTargetEntity()));
+        SendToSpawnEvent sEvent;
+        try (CauseStackManager.StackFrame frame = Sponge.getCauseStackManager().pushCauseFrame()) {
+            frame.addContext(EventContexts.SPAWN_EVENT_TYPE, SendToSpawnEvent.Type.DEATH);
+            frame.pushCause(player);
+            sEvent = new SendToSpawnEvent(to, player, frame.getCurrentCause());
+        }
+
         if (Sponge.getEventManager().post(sEvent)) {
             if (sEvent.getCancelReason().isPresent()) {
-                event.getTargetEntity().sendMessage(Nucleus.getNucleus().getMessageProvider().getTextMessageWithFormat("command.spawnother.self.failed.reason", sEvent.getCancelReason().get()));
+                this.serviceCollection.messageProvider().sendMessageTo(player, "command.spawnother.self.failed.reason", sEvent.getCancelReason().get());
                 return;
             }
 
-            event.getTargetEntity().sendMessage(Nucleus.getNucleus().getMessageProvider().getTextMessageWithFormat("command.spawnother.self.failed.noreason"));
+            this.serviceCollection.messageProvider().sendMessageTo(player, "command.spawnother.self.failed.noreason");
             return;
         }
 
         // Compare current transform to spawn - set rotation.
-        Nucleus.getNucleus()
-                .getStorageManager()
+        this.serviceCollection.storageManager()
                 .getWorldService()
                 .getOrNewOnThread(world.getUniqueId())
                 .get(SpawnKeys.WORLD_SPAWN_ROTATION)
                 .ifPresent(y -> event.setToTransform(sEvent.isRedirected() ? sEvent.getTransformTo() : to.setRotation(y)));
     }
 
-    @Override public void onReload() {
-        this.spawnConfig = getServiceUnchecked(SpawnConfigAdapter.class).getNodeOrDefault();
+    @Override public void onReload(INucleusServiceCollection serviceCollection) {
+        this.spawnConfig = serviceCollection.moduleDataProvider().getModuleConfig(SpawnConfig.class);
     }
 
     private static Location<World> process(Location<World> v3d) {

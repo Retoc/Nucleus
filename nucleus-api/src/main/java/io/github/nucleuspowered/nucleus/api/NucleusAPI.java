@@ -23,13 +23,14 @@ import io.github.nucleuspowered.nucleus.api.service.NucleusPlayerMetadataService
 import io.github.nucleuspowered.nucleus.api.service.NucleusPrivateMessagingService;
 import io.github.nucleuspowered.nucleus.api.service.NucleusRTPService;
 import io.github.nucleuspowered.nucleus.api.service.NucleusSeenService;
-import io.github.nucleuspowered.nucleus.api.service.NucleusServerShopService;
 import io.github.nucleuspowered.nucleus.api.service.NucleusStaffChatService;
+import io.github.nucleuspowered.nucleus.api.service.NucleusTextTemplateFactory;
 import io.github.nucleuspowered.nucleus.api.service.NucleusUserPreferenceService;
 import io.github.nucleuspowered.nucleus.api.service.NucleusWarmupManagerService;
 import io.github.nucleuspowered.nucleus.api.service.NucleusWarningService;
 import io.github.nucleuspowered.nucleus.api.service.NucleusWarpService;
 import io.github.nucleuspowered.nucleus.api.service.NucleusWorldUUIDChangeService;
+import io.github.nucleuspowered.nucleus.api.text.NucleusTextTemplate;
 import org.spongepowered.api.Sponge;
 import org.spongepowered.api.event.game.state.GameStartingServerEvent;
 
@@ -85,8 +86,18 @@ public class NucleusAPI {
      * @throws IllegalStateException if Nucleus hasn't completed pre init yet.
      */
     public static NucleusMessageTokenService getMessageTokenService() {
-        return getService(NucleusMessageTokenService.class).orElseThrow(() -> new IllegalStateException("Message Tokens are not being registered "
-                + "yet"));
+        return getService(NucleusMessageTokenService.class)
+                .orElseThrow(() -> new IllegalStateException("Message Tokens are not being registered yet"));
+    }
+
+    /**
+     * Gets the {@link NucleusTextTemplateFactory} service, which allows plugins to create {@link NucleusTextTemplate}s.
+     * @return The {@link NucleusTextTemplateFactory}
+     * @throws IllegalStateException if Nucleus hasn't completed pre init yet.
+     */
+    public static NucleusTextTemplateFactory getTextTemplateFactory() {
+        return getService(NucleusTextTemplateFactory.class)
+                .orElseThrow(() -> new IllegalStateException("Nucleus Text Template Factory has not been registered"));
     }
 
     /**
@@ -309,19 +320,6 @@ public class NucleusAPI {
      */
     public static Optional<NucleusSeenService> getSeenService() {
         return getService(NucleusSeenService.class);
-    }
-
-    /**
-     * Gets the {@link NucleusServerShopService}, if it exists.
-     *
-     * <p>
-     *     Requires the "servershop" module.
-     * </p>
-     *
-     * @return The {@link NucleusServerShopService}
-     */
-    public static Optional<NucleusServerShopService> getServerShopService() {
-        return getService(NucleusServerShopService.class);
     }
 
     /**

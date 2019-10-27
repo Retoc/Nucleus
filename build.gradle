@@ -135,6 +135,10 @@ dependencies {
         ext.versionno = versionno
         ext.suffix = suffix
     })
+    compile project(":nucleus-core", {
+        ext.versionno = versionno
+        ext.suffix = suffix
+    })
     compile "org.spongepowered:spongeapi:" + project.ext.spongeapi
     compile "org.spongepowered:configurate-core:3.6.1"
     compile "org.spongepowered:configurate-gson:3.6.1"

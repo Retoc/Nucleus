@@ -5,21 +5,24 @@
 package io.github.nucleuspowered.nucleus.internal;
 
 import io.github.nucleuspowered.nucleus.Nucleus;
+import io.github.nucleuspowered.nucleus.internal.command.ICommandContext;
 import io.github.nucleuspowered.nucleus.internal.interfaces.CancellableTask;
+import io.github.nucleuspowered.nucleus.services.INucleusServiceCollection;
 import org.spongepowered.api.Sponge;
 import org.spongepowered.api.command.CommandSource;
 import org.spongepowered.api.entity.living.player.Player;
+import org.spongepowered.api.scheduler.Task;
 
 public abstract class CostCancellableTask implements CancellableTask {
 
-    protected final double cost;
-    protected final Nucleus plugin;
-    protected final CommandSource subject;
+    private final INucleusServiceCollection serviceCollection;
+    private final CommandSource target;
+    private final double cost;
     private boolean hasRun = false;
 
-    public CostCancellableTask(Nucleus plugin, CommandSource src, double cost) {
-        this.plugin = plugin;
-        this.subject = src;
+    public CostCancellableTask(INucleusServiceCollection serviceCollection, CommandSource target, double cost) {
+        this.serviceCollection = serviceCollection;
+        this.target = target;
         this.cost = cost;
     }
 
@@ -27,9 +30,10 @@ public abstract class CostCancellableTask implements CancellableTask {
     public void onCancel() {
         if (!this.hasRun) {
             this.hasRun = true;
-            if (this.subject instanceof Player && this.cost > 0) {
-                Sponge.getScheduler().createSyncExecutor(this.plugin).execute(() -> this.plugin
-                        .getEconHelper().depositInPlayer((Player) this.subject, this.cost));
+            if (this.target instanceof Player && this.cost > 0) {
+                Task.builder()
+                        .execute(task -> this.serviceCollection.economyServiceProvider().depositInPlayer((Player) target, cost))
+                        .submit(this.serviceCollection.pluginContainer());
             }
         }
     }

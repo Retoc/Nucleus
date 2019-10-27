@@ -4,112 +4,68 @@
  */
 package io.github.nucleuspowered.nucleus.modules.nickname.commands;
 
-import com.google.common.collect.Maps;
-import io.github.nucleuspowered.nucleus.NameUtil;
-import io.github.nucleuspowered.nucleus.Nucleus;
 import io.github.nucleuspowered.nucleus.api.exceptions.NicknameException;
-import io.github.nucleuspowered.nucleus.internal.annotations.command.Permissions;
-import io.github.nucleuspowered.nucleus.internal.annotations.command.RegisterCommand;
-import io.github.nucleuspowered.nucleus.internal.command.AbstractCommand;
-import io.github.nucleuspowered.nucleus.internal.command.ReturnMessageException;
-import io.github.nucleuspowered.nucleus.internal.docgen.annotations.EssentialsEquivalent;
-import io.github.nucleuspowered.nucleus.internal.messages.MessageProvider;
-import io.github.nucleuspowered.nucleus.internal.permissions.PermissionInformation;
-import io.github.nucleuspowered.nucleus.internal.permissions.SuggestedLevel;
+import io.github.nucleuspowered.nucleus.internal.command.ICommandContext;
+import io.github.nucleuspowered.nucleus.internal.command.ICommandExecutor;
+import io.github.nucleuspowered.nucleus.internal.command.ICommandResult;
+import io.github.nucleuspowered.nucleus.internal.command.annotation.Command;
+import io.github.nucleuspowered.nucleus.internal.command.annotation.CommandModifier;
+import io.github.nucleuspowered.nucleus.internal.command.annotation.EssentialsEquivalent;
+import io.github.nucleuspowered.nucleus.internal.command.requirements.CommandModifiers;
+import io.github.nucleuspowered.nucleus.modules.nickname.NicknamePermissions;
 import io.github.nucleuspowered.nucleus.modules.nickname.services.NicknameService;
-import org.spongepowered.api.command.CommandResult;
+import io.github.nucleuspowered.nucleus.services.INucleusServiceCollection;
+import org.spongepowered.api.command.CommandException;
 import org.spongepowered.api.command.CommandSource;
-import org.spongepowered.api.command.args.CommandContext;
 import org.spongepowered.api.command.args.CommandElement;
 import org.spongepowered.api.command.args.GenericArguments;
 import org.spongepowered.api.entity.living.player.User;
-import org.spongepowered.api.event.cause.Cause;
 import org.spongepowered.api.text.Text;
 import org.spongepowered.api.text.format.TextColors;
 import org.spongepowered.api.text.serializer.TextSerializers;
 import org.spongepowered.api.util.annotation.NonnullByDefault;
 
-import java.util.HashMap;
-import java.util.Map;
-import java.util.stream.Collectors;
-
 @NonnullByDefault
-@RegisterCommand({"nick", "nickname"})
-@Permissions
+@Command(
+        aliases = {"nick", "nickname"},
+        basePermission = NicknamePermissions.BASE_NICK,
+        commandDescriptionKey = "nick",
+        modifiers = {
+                @CommandModifier(value = CommandModifiers.HAS_COOLDOWN, exemptPermission = NicknamePermissions.EXEMPT_COOLDOWN_NICK),
+                @CommandModifier(value = CommandModifiers.HAS_WARMUP, exemptPermission = NicknamePermissions.EXEMPT_WARMUP_NICK),
+                @CommandModifier(value = CommandModifiers.HAS_COST, exemptPermission = NicknamePermissions.EXEMPT_COST_NICK)
+        }
+)
 @EssentialsEquivalent(value = {"nick", "nickname"}, isExact = false,
         notes = "To remove a nickname, use '/delnick'")
-public class NicknameCommand extends AbstractCommand<CommandSource> {
+public class NicknameCommand implements ICommandExecutor<CommandSource> {
 
-    private final NicknameService nicknameService = getServiceUnchecked(NicknameService.class);
-
-    private final String playerKey = "subject";
     private final String nickName = "nickname";
 
-    // Order is important here! TODO: Need to de-dup
-    private final Map<String, String> permissionToDesc = Maps.newHashMap();
-
-    @Override protected void afterPostInit() {
-        super.afterPostInit();
-
-        MessageProvider mp = Nucleus.getNucleus().getMessageProvider();
-
-        String colPerm = this.permissions.getPermissionWithSuffix("colour.");
-        String colPerm2 = this.permissions.getPermissionWithSuffix("color.");
-
-        NameUtil.getColours().forEach((key, value) -> {
-            this.permissionToDesc.put(colPerm + value.getName(),
-                    mp.getMessageWithFormat("permission.nick.colourspec", value.getName().toLowerCase(), key.toString()));
-            this.permissionToDesc
-                    .put(colPerm2 + value.getName(), mp.getMessageWithFormat("permission.nick.colorspec", value.getName().toLowerCase(), key.toString()));
-        });
-
-        String stylePerm = this.permissions.getPermissionWithSuffix("style.");
-        NameUtil.getStyleKeys().entrySet().stream().filter(x -> x.getKey() != 'k').forEach((k) -> this.permissionToDesc.put(stylePerm + k.getValue().toLowerCase(),
-            mp.getMessageWithFormat("permission.nick.stylespec", k.getValue().toLowerCase(), k.getKey().toString())));
-    }
-
     @Override
-    protected Map<String, PermissionInformation> permissionSuffixesToRegister() {
-        Map<String, PermissionInformation> m = new HashMap<>();
-        m.put("others", PermissionInformation.getWithTranslation("permission.nick.others", SuggestedLevel.ADMIN));
-        m.put("color", PermissionInformation.getWithTranslation("permission.nick.color", SuggestedLevel.ADMIN));
-        m.put("style", PermissionInformation.getWithTranslation("permission.nick.style", SuggestedLevel.ADMIN));
-        m.put("magic", PermissionInformation.getWithTranslation("permission.nick.magic", SuggestedLevel.ADMIN));
-        return m;
-    }
-
-    @Override
-    protected Map<String, PermissionInformation> permissionsToRegister() {
-        return this.permissionToDesc.entrySet().stream().collect(Collectors.toMap(
-            Map.Entry::getKey, v -> PermissionInformation.getWithTranslation(v.getValue(), SuggestedLevel.ADMIN)));
-    }
-
-    @Override
-    public CommandElement[] getArguments() {
+    public CommandElement[] parameters(INucleusServiceCollection serviceCollection) {
         return new CommandElement[] {
-                GenericArguments.optionalWeak(requirePermissionArg(
-                        GenericArguments.onlyOne(GenericArguments.user(Text.of(this.playerKey))), this.permissions.getPermissionWithSuffix("others"))),
+                serviceCollection.commandElementSupplier()
+                    .createOtherUserPermissionElement(false, NicknamePermissions.OTHERS_NICK),
                 GenericArguments.onlyOne(GenericArguments.string(Text.of(this.nickName)))};
     }
 
-    @Override
-    public CommandResult executeCommand(CommandSource src, CommandContext args, Cause cause) throws Exception {
-        User pl = this.getUserFromArgs(User.class, src, this.playerKey, args);
-        Text name = args.<String>getOne(this.nickName).map(TextSerializers.FORMATTING_CODE::deserialize).get();
+    @Override public ICommandResult execute(ICommandContext<? extends CommandSource> context) throws CommandException {
+        User pl = context.getUserFromArgs();
+        Text name = TextSerializers.FORMATTING_CODE.deserialize(context.requireOne(this.nickName, String.class));
 
         try {
-            this.nicknameService.setNick(pl, src, name, false);
+            context.getServiceCollection().getServiceUnchecked(NicknameService.class).setNick(pl, context.getCommandSource(), name, false);
         } catch (NicknameException e) {
-            throw new ReturnMessageException(e.getTextMessage());
+            return context.errorResultLiteral(e.getTextMessage());
         }
 
-        if (!src.equals(pl)) {
-            src.sendMessage(Text.builder().append(
-                    Nucleus.getNucleus().getMessageProvider().getTextMessageWithFormat("command.nick.success.other", pl.getName()))
-                    .append(Text.of(" - ", TextColors.RESET, name)).build());
+        if (!context.is(pl)) {
+            context.sendMessageText(
+                    Text.builder().append(context.getMessage("command.nick.success.other", pl.getName())).append(Text.of(" - ", TextColors.RESET, name)).build());
         }
 
-        return CommandResult.success();
+        return context.successResult();
     }
 
 }

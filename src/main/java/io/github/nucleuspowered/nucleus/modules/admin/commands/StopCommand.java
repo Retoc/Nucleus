@@ -4,46 +4,43 @@
  */
 package io.github.nucleuspowered.nucleus.modules.admin.commands;
 
-import io.github.nucleuspowered.nucleus.internal.annotations.command.NoModifiers;
-import io.github.nucleuspowered.nucleus.internal.annotations.command.NoTimings;
-import io.github.nucleuspowered.nucleus.internal.annotations.command.Permissions;
-import io.github.nucleuspowered.nucleus.internal.annotations.command.RegisterCommand;
-import io.github.nucleuspowered.nucleus.internal.command.AbstractCommand;
+import io.github.nucleuspowered.nucleus.internal.command.ICommandContext;
+import io.github.nucleuspowered.nucleus.internal.command.ICommandExecutor;
+import io.github.nucleuspowered.nucleus.internal.command.ICommandResult;
 import io.github.nucleuspowered.nucleus.internal.command.NucleusParameters;
+import io.github.nucleuspowered.nucleus.internal.command.annotation.Command;
+import io.github.nucleuspowered.nucleus.modules.admin.AdminPermissions;
+import io.github.nucleuspowered.nucleus.services.INucleusServiceCollection;
 import org.spongepowered.api.Sponge;
-import org.spongepowered.api.command.CommandResult;
 import org.spongepowered.api.command.CommandSource;
-import org.spongepowered.api.command.args.CommandContext;
 import org.spongepowered.api.command.args.CommandElement;
-import org.spongepowered.api.event.cause.Cause;
 import org.spongepowered.api.text.serializer.TextSerializers;
 import org.spongepowered.api.util.annotation.NonnullByDefault;
 
 import java.util.Optional;
 
-@Permissions
-@NoModifiers
-@NoTimings
-@RegisterCommand({"stop"})
+@Command(aliases = {"stop"},
+        basePermission = AdminPermissions.BASE_STOP,
+        commandDescriptionKey = "stop")
 @NonnullByDefault
-public class StopCommand extends AbstractCommand<CommandSource> {
+public class StopCommand implements ICommandExecutor<CommandSource> {
 
     @Override
-    public CommandElement[] getArguments() {
+    public CommandElement[] parameters(INucleusServiceCollection serviceCollection) {
         return new CommandElement[] {
                 NucleusParameters.OPTIONAL_MESSAGE
         };
     }
 
     @Override
-    public CommandResult executeCommand(CommandSource src, CommandContext args, Cause cause) {
-        Optional<String> opt = args.getOne(NucleusParameters.Keys.MESSAGE);
+    public ICommandResult execute(ICommandContext<? extends CommandSource> context) {
+        Optional<String> opt = context.getOne(NucleusParameters.Keys.MESSAGE, String.class);
         if (opt.isPresent()) {
             Sponge.getServer().shutdown(TextSerializers.FORMATTING_CODE.deserialize(opt.get()));
         } else {
             Sponge.getServer().shutdown();
         }
 
-        return CommandResult.success();
+        return context.successResult();
     }
 }

@@ -4,14 +4,26 @@
  */
 package io.github.nucleuspowered.nucleus.modules.admin;
 
-import io.github.nucleuspowered.nucleus.internal.qsml.module.ConfigurableModule;
+import io.github.nucleuspowered.nucleus.modules.admin.config.AdminConfig;
+import io.github.nucleuspowered.nucleus.quickstart.module.ConfigurableModule;
 import io.github.nucleuspowered.nucleus.modules.admin.config.AdminConfigAdapter;
+import io.github.nucleuspowered.nucleus.services.INucleusServiceCollection;
 import uk.co.drnaylor.quickstart.annotations.ModuleData;
+import uk.co.drnaylor.quickstart.holders.DiscoveryModuleHolder;
+
+import java.util.function.Supplier;
+
+import javax.inject.Inject;
 
 @ModuleData(id = AdminModule.ID, name = "Admin")
-public class AdminModule extends ConfigurableModule<AdminConfigAdapter> {
+public class AdminModule extends ConfigurableModule<AdminConfig, AdminConfigAdapter> {
 
     public final static String ID = "admin";
+
+    @Inject
+    public AdminModule(Supplier<DiscoveryModuleHolder<?, ?>> moduleHolder, INucleusServiceCollection collection) {
+        super(moduleHolder, collection);
+    }
 
     @Override
     public AdminConfigAdapter createAdapter() {

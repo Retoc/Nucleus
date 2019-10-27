@@ -9,33 +9,31 @@ import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.ImmutableSet;
 import com.google.common.collect.Maps;
-import io.github.nucleuspowered.nucleus.Nucleus;
 import io.github.nucleuspowered.nucleus.Util;
-import io.github.nucleuspowered.nucleus.api.exceptions.NucleusException;
+import io.github.nucleuspowered.nucleus.api.exceptions.HomeException;
 import io.github.nucleuspowered.nucleus.api.nucleusdata.Home;
 import io.github.nucleuspowered.nucleus.api.service.NucleusHomeService;
 import io.github.nucleuspowered.nucleus.api.teleport.TeleportResult;
 import io.github.nucleuspowered.nucleus.api.teleport.TeleportScanners;
 import io.github.nucleuspowered.nucleus.configurate.datatypes.LocationNode;
 import io.github.nucleuspowered.nucleus.internal.annotations.APIService;
-import io.github.nucleuspowered.nucleus.internal.command.ReturnMessageException;
 import io.github.nucleuspowered.nucleus.internal.interfaces.ServiceBase;
-import io.github.nucleuspowered.nucleus.internal.traits.IDataManagerTrait;
-import io.github.nucleuspowered.nucleus.internal.traits.MessageProviderTrait;
-import io.github.nucleuspowered.nucleus.internal.traits.PermissionTrait;
-import io.github.nucleuspowered.nucleus.modules.core.services.SafeTeleportService;
 import io.github.nucleuspowered.nucleus.modules.home.HomeKeys;
-import io.github.nucleuspowered.nucleus.modules.home.commands.SetHomeCommand;
+import io.github.nucleuspowered.nucleus.modules.home.HomePermissions;
 import io.github.nucleuspowered.nucleus.modules.home.events.AbstractHomeEvent;
 import io.github.nucleuspowered.nucleus.modules.home.events.CreateHomeEvent;
 import io.github.nucleuspowered.nucleus.modules.home.events.DeleteHomeEvent;
 import io.github.nucleuspowered.nucleus.modules.home.events.ModifyHomeEvent;
 import io.github.nucleuspowered.nucleus.modules.home.events.UseHomeEvent;
-import io.github.nucleuspowered.nucleus.storage.dataobjects.modular.IUserDataObject;
-import io.github.nucleuspowered.nucleus.util.CauseStackHelper;
+import io.github.nucleuspowered.nucleus.services.INucleusServiceCollection;
+import io.github.nucleuspowered.nucleus.services.INucleusTeleportService;
+import io.github.nucleuspowered.nucleus.services.IPermissionService;
+import io.github.nucleuspowered.nucleus.services.impl.storage.dataobjects.modular.IUserDataObject;
 import org.spongepowered.api.Sponge;
+import org.spongepowered.api.command.CommandSource;
 import org.spongepowered.api.entity.living.player.Player;
 import org.spongepowered.api.entity.living.player.User;
+import org.spongepowered.api.event.CauseStackManager;
 import org.spongepowered.api.event.cause.Cause;
 import org.spongepowered.api.service.user.UserStorageService;
 import org.spongepowered.api.world.Location;
@@ -50,15 +48,21 @@ import java.util.UUID;
 import java.util.regex.Pattern;
 
 import javax.annotation.Nullable;
+import javax.inject.Inject;
 
 @APIService(NucleusHomeService.class)
-public class HomeService implements NucleusHomeService, MessageProviderTrait, PermissionTrait, ServiceBase, IDataManagerTrait {
+public class HomeService implements NucleusHomeService, ServiceBase {
 
-    private final String unlimitedPermission
-            = Nucleus.getNucleus().getPermissionRegistry().getPermissionsForNucleusCommand(SetHomeCommand.class).getPermissionWithSuffix("unlimited");
+    private final INucleusServiceCollection serviceCollection;
 
-    @Override public List<Home> getHomes(UUID user) {
-        Optional<IUserDataObject> service = getUser(user).join(); //.get().getHome;
+    @Inject
+    public HomeService(INucleusServiceCollection serviceCollection) {
+        this.serviceCollection = serviceCollection;
+    }
+
+    @Override
+    public List<Home> getHomes(UUID user) {
+        Optional<IUserDataObject> service = this.serviceCollection.storageManager().getUserOnThread(user); //.get().getHome;
         return service.map(modularUserService -> getHomes(user, modularUserService)).orElseGet(ImmutableList::of);
 
     }
@@ -68,79 +72,97 @@ public class HomeService implements NucleusHomeService, MessageProviderTrait, Pe
     }
 
     public Collection<String> getHomeNames(UUID user) {
-        return getUserOnThread(user).flatMap(x -> x.get(HomeKeys.HOMES).map(Map::keySet)).orElseGet(ImmutableSet::of);
+        return this.serviceCollection.storageManager()
+                .getUserOnThread(user).flatMap(x -> x.get(HomeKeys.HOMES).map(Map::keySet)).orElseGet(ImmutableSet::of);
     }
 
     @Override public Optional<Home> getHome(UUID user, String name) {
-        Optional<IUserDataObject> service = getUser(user).join();
+        Optional<IUserDataObject> service = this.serviceCollection.storageManager().getUser(user).join();
         return service.flatMap(modularUserService -> getHome(name, user, modularUserService.get(HomeKeys.HOMES).orElse(null)));
 
     }
 
-    @Override public void createHome(Cause cause, User user, String name, Location<World> location, Vector3d rotation) throws NucleusException {
+    @Override public void createHome(Cause cause, User user, String name, Location<World> location, Vector3d rotation) throws HomeException  {
         // Preconditions.checkState(cause.root() instanceof PluginContainer, "The root must be a PluginContainer");
         createHomeInternal(cause, user, name, location, rotation);
     }
 
-    public void createHomeInternal(Cause cause, User user, String name, Location<World> location, Vector3d rotation) throws NucleusException {
+    public void createHomeInternal(Cause cause, User user, String name, Location<World> location, Vector3d rotation) throws HomeException {
         if (!NucleusHomeService.HOME_NAME_PATTERN.matcher(name).matches()) {
-            throw new NucleusException(
-                    Nucleus.getNucleus().getMessageProvider().getTextMessageWithFormat("command.sethome.name"),
-                NucleusException.ExceptionType.DISALLOWED_NAME);
+            throw new HomeException(
+                    this.serviceCollection.messageProvider().getMessageFor(
+                            cause.first(CommandSource.class).orElseGet(Sponge.getServer()::getConsole),
+                            "command.sethome.name"),
+                    HomeException.Reasons.INVALID_NAME
+            );
         }
 
         int max = getMaximumHomes(user);
-        IUserDataObject udo = getOrCreateUserOnThread(user.getUniqueId());
+        IUserDataObject udo = this.serviceCollection.storageManager().getOrCreateUserOnThread(user.getUniqueId());
         Map<String, LocationNode> m = udo.get(HomeKeys.HOMES).orElseGet(ImmutableMap::of);
         if (m.size() >= max) {
-            throw new NucleusException(
-                    Nucleus.getNucleus().getMessageProvider().getTextMessageWithFormat("command.sethome.limit", String.valueOf(max)),
-                NucleusException.ExceptionType.LIMIT_REACHED);
+            throw new HomeException(
+                    this.serviceCollection.messageProvider().getMessageFor(cause.first(CommandSource.class)
+                                    .orElseGet(Sponge.getServer()::getConsole), "command.sethome.limit", String.valueOf(max)),
+                    HomeException.Reasons.LIMIT_REACHED);
         }
 
         CreateHomeEvent event = new CreateHomeEvent(name, user, cause, location);
         postEvent(event);
 
         if (!setHome(m, name, location, rotation, false, udo)) {
-            throw new NucleusException(
-                    Nucleus.getNucleus().getMessageProvider().getTextMessageWithFormat("command.sethome.seterror", name),
-                    NucleusException.ExceptionType.UNKNOWN_ERROR);
+            throw new HomeException(
+                    this.serviceCollection.messageProvider().getMessageFor(
+                        Util.getSourceFromCause(cause),
+                            "command.sethome.seterror",
+                            name
+                    ),
+                    HomeException.Reasons.UNKNOWN);
         }
 
     }
 
-    @Override public void modifyHome(Cause cause, Home home, Location<World> location, Vector3d rotation) throws NucleusException {
+    @Override public void modifyHome(Cause cause, Home home, Location<World> location, Vector3d rotation) throws HomeException {
         // Preconditions.checkState(cause.root() instanceof PluginContainer, "The root must be a PluginContainer");
         modifyHomeInternal(cause, home, location, rotation);
     }
 
-    public void modifyHomeInternal(Cause cause, Home home, Location<World> location, Vector3d rotation) throws NucleusException {
+    public void modifyHomeInternal(Cause cause, Home home, Location<World> location, Vector3d rotation) throws HomeException {
         ModifyHomeEvent event = new ModifyHomeEvent(cause, home, location);
         postEvent(event);
 
-        IUserDataObject udo = getOrCreateUserOnThread(home.getOwnersUniqueId());
+        IUserDataObject udo = this.serviceCollection.storageManager().getOrCreateUserOnThread(home.getOwnersUniqueId());
         Map<String, LocationNode> m = udo.get(HomeKeys.HOMES).orElseGet(ImmutableMap::of);
         if (!setHome(m, home.getName(), location, rotation, false, udo)) {
-            throw new NucleusException(
-                    Nucleus.getNucleus().getMessageProvider().getTextMessageWithFormat("command.sethome.seterror", home.getName()),
-                    NucleusException.ExceptionType.UNKNOWN_ERROR);
+            throw new HomeException(
+                    this.serviceCollection.messageProvider().getMessageFor(
+                            Util.getSourceFromCause(cause),
+                            "command.sethome.seterror",
+                            home.getName()
+                    ),
+                    HomeException.Reasons.UNKNOWN);
         }
 
     }
 
-    @Override public void removeHome(Cause cause, Home home) throws NucleusException {
+    @Override public void removeHome(Cause cause, Home home) throws HomeException {
         // Preconditions.checkState(cause.root() instanceof PluginContainer, "The root must be a PluginContainer");
         removeHomeInternal(cause, home);
     }
 
-    public void removeHomeInternal(Cause cause, Home home) throws NucleusException {
+    public void removeHomeInternal(Cause cause, Home home) throws HomeException {
         DeleteHomeEvent event = new DeleteHomeEvent(cause, home);
         postEvent(event);
 
-        IUserDataObject udo = getOrCreateUserOnThread(home.getOwnersUniqueId());
+        IUserDataObject udo = this.serviceCollection.storageManager().getOrCreateUserOnThread(home.getOwnersUniqueId());
         Map<String, LocationNode> m = udo.get(HomeKeys.HOMES).orElseGet(ImmutableMap::of);
         if (!deleteHome(m, home.getName(), udo)) {
-                throw new NucleusException(getMessage("command.home.delete.fail", home.getName()), NucleusException.ExceptionType.UNKNOWN_ERROR);
+                throw new HomeException(
+                        this.serviceCollection.messageProvider().getMessageFor(
+                                Util.getSourceFromCause(cause),
+                                "command.home.delete.fail",
+                                home.getName()),
+                        HomeException.Reasons.UNKNOWN);
         }
     }
 
@@ -154,34 +176,41 @@ public class HomeService implements NucleusHomeService, MessageProviderTrait, Pe
     }
 
     @Override public int getMaximumHomes(User src) {
-        if (hasPermission(src, this.unlimitedPermission)) {
+        IPermissionService permissionService = this.serviceCollection.permissionService();
+        if (permissionService.hasPermission(src, HomePermissions.HOMES_UNLIMITED)) {
             return Integer.MAX_VALUE;
         }
 
         //noinspection deprecation
-        return Math.max(Util.getPositiveIntOptionFromSubject(src, NucleusHomeService.HOME_COUNT_OPTION, NucleusHomeService.ALTERNATIVE_HOME_COUNT_OPTION)
+        return Math.max(permissionService.getPositiveIntOptionFromSubject(src, NucleusHomeService.HOME_COUNT_OPTION,
+                NucleusHomeService.ALTERNATIVE_HOME_COUNT_OPTION)
                 .orElse(1), 1);
     }
 
-    public TeleportResult warpToHome(Player src, Home home, boolean safeTeleport) throws ReturnMessageException {
+    public TeleportResult warpToHome(Player src, Home home, boolean safeTeleport) throws HomeException {
         Sponge.getServer().loadWorld(home.getWorldProperties()
-                .orElseThrow(() -> ReturnMessageException.fromKey("command.home.invalid", home.getName())));
+                .orElseThrow(() ->
+                        new HomeException(
+                                this.serviceCollection.messageProvider().getMessageFor(src, "command.home.invalid", home.getName()),
+                                HomeException.Reasons.INVALID_LOCATION
+                        )));
 
-        Location<World> targetLocation = home.getLocation().orElseThrow(() -> ReturnMessageException.fromKey("command.home.invalid", home.getName()));
+        Location<World> targetLocation = home.getLocation().orElseThrow((() ->
+                        new HomeException(
+                                this.serviceCollection.messageProvider().getMessageFor(src, "command.home.invalid", home.getName()),
+                                HomeException.Reasons.INVALID_LOCATION
+                        )));
+                // ReturnMessageException.fromKey("command.home.invalid", home.getName()));
 
-        UseHomeEvent event = CauseStackHelper.createFrameWithCausesWithReturn(c -> new UseHomeEvent(c, src, home), src);
-        if (Sponge.getEventManager().post(event)) {
-            throw new ReturnMessageException(event.getCancelMessage().orElseGet(() ->
-                    Nucleus.getNucleus().getMessageProvider().getTextMessageWithFormat("nucleus.eventcancelled")
-            ));
+        try (CauseStackManager.StackFrame frame = Sponge.getCauseStackManager().pushCauseFrame()) {
+            frame.pushCause(src);
+            postEvent(new UseHomeEvent(frame.getCurrentCause(), src, home));
         }
 
-        SafeTeleportService safeLocationService = Nucleus.getNucleus()
-                .getInternalServiceManager()
-                .getServiceUnchecked(SafeTeleportService.class);
-        TeleportHelperFilter filter = safeLocationService.getAppropriateFilter(src, safeTeleport);
+        INucleusTeleportService teleportService = this.serviceCollection.teleportService();
+        TeleportHelperFilter filter = teleportService.getAppropriateFilter(src, safeTeleport);
 
-        return safeLocationService.teleportPlayer(
+        return teleportService.teleportPlayer(
                         src,
                         targetLocation,
                         home.getRotation(),
@@ -191,10 +220,13 @@ public class HomeService implements NucleusHomeService, MessageProviderTrait, Pe
                 );
     }
 
-    private void postEvent(AbstractHomeEvent event) throws NucleusException {
+    private void postEvent(AbstractHomeEvent event) throws HomeException {
         if (Sponge.getEventManager().post(event)) {
-            throw new NucleusException(event.getCancelMessage().orElseGet(() ->
-                    Nucleus.getNucleus().getMessageProvider().getTextMessageWithFormat("nucleus.eventcancelled")), NucleusException.ExceptionType.EVENT_CANCELLED
+            throw new HomeException(event.getCancelMessage().orElseGet(() ->
+                    this.serviceCollection.messageProvider().getMessageFor(
+                            event.getCause().first(CommandSource.class).orElseGet(Sponge.getServer()::getConsole),
+                            "nucleus.eventcancelled")),
+                    HomeException.Reasons.PLUGIN_CANCELLED
             );
         }
     }
@@ -270,4 +302,5 @@ public class HomeService implements NucleusHomeService, MessageProviderTrait, Pe
 
         return false;
     }
+
 }

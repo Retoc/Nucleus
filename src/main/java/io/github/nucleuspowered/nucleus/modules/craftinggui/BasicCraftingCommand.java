@@ -4,28 +4,24 @@
  */
 package io.github.nucleuspowered.nucleus.modules.craftinggui;
 
-import io.github.nucleuspowered.nucleus.Nucleus;
-import io.github.nucleuspowered.nucleus.internal.command.AbstractCommand;
-import io.github.nucleuspowered.nucleus.internal.command.ReturnMessageException;
-import org.spongepowered.api.command.CommandResult;
-import org.spongepowered.api.command.args.CommandContext;
+import io.github.nucleuspowered.nucleus.internal.command.ICommandContext;
+import io.github.nucleuspowered.nucleus.internal.command.ICommandExecutor;
+import io.github.nucleuspowered.nucleus.internal.command.ICommandResult;
+import org.spongepowered.api.command.CommandException;
 import org.spongepowered.api.entity.living.player.Player;
-import org.spongepowered.api.event.cause.Cause;
 import org.spongepowered.api.item.inventory.Inventory;
 import org.spongepowered.api.item.inventory.InventoryArchetype;
 import org.spongepowered.api.util.annotation.NonnullByDefault;
 
 @NonnullByDefault
-public abstract class BasicCraftingCommand extends AbstractCommand<Player> {
+public abstract class BasicCraftingCommand implements ICommandExecutor<Player> {
 
     protected abstract InventoryArchetype getArchetype();
 
     @Override
-    public CommandResult executeCommand(Player src, CommandContext args, Cause cause) throws Exception {
-        Inventory i = Inventory.builder().of(getArchetype())
-            .build(Nucleus.getNucleus());
-        src.openInventory(i)
-                .orElseThrow(() -> new ReturnMessageException(Nucleus.getNucleus().getMessageProvider().getTextMessageWithFormat("command.crafting.error")));
-        return CommandResult.success();
+    public ICommandResult execute(ICommandContext<? extends Player> context) throws CommandException {
+        Inventory i = Inventory.builder().of(getArchetype()).build(context.getServiceCollection().pluginContainer());
+        context.getCommandSource().openInventory(i).orElseThrow(() -> context.createException("command.crafting.error"));
+        return context.successResult();
     }
 }

@@ -10,25 +10,22 @@ import io.github.nucleuspowered.nucleus.Nucleus;
 import io.github.nucleuspowered.nucleus.api.rtp.RTPKernel;
 import io.github.nucleuspowered.nucleus.api.service.NucleusRTPService;
 import io.github.nucleuspowered.nucleus.internal.CostCancellableTask;
-import io.github.nucleuspowered.nucleus.internal.annotations.command.Permissions;
-import io.github.nucleuspowered.nucleus.internal.annotations.command.RegisterCommand;
-import io.github.nucleuspowered.nucleus.internal.annotations.command.SetCooldownManually;
-import io.github.nucleuspowered.nucleus.internal.command.AbstractCommand;
+import io.github.nucleuspowered.nucleus.internal.command.ICommandContext;
+import io.github.nucleuspowered.nucleus.internal.command.ICommandExecutor;
+import io.github.nucleuspowered.nucleus.internal.command.ICommandResult;
 import io.github.nucleuspowered.nucleus.internal.command.NucleusParameters;
-import io.github.nucleuspowered.nucleus.internal.command.ReturnMessageException;
+import io.github.nucleuspowered.nucleus.internal.command.annotation.Command;
+import io.github.nucleuspowered.nucleus.internal.command.annotation.CommandModifier;
+import io.github.nucleuspowered.nucleus.internal.command.requirements.CommandModifiers;
 import io.github.nucleuspowered.nucleus.internal.interfaces.Reloadable;
-import io.github.nucleuspowered.nucleus.internal.permissions.PermissionInformation;
-import io.github.nucleuspowered.nucleus.internal.permissions.SuggestedLevel;
-import io.github.nucleuspowered.nucleus.modules.core.services.SafeTeleportService;
-import io.github.nucleuspowered.nucleus.modules.rtp.RTPModule;
+import io.github.nucleuspowered.nucleus.modules.rtp.RTPPermissions;
 import io.github.nucleuspowered.nucleus.modules.rtp.config.RTPConfig;
-import io.github.nucleuspowered.nucleus.modules.rtp.config.RTPConfigAdapter;
 import io.github.nucleuspowered.nucleus.modules.rtp.events.RTPSelectedLocationEvent;
 import io.github.nucleuspowered.nucleus.modules.rtp.options.RTPOptions;
+import io.github.nucleuspowered.nucleus.services.INucleusServiceCollection;
 import org.spongepowered.api.Sponge;
-import org.spongepowered.api.command.CommandResult;
+import org.spongepowered.api.command.CommandException;
 import org.spongepowered.api.command.CommandSource;
-import org.spongepowered.api.command.args.CommandContext;
 import org.spongepowered.api.command.args.CommandElement;
 import org.spongepowered.api.command.args.GenericArguments;
 import org.spongepowered.api.entity.living.player.Player;
@@ -39,84 +36,89 @@ import org.spongepowered.api.util.annotation.NonnullByDefault;
 import org.spongepowered.api.world.Location;
 import org.spongepowered.api.world.World;
 import org.spongepowered.api.world.storage.WorldProperties;
-import uk.co.drnaylor.quickstart.config.TypedAbstractConfigAdapter;
 
-import java.util.HashMap;
+import java.time.Duration;
 import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
 import java.util.WeakHashMap;
 
-@SetCooldownManually
 @NonnullByDefault
-@Permissions(supportsOthers = true)
-@RegisterCommand({"rtp", "randomteleport", "rteleport"})
-public class RandomTeleportCommand extends AbstractCommand.SimpleTargetOtherPlayer implements Reloadable {
+@Command(
+        aliases = {"rtp", "randomteleport", "rteleport"},
+        basePermission = RTPPermissions.BASE_RTP,
+        commandDescriptionKey = "rtp",
+        modifiers = {
+                @CommandModifier(
+                        value = CommandModifiers.HAS_COOLDOWN,
+                        exemptPermission = RTPPermissions.EXEMPT_COOLDOWN_RTP,
+                        onCompletion = false
+                ),
+                @CommandModifier(value = CommandModifiers.HAS_WARMUP, exemptPermission = RTPPermissions.EXEMPT_WARMUP_RTP),
+                @CommandModifier(value = CommandModifiers.HAS_COST, exemptPermission = RTPPermissions.EXEMPT_COST_RTP)
+        }
+)
+public class RandomTeleportCommand implements ICommandExecutor<CommandSource>, Reloadable {
 
     private RTPConfig rc = new RTPConfig();
     private final Map<Task, UUID> cachedTasks = new WeakHashMap<>();
 
     private final Timing TIMINGS = Timings.of(Nucleus.getNucleus(), "RTP task");
 
-    @Override protected Map<String, PermissionInformation> permissionSuffixesToRegister() {
-        return new HashMap<String, PermissionInformation>() {{
-            put("worlds", PermissionInformation.getWithTranslation("permission.rtp.worlds", SuggestedLevel.ADMIN));
-        }};
-    }
-
-    @Override public CommandElement[] additionalArguments() {
+    @Override public CommandElement[] parameters(INucleusServiceCollection serviceCollection) {
         return new CommandElement[] {
-            GenericArguments.optionalWeak(
-                requirePermissionArg(
-                        NucleusParameters.WORLD_PROPERTIES_ENABLED_ONLY, this.permissions.getPermissionWithSuffix("world")
-                ))
+                serviceCollection.commandElementSupplier().createOtherUserPermissionElement(true, RTPPermissions.OTHERS_RTP),
+                GenericArguments.optionalWeak(NucleusParameters.WORLD_PROPERTIES_ENABLED_ONLY)
         };
     }
 
-    @Override
-    protected CommandResult executeWithPlayer(CommandSource src, Player player, CommandContext args, boolean self)
-            throws Exception {
+    @Override public ICommandResult execute(ICommandContext<? extends CommandSource> context) throws CommandException {
+        Player player = context.getPlayerFromArgs();
         synchronized (this.cachedTasks) {
             this.cachedTasks.keySet().removeIf(task -> !Sponge.getScheduler().getTaskById(task.getUniqueId()).isPresent());
             if (this.cachedTasks.containsValue(player.getUniqueId())) {
-                throw ReturnMessageException.fromKey("command.rtp.inprogress", player.getName());
+                return context.errorResult("command.rtp.inprogress", player.getName());
             }
         }
 
         // Get the current world.
         final WorldProperties wp;
         if (this.rc.getDefaultWorld().isPresent()) {
-            wp = args.<WorldProperties>getOne(NucleusParameters.Keys.WORLD).orElseGet(() -> this.rc.getDefaultWorld().get());
+            wp = context.getOne(NucleusParameters.Keys.WORLD, WorldProperties.class).orElseGet(() -> this.rc.getDefaultWorld().get());
         } else {
-            wp = this.getWorldFromUserOrArgs(src, NucleusParameters.Keys.WORLD, args);
+            wp = context.getWorldPropertiesOrFromSelf(NucleusParameters.Keys.WORLD).get();
         }
 
         if (this.rc.isPerWorldPermissions()) {
             String name = wp.getWorldName();
-            this.permissions.checkSuffix(src, "worlds." + name.toLowerCase(), () -> ReturnMessageException.fromKey("command.rtp.worldnoperm", name));
+            if (!context.testPermission(RTPPermissions.RTP_WORLDS + "." + name.toLowerCase())) {
+                return context.errorResult("command.rtp.worldnoperm", name);
+            }
         }
 
         World currentWorld = Sponge.getServer().loadWorld(wp.getUniqueId()).orElse(null);
         if (currentWorld == null) {
-            currentWorld = Sponge.getServer().loadWorld(wp).orElseThrow(() -> ReturnMessageException.fromKey("command.rtp.worldnoload", wp.getWorldName()));
+            currentWorld = Sponge.getServer().loadWorld(wp).orElseThrow(() -> context.createException("command.rtp.worldnoload", wp.getWorldName()));
         }
 
-        sendMessageTo(src, "command.rtp.searching");
+        context.sendMessage("command.rtp.searching");
 
         RTPOptions options = new RTPOptions(this.rc, currentWorld.getName());
-        RTPTask rtask = new RTPTask(currentWorld, src, player, this.rc.getNoOfAttempts(),
+        RTPTask rtask = new RTPTask(currentWorld,
+                context,
+                player,
+                this.rc.getNoOfAttempts(),
                 options,
                 this.rc.getKernel(wp.getWorldName()),
-                getCost(src, args));
+                context.is(player) ? context.getCost() : 0);
         Task task = Sponge.getScheduler().createTaskBuilder().execute(rtask).submit(Nucleus.getNucleus());
         this.cachedTasks.put(task, player.getUniqueId());
 
-        return CommandResult.success();
+        return context.successResult();
     }
 
-    @Override public void onReload() {
-        this.rc = Nucleus.getNucleus().getConfigAdapter(RTPModule.ID, RTPConfigAdapter.class)
-                .map(TypedAbstractConfigAdapter::getNodeOrDefault).orElseGet(RTPConfig::new);
+    @Override public void onReload(INucleusServiceCollection serviceCollection) {
+        this.rc = serviceCollection.moduleDataProvider().getModuleConfig(RTPConfig.class);
     }
 
     /*
@@ -130,7 +132,7 @@ public class RandomTeleportCommand extends AbstractCommand.SimpleTargetOtherPlay
 
         private final Cause cause;
         private final World targetWorld;
-        private final CommandSource source;
+        private final ICommandContext<? extends CommandSource> source;
         private final Player target;
         private final boolean isSelf;
         private int count;
@@ -138,9 +140,14 @@ public class RandomTeleportCommand extends AbstractCommand.SimpleTargetOtherPlay
         private final NucleusRTPService.RTPOptions options;
         private final RTPKernel kernel;
 
-        private RTPTask(World target, CommandSource source, Player target1, int maxCount, NucleusRTPService.RTPOptions options,
-                RTPKernel kernel, double cost) {
-            super(Nucleus.getNucleus(), source, cost);
+        private RTPTask(World target,
+                ICommandContext<? extends CommandSource> source,
+                Player target1,
+                int maxCount,
+                NucleusRTPService.RTPOptions options,
+                RTPKernel kernel,
+                double cost) {
+            super(source.getServiceCollection(), target1, cost);
             this.cause = Sponge.getCauseStackManager().getCurrentCause();
             this.targetWorld = target;
             this.source = source;
@@ -179,33 +186,44 @@ public class RandomTeleportCommand extends AbstractCommand.SimpleTargetOtherPlay
                                 continue;
                             }
 
-                            Nucleus.getNucleus().getLogger().debug(String.format("RTP of %s, found location %s, %s, %s", this.target.getName(),
+                            this.source.getServiceCollection().logger().debug(String.format("RTP of %s, found location %s, %s, %s",
+                                    this.target.getName(),
                                     String.valueOf(targetLocation.getBlockX()),
                                     String.valueOf(targetLocation.getBlockY()),
                                     String.valueOf(targetLocation.getBlockZ())));
-                            if (SafeTeleportService.setLocation(this.target, targetLocation)) {
+                            if (this.source.getServiceCollection().teleportService().setLocation(this.target, targetLocation)) {
                                 if (!this.isSelf) {
-                                    sendMessageTo(this.target, "command.rtp.other");
-                                    sendMessageTo(this.source, "command.rtp.successother",
+                                    this.source.sendMessageTo(this.target, "command.rtp.other");
+                                    this.source.sendMessage("command.rtp.successother",
                                             this.target.getName(),
                                             targetLocation.getBlockX(),
                                             targetLocation.getBlockY(),
                                             targetLocation.getBlockZ());
                                 }
 
-                                sendMessageTo(this.target, "command.rtp.success",
+                                this.source.sendMessageTo(this.target, "command.rtp.success",
                                         targetLocation.getBlockX(),
                                         targetLocation.getBlockY(),
                                         targetLocation.getBlockZ());
                                 if (this.isSelf) {
-                                    RandomTeleportCommand.this.setCooldown(this.target);
+                                    this.source.getServiceCollection()
+                                            .cooldownService()
+                                            .setCooldown(
+                                                    this.source.getCommandKey(),
+                                                    this.target,
+                                                    Duration.ofSeconds(this.source.getServiceCollection()
+                                                            .commandMetadataService()
+                                                            .getControl(RandomTeleportCommand.class)
+                                                            .orElseThrow(IllegalStateException::new)
+                                                            .getCooldown(this.target))
+                                            );
                                     synchronized (RandomTeleportCommand.this.cachedTasks) {
                                         RandomTeleportCommand.this.cachedTasks.remove(task);
                                     }
                                 }
                                 return;
                             } else {
-                                sendMessageTo(this.source, "command.rtp.cancelled");
+                                this.source.sendMessage("command.rtp.cancelled");
                                 onCancel();
                                 return;
                             }
@@ -222,8 +240,9 @@ public class RandomTeleportCommand extends AbstractCommand.SimpleTargetOtherPlay
         private void onUnsuccesfulAttempt(Task task) {
             synchronized (RandomTeleportCommand.this.cachedTasks) {
                 if (this.count <= 0) {
-                    Nucleus.getNucleus().getLogger().debug(String.format("RTP of %s was unsuccessful", this.subject.getName()));
-                    sendMessageTo(this.subject, "command.rtp.error");
+                    this.source.getServiceCollection().logger()
+                            .debug(String.format("RTP of %s was unsuccessful", this.target.getName()));
+                    this.source.sendMessage("command.rtp.error");
                     onCancel();
                 } else {
                     // We're using a scheduler to allow some ticks to go by between attempts to find a

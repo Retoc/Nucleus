@@ -7,7 +7,7 @@ package io.github.nucleuspowered.nucleus.modules.warp;
 import io.github.nucleuspowered.nucleus.api.nucleusdata.Warp;
 import io.github.nucleuspowered.nucleus.api.nucleusdata.WarpCategory;
 import io.github.nucleuspowered.nucleus.internal.TypeTokens;
-import io.github.nucleuspowered.nucleus.storage.dataobjects.modular.IGeneralDataObject;
+import io.github.nucleuspowered.nucleus.services.impl.storage.dataobjects.modular.IGeneralDataObject;
 import io.github.nucleuspowered.storage.dataobjects.keyed.DataKey;
 
 public class WarpKeys {

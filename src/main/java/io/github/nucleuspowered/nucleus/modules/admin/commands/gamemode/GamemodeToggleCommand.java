@@ -4,33 +4,50 @@
  */
 package io.github.nucleuspowered.nucleus.modules.admin.commands.gamemode;
 
-import io.github.nucleuspowered.nucleus.internal.annotations.command.PermissionsFrom;
-import io.github.nucleuspowered.nucleus.internal.annotations.command.RegisterCommand;
-import io.github.nucleuspowered.nucleus.internal.docgen.annotations.EssentialsEquivalent;
-import org.spongepowered.api.command.CommandResult;
-import org.spongepowered.api.command.args.CommandContext;
+import io.github.nucleuspowered.nucleus.internal.command.ICommandContext;
+import io.github.nucleuspowered.nucleus.internal.command.ICommandResult;
+import io.github.nucleuspowered.nucleus.internal.command.annotation.CommandModifier;
+import io.github.nucleuspowered.nucleus.internal.command.annotation.Command;
+import io.github.nucleuspowered.nucleus.internal.command.requirements.CommandModifiers;
+import io.github.nucleuspowered.nucleus.internal.command.annotation.EssentialsEquivalent;
+import io.github.nucleuspowered.nucleus.modules.admin.AdminPermissions;
+import org.spongepowered.api.command.CommandException;
 import org.spongepowered.api.data.key.Keys;
 import org.spongepowered.api.entity.living.player.Player;
 import org.spongepowered.api.entity.living.player.gamemode.GameMode;
 import org.spongepowered.api.entity.living.player.gamemode.GameModes;
-import org.spongepowered.api.event.cause.Cause;
 import org.spongepowered.api.util.annotation.NonnullByDefault;
 
 @NonnullByDefault
-@RegisterCommand("gmt")
+@Command(
+        aliases = {"gmt"},
+        parentCommand = GamemodeCommand.class,
+        basePermission = {AdminPermissions.BASE_GAMEMODE,
+                AdminPermissions.GAMEMODE_MODES_SPECTATOR,
+                AdminPermissions.GAMEMODE_MODES_CREATIVE},
+        commandDescriptionKey = "gmt",
+        modifiers =
+                {
+                        @CommandModifier(value = CommandModifiers.HAS_WARMUP, exemptPermission = AdminPermissions.EXEMPT_WARMUP_GAMEMODE,
+                                useFrom = GamemodeCommand.class),
+                        @CommandModifier(value = CommandModifiers.HAS_COOLDOWN, exemptPermission = AdminPermissions.EXEMPT_COOLDOWN_GAMEMODE,
+                                useFrom = GamemodeCommand.class),
+                        @CommandModifier(value = CommandModifiers.HAS_COST, exemptPermission = AdminPermissions.EXEMPT_COST_GAMEMODE,
+                                useFrom = GamemodeCommand.class)
+                }
+)
 @EssentialsEquivalent("gmt")
-@PermissionsFrom(value = GamemodeCommand.class, requiresSuffix = {"modes.survival", "modes.creative"})
 public class GamemodeToggleCommand extends GamemodeBase<Player> {
 
     @Override
-    protected CommandResult executeCommand(Player src, CommandContext args, Cause cause) throws Exception {
-        GameMode mode = src.get(Keys.GAME_MODE).orElse(GameModes.SURVIVAL);
+    public ICommandResult execute(ICommandContext<? extends Player> src) throws CommandException {
+        GameMode mode = src.getIfPlayer().get(Keys.GAME_MODE).orElse(GameModes.SURVIVAL);
         if (mode.equals(GameModes.SURVIVAL) || mode.equals(GameModes.NOT_SET)) {
             mode = GameModes.CREATIVE;
         } else {
             mode = GameModes.SURVIVAL;
         }
 
-        return baseCommand(src, src, mode);
+        return baseCommand(src, src.getIfPlayer(), mode);
     }
 }

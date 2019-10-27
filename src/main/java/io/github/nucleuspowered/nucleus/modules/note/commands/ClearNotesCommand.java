@@ -4,58 +4,54 @@
  */
 package io.github.nucleuspowered.nucleus.modules.note.commands;
 
-import io.github.nucleuspowered.nucleus.Nucleus;
-import io.github.nucleuspowered.nucleus.internal.annotations.RunAsync;
-import io.github.nucleuspowered.nucleus.internal.annotations.command.NoModifiers;
-import io.github.nucleuspowered.nucleus.internal.annotations.command.Permissions;
-import io.github.nucleuspowered.nucleus.internal.annotations.command.RegisterCommand;
-import io.github.nucleuspowered.nucleus.internal.command.AbstractCommand;
-import io.github.nucleuspowered.nucleus.internal.permissions.SuggestedLevel;
+import io.github.nucleuspowered.nucleus.internal.command.ICommandContext;
+import io.github.nucleuspowered.nucleus.internal.command.ICommandExecutor;
+import io.github.nucleuspowered.nucleus.internal.command.ICommandResult;
+import io.github.nucleuspowered.nucleus.internal.command.NucleusParameters;
+import io.github.nucleuspowered.nucleus.internal.command.annotation.Command;
+import io.github.nucleuspowered.nucleus.modules.note.NotePermissions;
 import io.github.nucleuspowered.nucleus.modules.note.data.NoteData;
 import io.github.nucleuspowered.nucleus.modules.note.services.NoteHandler;
-import org.spongepowered.api.command.CommandResult;
+import io.github.nucleuspowered.nucleus.services.INucleusServiceCollection;
+import org.spongepowered.api.command.CommandException;
 import org.spongepowered.api.command.CommandSource;
-import org.spongepowered.api.command.args.CommandContext;
 import org.spongepowered.api.command.args.CommandElement;
-import org.spongepowered.api.command.args.GenericArguments;
 import org.spongepowered.api.entity.living.player.User;
-import org.spongepowered.api.event.cause.Cause;
-import org.spongepowered.api.text.Text;
 import org.spongepowered.api.util.annotation.NonnullByDefault;
 
 import java.util.List;
 
-@Permissions(suggestedLevel = SuggestedLevel.ADMIN)
-@RunAsync
-@NoModifiers
 @NonnullByDefault
-@RegisterCommand({"clearnotes", "removeallnotes"})
-public class ClearNotesCommand extends AbstractCommand<CommandSource> {
-
-    private final NoteHandler handler = getServiceUnchecked(NoteHandler.class);
-    private final String playerKey = "subject";
+@Command(
+        aliases = {"clearnotes", "removeallnotes"},
+        basePermission = NotePermissions.BASE_CLEARNOTES,
+        commandDescriptionKey = "clearnotes",
+        async = true
+)
+public class ClearNotesCommand implements ICommandExecutor<CommandSource> {
 
     @Override
-    public CommandElement[] getArguments() {
-        return new CommandElement[] {GenericArguments.onlyOne(GenericArguments.user(Text.of(this.playerKey)))};
+    public CommandElement[] parameters(INucleusServiceCollection serviceCollection) {
+        return new CommandElement[] {
+                NucleusParameters.ONE_USER
+        };
     }
 
-    @Override
-    public CommandResult executeCommand(CommandSource src, CommandContext args, Cause cause) {
-        User user = args.<User>getOne(this.playerKey).get();
+    @Override public ICommandResult execute(ICommandContext<? extends CommandSource> context) throws CommandException {
+        User user = context.requireOne(NucleusParameters.Keys.USER, User.class);
+        NoteHandler handler = context.getServiceCollection().getServiceUnchecked(NoteHandler.class);
 
-        List<NoteData> notes = this.handler.getNotesInternal(user);
+        List<NoteData> notes = handler.getNotesInternal(user);
         if (notes.isEmpty()) {
-            src.sendMessage(Nucleus.getNucleus().getMessageProvider().getTextMessageWithFormat("command.checknotes.none", user.getName()));
-            return CommandResult.success();
+            context.sendMessage("command.checknotes.none", user.getName());
+            return context.successResult();
         }
 
-        if (this.handler.clearNotes(user)) {
-            src.sendMessage(Nucleus.getNucleus().getMessageProvider().getTextMessageWithFormat("command.clearnotes.success", user.getName()));
-            return CommandResult.success();
+        if (handler.clearNotes(user)) {
+            context.sendMessage("command.clearnotes.success", user.getName());
+            return context.successResult();
         }
 
-        src.sendMessage(Nucleus.getNucleus().getMessageProvider().getTextMessageWithFormat("command.clearnotes.failure", user.getName()));
-        return CommandResult.empty();
+        return context.errorResult("command.clearnotes.failure", user.getName());
     }
 }

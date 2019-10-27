@@ -4,12 +4,13 @@
  */
 package io.github.nucleuspowered.nucleus.modules.item.commands.lore;
 
-import io.github.nucleuspowered.nucleus.Nucleus;
 import io.github.nucleuspowered.nucleus.argumentparsers.PositiveIntegerArgument;
-import io.github.nucleuspowered.nucleus.internal.command.AbstractCommand;
+import io.github.nucleuspowered.nucleus.internal.command.ICommandContext;
+import io.github.nucleuspowered.nucleus.internal.command.ICommandExecutor;
+import io.github.nucleuspowered.nucleus.internal.command.ICommandResult;
 import io.github.nucleuspowered.nucleus.internal.command.NucleusParameters;
-import io.github.nucleuspowered.nucleus.internal.command.ReturnMessageException;
-import org.spongepowered.api.command.CommandResult;
+import io.github.nucleuspowered.nucleus.services.INucleusServiceCollection;
+import org.spongepowered.api.command.CommandException;
 import org.spongepowered.api.command.args.CommandElement;
 import org.spongepowered.api.data.key.Keys;
 import org.spongepowered.api.data.manipulator.mutable.item.LoreData;
@@ -23,12 +24,12 @@ import org.spongepowered.api.util.annotation.NonnullByDefault;
 import java.util.List;
 
 @NonnullByDefault
-abstract class LoreModifyBaseCommand extends AbstractCommand<Player> {
+abstract class LoreModifyBaseCommand implements ICommandExecutor<Player> {
 
     final String loreLine = "line";
 
     @Override
-    public CommandElement[] getArguments() {
+    public CommandElement[] parameters(INucleusServiceCollection serviceCollection) {
         return new CommandElement[]{
                 new PositiveIntegerArgument(Text.of(this.loreLine), false),
                 NucleusParameters.LORE
@@ -41,17 +42,18 @@ abstract class LoreModifyBaseCommand extends AbstractCommand<Player> {
      * the passed text. When false, we will rather insert the lore at the specified
      * line.
      *
-     * @param src The player attempting to alter an item's lore
+     * @param context The player attempting to alter an item's lore
      * @param message The text to offer to the item
      * @param line The line of the lore we want to edit
      * @param editOrInsert True to edit, false to insert
      * @return The result of the operation
      */
-    CommandResult setLore(Player src, String message, int line, boolean editOrInsert) throws Exception {
+    ICommandResult setLore(ICommandContext<? extends Player> context, String message, int line, boolean editOrInsert) throws CommandException {
+        Player src = context.getIfPlayer();
         // The number will come in one based - we need to reduce by one.
         line--;
 
-        ItemStack stack = src.getItemInHand(HandTypes.MAIN_HAND).orElseThrow(() -> ReturnMessageException.fromKey("command.lore.set.noitem"));
+        ItemStack stack = src.getItemInHand(HandTypes.MAIN_HAND).orElseThrow(() -> context.createException("command.lore.set.noitem"));
         LoreData loreData = stack.getOrCreate(LoreData.class).get();
 
         Text getLore = TextSerializers.FORMATTING_CODE.deserialize(message);
@@ -59,7 +61,7 @@ abstract class LoreModifyBaseCommand extends AbstractCommand<Player> {
         List<Text> loreList = loreData.lore().get();
         if (editOrInsert) {
             if (loreList.size() < line) {
-                throw ReturnMessageException.fromKey("command.lore.set.invalidEdit");
+                return context.errorResult("command.lore.set.invalidEdit");
             }
 
             loreList.set(line, getLore);
@@ -74,10 +76,10 @@ abstract class LoreModifyBaseCommand extends AbstractCommand<Player> {
         if (stack.offer(Keys.ITEM_LORE, loreList).isSuccessful()) {
             src.setItemInHand(HandTypes.MAIN_HAND, stack);
 
-            src.sendMessage(Nucleus.getNucleus().getMessageProvider().getTextMessageWithFormat("command.lore.set.success"));
-            return CommandResult.success();
+            context.sendMessage("command.lore.set.success");
+            return context.successResult();
         }
 
-        throw ReturnMessageException.fromKey("command.lore.set.fail");
+        return context.errorResult("command.lore.set.fail");
     }
 }

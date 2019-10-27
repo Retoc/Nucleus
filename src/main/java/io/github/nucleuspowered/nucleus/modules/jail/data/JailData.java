@@ -87,7 +87,7 @@ public final class JailData extends EndTimestamp implements Inmate {
     }
 
     @Override public Optional<UUID> getJailer() {
-        return this.jailer.equals(Util.consoleFakeUUID) ? Optional.empty() : Optional.of(this.jailer);
+        return this.jailer.equals(Util.CONSOLE_FAKE_UUID) ? Optional.empty() : Optional.of(this.jailer);
     }
 
     public Optional<Instant> getCreationInstant() {

@@ -8,13 +8,12 @@ import io.github.nucleuspowered.nucleus.Nucleus;
 import io.github.nucleuspowered.nucleus.api.exceptions.KitRedeemException;
 import io.github.nucleuspowered.nucleus.api.nucleusdata.Kit;
 import io.github.nucleuspowered.nucleus.dataservices.KitDataService;
-import io.github.nucleuspowered.nucleus.internal.PermissionRegistry;
 import io.github.nucleuspowered.nucleus.internal.interfaces.ListenerBase;
 import io.github.nucleuspowered.nucleus.internal.interfaces.Reloadable;
-import io.github.nucleuspowered.nucleus.internal.traits.InternalServiceManagerTrait;
+import io.github.nucleuspowered.nucleus.modules.kit.KitPermissions;
 import io.github.nucleuspowered.nucleus.modules.kit.config.KitConfig;
-import io.github.nucleuspowered.nucleus.modules.kit.config.KitConfigAdapter;
 import io.github.nucleuspowered.nucleus.modules.kit.services.KitHandler;
+import io.github.nucleuspowered.nucleus.services.INucleusServiceCollection;
 import org.slf4j.Logger;
 import org.spongepowered.api.entity.living.player.Player;
 import org.spongepowered.api.event.Listener;
@@ -23,14 +22,22 @@ import org.spongepowered.api.event.network.ClientConnectionEvent;
 
 import java.util.List;
 
-public class KitAutoRedeemListener implements ListenerBase.Conditional, Reloadable, InternalServiceManagerTrait {
+import javax.inject.Inject;
 
-    private final KitHandler handler = getServiceUnchecked(KitHandler.class);
+public class KitAutoRedeemListener implements ListenerBase.Conditional, Reloadable {
+
+    private final KitHandler kitHandler;
+
     private final KitDataService gds = Nucleus.getNucleus().getKitDataService();
     private final Logger logger = Nucleus.getNucleus().getLogger();
 
     private boolean mustGetAll;
     private boolean logAutoRedeem = false;
+
+    @Inject
+    public KitAutoRedeemListener(INucleusServiceCollection serviceCollection) {
+        this.kitHandler = serviceCollection.getServiceUnchecked(KitHandler.class);
+    }
 
     // TODO: Replace
     @Listener
@@ -38,7 +45,7 @@ public class KitAutoRedeemListener implements ListenerBase.Conditional, Reloadab
         List<Kit> autoRedeemable = this.gds.getAutoRedeemable();
         String name = "[Kit Auto Redeem - " + player.getName() + "]: ";
         for (Kit kit : autoRedeemable) {
-            String permission = PermissionRegistry.PERMISSIONS_PREFIX + "kits." + kit.getName().toLowerCase();
+            String permission = KitPermissions.getKitPermission(kit.getName().toLowerCase());
             String kitName = kit.getName();
             if (kit.ignoresPermission()) {
                 log(name + kitName + " - permission check bypassed.");
@@ -49,9 +56,8 @@ public class KitAutoRedeemListener implements ListenerBase.Conditional, Reloadab
             }
 
             // Redeem kit in the normal way.
-            // TODO: Move this logic into the handler while I'm not on a plane somwhere.
             try {
-                this.handler.redeemKit(kit, player, true, true, this.mustGetAll, false);
+                this.kitHandler.redeemKit(kit, player, true, true, this.mustGetAll, false);
                 log(name  + kitName + " - kit redeemed.");
             } catch (KitRedeemException e) {
                 if (this.logAutoRedeem) {
@@ -61,8 +67,8 @@ public class KitAutoRedeemListener implements ListenerBase.Conditional, Reloadab
         }
     }
 
-    @Override public boolean shouldEnable() {
-        return getServiceUnchecked(KitConfigAdapter.class).getNodeOrDefault().isEnableAutoredeem();
+    @Override public boolean shouldEnable(INucleusServiceCollection serviceCollection) {
+        return serviceCollection.moduleDataProvider().getModuleConfig(KitConfig.class).isEnableAutoredeem();
     }
 
     private void log(String message) {
@@ -71,8 +77,8 @@ public class KitAutoRedeemListener implements ListenerBase.Conditional, Reloadab
         }
     }
 
-    @Override public void onReload() throws Exception {
-        KitConfig kca = getServiceUnchecked(KitConfigAdapter.class).getNodeOrDefault();
+    @Override public void onReload(INucleusServiceCollection serviceCollection) {
+        KitConfig kca = serviceCollection.moduleDataProvider().getModuleConfig(KitConfig.class);
         this.mustGetAll = kca.isMustGetAll();
         this.logAutoRedeem = kca.isLogAutoredeem();
     }

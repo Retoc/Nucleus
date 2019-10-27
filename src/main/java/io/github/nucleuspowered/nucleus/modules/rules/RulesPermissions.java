@@ -5,8 +5,8 @@
 package io.github.nucleuspowered.nucleus.modules.rules;
 
 import io.github.nucleuspowered.nucleus.annotationprocessor.RegisterPermissions;
-import io.github.nucleuspowered.nucleus.internal.permissions.PermissionMetadata;
-import io.github.nucleuspowered.nucleus.internal.permissions.SuggestedLevel;
+import io.github.nucleuspowered.nucleus.services.impl.permission.PermissionMetadata;
+import io.github.nucleuspowered.nucleus.services.impl.permission.SuggestedLevel;
 
 @RegisterPermissions
 public class RulesPermissions {
@@ -15,6 +15,6 @@ public class RulesPermissions {
     }
 
     @PermissionMetadata(descriptionKey = "permission.base", replacements = { "rules" }, level = SuggestedLevel.USER)
-    public static final String BASE_RULES = "rules.base";
+    public static final String BASE_RULES = "nucleus.rules.base";
 
 }

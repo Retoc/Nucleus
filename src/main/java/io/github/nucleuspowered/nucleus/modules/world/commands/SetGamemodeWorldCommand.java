@@ -4,52 +4,53 @@
  */
 package io.github.nucleuspowered.nucleus.modules.world.commands;
 
-import io.github.nucleuspowered.nucleus.Nucleus;
 import io.github.nucleuspowered.nucleus.Util;
 import io.github.nucleuspowered.nucleus.argumentparsers.ImprovedGameModeArgument;
-import io.github.nucleuspowered.nucleus.internal.annotations.command.NoModifiers;
-import io.github.nucleuspowered.nucleus.internal.annotations.command.Permissions;
-import io.github.nucleuspowered.nucleus.internal.annotations.command.RegisterCommand;
-import io.github.nucleuspowered.nucleus.internal.command.AbstractCommand;
+import io.github.nucleuspowered.nucleus.internal.command.ICommandContext;
+import io.github.nucleuspowered.nucleus.internal.command.ICommandExecutor;
+import io.github.nucleuspowered.nucleus.internal.command.ICommandResult;
 import io.github.nucleuspowered.nucleus.internal.command.NucleusParameters;
-import io.github.nucleuspowered.nucleus.internal.permissions.SuggestedLevel;
-import org.spongepowered.api.command.CommandResult;
+import io.github.nucleuspowered.nucleus.internal.command.annotation.Command;
+import io.github.nucleuspowered.nucleus.modules.world.WorldPermissions;
+import io.github.nucleuspowered.nucleus.services.INucleusServiceCollection;
+import org.spongepowered.api.command.CommandException;
 import org.spongepowered.api.command.CommandSource;
-import org.spongepowered.api.command.args.CommandContext;
 import org.spongepowered.api.command.args.CommandElement;
 import org.spongepowered.api.command.args.GenericArguments;
 import org.spongepowered.api.entity.living.player.gamemode.GameMode;
-import org.spongepowered.api.event.cause.Cause;
 import org.spongepowered.api.text.Text;
 import org.spongepowered.api.util.annotation.NonnullByDefault;
 import org.spongepowered.api.world.storage.WorldProperties;
 
 @NonnullByDefault
-@NoModifiers
-@Permissions(prefix = "world", suggestedLevel = SuggestedLevel.ADMIN)
-@RegisterCommand(value = {"setgamemode", "setgm", "gamemode", "gm"}, subcommandOf = WorldCommand.class)
-public class SetGamemodeWorldCommand extends AbstractCommand<CommandSource> {
+@Command(
+        aliases = {"setgamemode", "setgm", "gamemode", "gm"},
+        basePermission = WorldPermissions.BASE_WORLD_SETGAMEMODE,
+        commandDescriptionKey = "world.setgamemode",
+        parentCommand = WorldCommand.class
+)
+public class SetGamemodeWorldCommand implements ICommandExecutor<CommandSource> {
 
     private final String gamemode = "gamemode";
 
     @Override
-    public CommandElement[] getArguments() {
+    public CommandElement[] parameters(INucleusServiceCollection serviceCollection) {
         return new CommandElement[] {
                 GenericArguments.onlyOne(new ImprovedGameModeArgument(Text.of(this.gamemode))),
                 NucleusParameters.OPTIONAL_WORLD_PROPERTIES_ALL
         };
     }
 
-    @Override
-    public CommandResult executeCommand(final CommandSource src, CommandContext args, Cause cause) throws Exception {
-        GameMode gamemodeInput = args.<GameMode>getOne(this.gamemode).get();
-        WorldProperties worldProperties = getWorldFromUserOrArgs(src, NucleusParameters.Keys.WORLD, args);
+    @Override public ICommandResult execute(ICommandContext<? extends CommandSource> context) throws CommandException {
+        GameMode gamemodeInput = context.requireOne(this.gamemode, GameMode.class);
+        WorldProperties worldProperties = context.getWorldPropertiesOrFromSelf(NucleusParameters.Keys.WORLD)
+                .orElseThrow(() -> context.createException("command.world.player"));
 
         worldProperties.setGameMode(gamemodeInput);
-        src.sendMessage(Nucleus.getNucleus().getMessageProvider().getTextMessageWithFormat("command.world.setgamemode.success",
+        context.sendMessage("command.world.setgamemode.success",
             worldProperties.getWorldName(),
-            Util.getTranslatableIfPresent(gamemodeInput)));
+            Util.getTranslatableIfPresent(gamemodeInput));
 
-        return CommandResult.success();
+        return context.successResult();
     }
 }

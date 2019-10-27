@@ -4,67 +4,68 @@
  */
 package io.github.nucleuspowered.nucleus.modules.jump.commands;
 
-import io.github.nucleuspowered.nucleus.Nucleus;
 import io.github.nucleuspowered.nucleus.api.teleport.TeleportScanners;
-import io.github.nucleuspowered.nucleus.internal.annotations.command.Permissions;
-import io.github.nucleuspowered.nucleus.internal.annotations.command.RegisterCommand;
-import io.github.nucleuspowered.nucleus.internal.command.AbstractCommand;
-import io.github.nucleuspowered.nucleus.internal.command.ReturnMessageException;
+import io.github.nucleuspowered.nucleus.internal.command.ICommandContext;
+import io.github.nucleuspowered.nucleus.internal.command.ICommandExecutor;
+import io.github.nucleuspowered.nucleus.internal.command.ICommandResult;
+import io.github.nucleuspowered.nucleus.internal.command.annotation.Command;
+import io.github.nucleuspowered.nucleus.internal.command.annotation.CommandModifier;
+import io.github.nucleuspowered.nucleus.internal.command.requirements.CommandModifiers;
 import io.github.nucleuspowered.nucleus.internal.interfaces.Reloadable;
-import io.github.nucleuspowered.nucleus.internal.permissions.SuggestedLevel;
-import io.github.nucleuspowered.nucleus.modules.core.services.SafeTeleportService;
-import io.github.nucleuspowered.nucleus.modules.jump.JumpModule;
+import io.github.nucleuspowered.nucleus.modules.jump.JumpPermissions;
 import io.github.nucleuspowered.nucleus.modules.jump.config.JumpConfig;
-import io.github.nucleuspowered.nucleus.modules.jump.config.JumpConfigAdapter;
+import io.github.nucleuspowered.nucleus.services.INucleusServiceCollection;
 import org.spongepowered.api.Sponge;
-import org.spongepowered.api.command.CommandResult;
-import org.spongepowered.api.command.args.CommandContext;
+import org.spongepowered.api.command.CommandException;
 import org.spongepowered.api.entity.living.player.Player;
-import org.spongepowered.api.event.cause.Cause;
 import org.spongepowered.api.util.annotation.NonnullByDefault;
 import org.spongepowered.api.world.Location;
 import org.spongepowered.api.world.World;
 import org.spongepowered.api.world.teleport.TeleportHelperFilters;
 
-import java.util.Optional;
-import java.util.function.Function;
-
-@Permissions(suggestedLevel = SuggestedLevel.ADMIN)
 @NonnullByDefault
-@RegisterCommand("unstuck")
-public class UnstuckCommand extends AbstractCommand<Player> implements Reloadable {
+@Command(
+        aliases = {"unstuck"},
+        basePermission = JumpPermissions.BASE_UNSTUCK,
+        commandDescriptionKey = "unstuck",
+        modifiers = {
+                @CommandModifier(value = CommandModifiers.HAS_COOLDOWN, exemptPermission = JumpPermissions.EXEMPT_COOLDOWN_UNSTUCK),
+                @CommandModifier(value = CommandModifiers.HAS_WARMUP, exemptPermission = JumpPermissions.EXEMPT_WARMUP_UNSTUCK),
+                @CommandModifier(value = CommandModifiers.HAS_COST, exemptPermission = JumpPermissions.EXEMPT_COST_UNSTUCK)
+        }
+)
+public class UnstuckCommand implements ICommandExecutor<Player>, Reloadable {
 
     private int radius = 1;
     private int height = 1;
 
-    @Override
-    protected CommandResult executeCommand(Player src, CommandContext args, Cause cause) throws Exception {
+    @Override public ICommandResult execute(ICommandContext<? extends Player> context) throws CommandException {
         // Get the player location, find a safe location. Prevent players trying this to get out of sticky situations, height and width is 1.
+        Player src = context.getIfPlayer();
         Location<World> location = Sponge.getGame().getTeleportHelper().getSafeLocation(src.getLocation(), this.height, this.radius)
-            .orElseThrow(() -> ReturnMessageException.fromKey("command.unstuck.nolocation"));
+            .orElseThrow(() -> context.createException("command.unstuck.nolocation"));
         if (location.getBlockPosition().equals(src.getLocation().getBlockPosition())) {
-            throw ReturnMessageException.fromKey("command.unstuck.notneeded");
+            return context.errorResult("command.unstuck.notneeded");
         }
 
-        if (getServiceUnchecked(SafeTeleportService.class).teleportPlayer(
+        if (context.getServiceCollection().teleportService().teleportPlayer(
                 src,
                 location,
                 false,
                 TeleportScanners.NO_SCAN,
                 TeleportHelperFilters.DEFAULT).isSuccessful())
-        if (SafeTeleportService.setLocation(src, location)) {
-            src.sendMessage(Nucleus.getNucleus().getMessageProvider().getTextMessageWithTextFormat("command.unstuck.success"));
-            return CommandResult.success();
+        if (context.getServiceCollection().teleportService().setLocation(src, location)) {
+            context.sendMessage("command.unstuck.success");
+            return context.successResult();
         }
 
-        throw ReturnMessageException.fromKey("command.unstuck.cancelled");
+        return context.errorResult("command.unstuck.cancelled");
     }
 
     @Override
-    public void onReload() {
-        Optional<JumpConfig> c = Nucleus.getNucleus().getConfigValue(JumpModule.ID, JumpConfigAdapter.class, Function.identity());
-        this.radius = c.map(JumpConfig::getMaxUnstuckRadius).orElse(1);
-        this.height = c.map(JumpConfig::getMaxUnstuckHeight).orElse(1);
+    public void onReload(INucleusServiceCollection serviceCollection) {
+        JumpConfig c = serviceCollection.moduleDataProvider().getModuleConfig(JumpConfig.class);
+        this.radius = c.getMaxUnstuckRadius();
+        this.height = c.getMaxUnstuckHeight();
     }
-
 }

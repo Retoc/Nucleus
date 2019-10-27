@@ -4,20 +4,20 @@
  */
 package io.github.nucleuspowered.nucleus.modules.core.commands;
 
+import com.google.inject.Inject;
 import io.github.nucleuspowered.nucleus.Util;
 import io.github.nucleuspowered.nucleus.api.service.NucleusUserPreferenceService;
-import io.github.nucleuspowered.nucleus.internal.annotations.RunAsync;
-import io.github.nucleuspowered.nucleus.internal.annotations.command.NoCommandPrefix;
-import io.github.nucleuspowered.nucleus.internal.annotations.command.NoModifiers;
-import io.github.nucleuspowered.nucleus.internal.annotations.command.Permissions;
-import io.github.nucleuspowered.nucleus.internal.annotations.command.RegisterCommand;
-import io.github.nucleuspowered.nucleus.internal.command.AbstractCommand;
-import io.github.nucleuspowered.nucleus.internal.permissions.SuggestedLevel;
-import io.github.nucleuspowered.nucleus.internal.userprefs.PreferenceKeyImpl;
-import io.github.nucleuspowered.nucleus.internal.userprefs.UserPreferenceService;
-import org.spongepowered.api.command.CommandResult;
+import io.github.nucleuspowered.nucleus.internal.command.ICommandContext;
+import io.github.nucleuspowered.nucleus.internal.command.ICommandExecutor;
+import io.github.nucleuspowered.nucleus.internal.command.ICommandResult;
+import io.github.nucleuspowered.nucleus.internal.command.annotation.Command;
+import io.github.nucleuspowered.nucleus.modules.core.CorePermissions;
+import io.github.nucleuspowered.nucleus.services.INucleusServiceCollection;
+import io.github.nucleuspowered.nucleus.services.IUserPreferenceService;
+import io.github.nucleuspowered.nucleus.services.impl.userprefs.PreferenceKeyImpl;
+import io.github.nucleuspowered.nucleus.services.impl.userprefs.UserPreferenceService;
+import org.spongepowered.api.command.CommandException;
 import org.spongepowered.api.command.CommandSource;
-import org.spongepowered.api.command.args.CommandContext;
 import org.spongepowered.api.command.args.CommandElement;
 import org.spongepowered.api.command.args.GenericArguments;
 import org.spongepowered.api.entity.living.player.User;
@@ -31,89 +31,114 @@ import java.util.Map;
 
 import javax.annotation.Nullable;
 
-@RunAsync
-@Permissions(mainOverride = "userprefs", supportsOthers = true, suggestedLevel = SuggestedLevel.USER)
-@NoModifiers
-@RegisterCommand({ "nuserprefs", "userprefs" })
-@NoCommandPrefix
+@Command(
+        aliases = { "nuserprefs", "userprefs" },
+        basePermission = CorePermissions.BASE_NUSERPREFS,
+        commandDescriptionKey = "nuserprefs",
+        prefixAliasesWithN = false,
+        async = true
+)
 @NonnullByDefault
-public class NucleusUserPrefsCommand extends AbstractCommand.SimpleTargetOtherUser {
+public class NucleusUserPrefsCommand implements ICommandExecutor<CommandSource> {
 
     private static final Text SEPARATOR = Text.of(": ");
+    private final IUserPreferenceService userPreferenceService;
+
+    @Inject
+    public NucleusUserPrefsCommand(INucleusServiceCollection serviceCollection) {
+        this.userPreferenceService = serviceCollection.userPreferenceService();
+    }
 
     @Override
-    protected CommandElement[] additionalArguments() {
+    public CommandElement[] parameters(INucleusServiceCollection serviceCollection) {
         return new CommandElement[] {
-                GenericArguments.optional(getServiceUnchecked(UserPreferenceService.class).getElement())
+                serviceCollection.commandElementSupplier().createOtherUserPermissionElement(false, CorePermissions.OTHERS_NUSERPREFS),
+                GenericArguments.optional(this.userPreferenceService.getElement())
         };
     }
 
-    @Override protected CommandResult executeWithPlayer(CommandSource source, User target, CommandContext args, boolean isSelf)
-            throws Exception {
-
-        if (args.hasAny(UserPreferenceService.PREFERENCE_ARG)) {
+    @Override
+    public ICommandResult execute(ICommandContext<? extends CommandSource> context) throws CommandException {
+        User target = context.getUserFromArgs();
+        if (context.hasAny(UserPreferenceService.PREFERENCE_ARG.toPlain())) {
             // do we get or set?
-            if (args.hasAny(UserPreferenceService.VALUE_ARG)) {
-                return set(source, target, isSelf,
-                        args.requireOne(UserPreferenceService.PREFERENCE_ARG),
-                        args.requireOne(UserPreferenceService.VALUE_ARG));
+            if (context.hasAny(UserPreferenceService.VALUE_ARG.toPlain())) {
+                return set(context, target, context.is(target),
+                        context.requireOne(UserPreferenceService.PREFERENCE_ARG.toPlain(), PreferenceKeyImpl.class),
+                        context.requireOne(UserPreferenceService.VALUE_ARG.toPlain(), Object.class));
             } else {
-                return get(source, target, args.requireOne(UserPreferenceService.PREFERENCE_ARG));
+                return get(context, target, context.requireOne(UserPreferenceService.PREFERENCE_ARG.toPlain(), PreferenceKeyImpl.class));
             }
         } else {
-            return list(source, target);
+            return list(context, target);
         }
 
     }
 
-    private <T> CommandResult set(CommandSource source, User target, boolean isSelf, PreferenceKeyImpl<T> key,
+    private <T> ICommandResult set(
+            ICommandContext<? extends CommandSource> context,
+            User target,
+            boolean isSelf,
+            PreferenceKeyImpl<T> key,
             @Nullable Object value) {
-        UserPreferenceService service = getServiceUnchecked(UserPreferenceService.class);
-        service.set(target.getUniqueId(), key, key.getValueClass().cast(value));
+        this.userPreferenceService.set(target.getUniqueId(), key, key.getValueClass().cast(value));
         if (isSelf) {
-            sendMessageTo(source, "command.userprefs.set.self", key.getID(), String.valueOf(value));
+            context.sendMessage("command.userprefs.set.self", key.getID(), value);
         } else {
-            sendMessageTo(source, "command.userprefs.set.other", target, key.getID(), String.valueOf(value));
+            context.sendMessage("command.userprefs.set.other", target, key.getID(), value);
         }
-        return CommandResult.success();
+        return context.successResult();
     }
 
-    private <T> CommandResult get(CommandSource source, User target, PreferenceKeyImpl<T> key) {
-        UserPreferenceService service = getServiceUnchecked(UserPreferenceService.class);
-        source.sendMessage(get(source, key, service.get(target.getUniqueId(), key).orElse(null)));
-        return CommandResult.success();
+    private <T> ICommandResult get(ICommandContext<? extends CommandSource> context, User target, PreferenceKeyImpl<T> key) throws CommandException {
+        context.sendMessageText(
+                get(context, context.getServiceCollection().userPreferenceService(),
+                        key,
+                        this.userPreferenceService.get(target.getUniqueId(), key).orElse(null)));
+        return context.successResult();
     }
 
-    private CommandResult list(CommandSource source, User target) {
-        UserPreferenceService service = getServiceUnchecked(UserPreferenceService.class);
-        Map<NucleusUserPreferenceService.PreferenceKey<?>, Object> ret = service.get(target);
+    private ICommandResult list(ICommandContext<? extends CommandSource> context, User target) throws CommandException {
+        Map<NucleusUserPreferenceService.PreferenceKey<?>, Object> ret = this.userPreferenceService.get(target);
 
         List<Text> entry = new ArrayList<>();
-        ret.forEach((key, value) -> entry.add(get(source, key, value)));
+        for (Map.Entry<NucleusUserPreferenceService.PreferenceKey<?>, Object> e : ret.entrySet()) {
+            NucleusUserPreferenceService.PreferenceKey<?> key = e.getKey();
+            Object value = e.getValue();
+            entry.add(get(context, this.userPreferenceService, key, value));
+        }
 
-        Util.getPaginationBuilder(source).title(getMessageFor(source, "command.userprefs.title", target.getName()))
-            .contents(entry).build().sendTo(source);
-        return CommandResult.success();
+        Util.getPaginationBuilder(context.getCommandSource())
+                .title(context.getServiceCollection().messageProvider().getMessageFor(
+                        context.getCommandSource(), "command.userprefs.title", target.getName()))
+            .contents(entry).build().sendTo(context.getCommandSource());
+        return context.successResult();
     }
 
-    private Text get(CommandSource source, NucleusUserPreferenceService.PreferenceKey<?> key, @Nullable Object value) {
+    private Text get(ICommandContext<? extends CommandSource> context,
+            IUserPreferenceService userPreferenceService,
+            NucleusUserPreferenceService.PreferenceKey<?> key,
+            @Nullable Object value) throws CommandException {
         Text.Builder tb = Text.builder(key.getID().replaceAll("^nucleus:", ""));
         tb.append(SEPARATOR);
         Text result;
+        CommandSource commandSource = context.getCommandSource();
         if (value == null) {
-            result = getMessageFor(source, "standard.unset");
+            result = context.getServiceCollection().messageProvider().getMessageFor(commandSource, "standard.unset");
         } else if (value instanceof Boolean) {
-            result = getMessageFor(source, "standard." + (boolean) value);
+            result = context.getServiceCollection().messageProvider().getMessageFor(commandSource, "standard." + (boolean) value);
         } else {
             result = Text.of(value);
         }
 
         tb.append(result);
-        if (key.getDescription() != null && !key.getDescription().isEmpty()) {
+        String desc = userPreferenceService.getDescription(key);
+        if (desc != null && !desc.isEmpty()) {
             tb.onHover(TextActions.showText(
                     key instanceof PreferenceKeyImpl ?
-                    getMessageFor(source, ((PreferenceKeyImpl<?>) key).getDescriptionKey()) :
-                    Text.of(key.getDescription())));
+                        context.getServiceCollection().messageProvider()
+                                .getMessageFor(commandSource, ((PreferenceKeyImpl<?>) key).getDescriptionKey()) :
+                        Text.of(desc)));
         }
         return tb.build();
     }

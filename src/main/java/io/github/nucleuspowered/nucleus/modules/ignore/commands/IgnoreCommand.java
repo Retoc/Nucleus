@@ -4,81 +4,67 @@
  */
 package io.github.nucleuspowered.nucleus.modules.ignore.commands;
 
-import com.google.common.collect.Maps;
-import io.github.nucleuspowered.nucleus.internal.annotations.RunAsync;
-import io.github.nucleuspowered.nucleus.internal.annotations.command.NoModifiers;
-import io.github.nucleuspowered.nucleus.internal.annotations.command.Permissions;
-import io.github.nucleuspowered.nucleus.internal.annotations.command.RegisterCommand;
-import io.github.nucleuspowered.nucleus.internal.command.AbstractCommand;
+import io.github.nucleuspowered.nucleus.internal.command.ICommandContext;
+import io.github.nucleuspowered.nucleus.internal.command.ICommandExecutor;
+import io.github.nucleuspowered.nucleus.internal.command.ICommandResult;
 import io.github.nucleuspowered.nucleus.internal.command.NucleusParameters;
-import io.github.nucleuspowered.nucleus.internal.docgen.annotations.EssentialsEquivalent;
-import io.github.nucleuspowered.nucleus.internal.permissions.PermissionInformation;
-import io.github.nucleuspowered.nucleus.internal.permissions.SuggestedLevel;
+import io.github.nucleuspowered.nucleus.internal.command.annotation.Command;
+import io.github.nucleuspowered.nucleus.internal.command.annotation.EssentialsEquivalent;
+import io.github.nucleuspowered.nucleus.modules.ignore.IgnorePermissions;
 import io.github.nucleuspowered.nucleus.modules.ignore.services.IgnoreService;
-import org.spongepowered.api.command.CommandResult;
-import org.spongepowered.api.command.args.CommandContext;
+import io.github.nucleuspowered.nucleus.services.INucleusServiceCollection;
+import org.spongepowered.api.command.CommandException;
 import org.spongepowered.api.command.args.CommandElement;
 import org.spongepowered.api.entity.living.player.Player;
 import org.spongepowered.api.entity.living.player.User;
-import org.spongepowered.api.event.cause.Cause;
 import org.spongepowered.api.util.annotation.NonnullByDefault;
 
-import java.util.Map;
-
-@RunAsync
-@NoModifiers
-@RegisterCommand("ignore")
-@Permissions(suggestedLevel = SuggestedLevel.USER)
 @EssentialsEquivalent("ignore")
 @NonnullByDefault
-public class IgnoreCommand extends AbstractCommand<Player> {
-
-    private final IgnoreService ignoreService = getServiceUnchecked(IgnoreService.class);
-
-    @Override
-    protected Map<String, PermissionInformation> permissionSuffixesToRegister() {
-        Map<String, PermissionInformation> m = Maps.newHashMap();
-        m.put("exempt.chat", PermissionInformation.getWithTranslation("permission.ignore.chat", SuggestedLevel.MOD));
-        return m;
-    }
+@Command(
+        aliases = { "ignore" },
+        basePermission = IgnorePermissions.BASE_IGNORE,
+        commandDescriptionKey = "ignore",
+        async = true
+)
+public class IgnoreCommand implements ICommandExecutor<Player> {
 
     @Override
-    public CommandElement[] getArguments() {
+    public CommandElement[] parameters(INucleusServiceCollection serviceCollection) {
         return new CommandElement[] {
                 NucleusParameters.ONE_USER,
                 NucleusParameters.OPTIONAL_ONE_TRUE_FALSE
         };
     }
 
-    @Override
-    public CommandResult executeCommand(Player src, CommandContext args, Cause cause) {
+    @Override public ICommandResult execute(ICommandContext<? extends Player> context) throws CommandException {
         // Get the target
-        User target = args.requireOne(NucleusParameters.Keys.USER);
+        final User target = context.requireOne(NucleusParameters.Keys.USER, User.class);
+        final Player player = context.getIfPlayer();
 
-        if (target.equals(src)) {
-            sendMessageTo(src, "command.ignore.self");
-            return CommandResult.empty();
+        if (context.is(target)) {
+            return context.errorResult("command.ignore.self");
         }
 
-        if (this.permissions.testSuffix(target, "exempt.chat")) {
+        final IgnoreService ignoreService = context.getServiceCollection().getServiceUnchecked(IgnoreService.class);
+        if (context.testPermissionFor(target, "exempt.chat")) {
             // Make sure they are removed.
-            this.ignoreService.unignore(src.getUniqueId(), target.getUniqueId());
-            sendMessageTo(src, "command.ignore.exempt", target.getName());
-            return CommandResult.empty();
+            ignoreService.unignore(player.getUniqueId(), target.getUniqueId());
+            return context.errorResult("command.ignore.exempt", target.getName());
         }
 
         // Ok, we can ignore or unignore them.
-        boolean ignore = args.<Boolean>getOne(NucleusParameters.Keys.BOOL)
-                .orElseGet(() -> !this.ignoreService.isIgnored(src.getUniqueId(), target.getUniqueId()));
+        boolean ignore = context.getOne(NucleusParameters.Keys.BOOL, Boolean.class)
+                .orElseGet(() -> !ignoreService.isIgnored(player.getUniqueId(), target.getUniqueId()));
 
         if (ignore) {
-            this.ignoreService.ignore(src.getUniqueId(), target.getUniqueId());
-            sendMessageTo(src, "command.ignore.added", target.getName());
+            ignoreService.ignore(player.getUniqueId(), target.getUniqueId());
+            context.sendMessage("command.ignore.added", target.getName());
         } else {
-            this.ignoreService.unignore(src.getUniqueId(), target.getUniqueId());
-            sendMessageTo(src, "command.ignore.remove", target.getName());
+            ignoreService.unignore(player.getUniqueId(), target.getUniqueId());
+            context.sendMessage("command.ignore.remove", target.getName());
         }
 
-        return CommandResult.success();
+        return context.successResult();
     }
 }

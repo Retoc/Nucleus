@@ -4,49 +4,50 @@
  */
 package io.github.nucleuspowered.nucleus.modules.nameban.commands;
 
-import io.github.nucleuspowered.nucleus.Nucleus;
 import io.github.nucleuspowered.nucleus.Util;
 import io.github.nucleuspowered.nucleus.argumentparsers.RegexArgument;
-import io.github.nucleuspowered.nucleus.internal.annotations.RunAsync;
-import io.github.nucleuspowered.nucleus.internal.annotations.command.NoModifiers;
-import io.github.nucleuspowered.nucleus.internal.annotations.command.Permissions;
-import io.github.nucleuspowered.nucleus.internal.annotations.command.RegisterCommand;
-import io.github.nucleuspowered.nucleus.internal.command.AbstractCommand;
-import io.github.nucleuspowered.nucleus.internal.command.ReturnMessageException;
+import io.github.nucleuspowered.nucleus.internal.command.ICommandContext;
+import io.github.nucleuspowered.nucleus.internal.command.ICommandExecutor;
+import io.github.nucleuspowered.nucleus.internal.command.ICommandResult;
+import io.github.nucleuspowered.nucleus.internal.command.annotation.Command;
+import io.github.nucleuspowered.nucleus.modules.nameban.NameBanPermissions;
 import io.github.nucleuspowered.nucleus.modules.nameban.services.NameBanHandler;
-import io.github.nucleuspowered.nucleus.util.CauseStackHelper;
-import org.spongepowered.api.command.CommandResult;
+import io.github.nucleuspowered.nucleus.services.INucleusServiceCollection;
+import org.spongepowered.api.Sponge;
+import org.spongepowered.api.command.CommandException;
 import org.spongepowered.api.command.CommandSource;
-import org.spongepowered.api.command.args.CommandContext;
 import org.spongepowered.api.command.args.CommandElement;
-import org.spongepowered.api.event.cause.Cause;
+import org.spongepowered.api.event.CauseStackManager;
 import org.spongepowered.api.text.Text;
 import org.spongepowered.api.util.annotation.NonnullByDefault;
 
-@Permissions(prefix = "nameban", mainOverride = "unban")
-@RunAsync
-@NoModifiers
 @NonnullByDefault
-@RegisterCommand({"nameunban", "namepardon"})
-public class NameUnbanCommand extends AbstractCommand<CommandSource> {
+@Command(
+        aliases = {"nameunban", "namepardon"},
+        basePermission = NameBanPermissions.BASE_NAMEUNBAN,
+        commandDescriptionKey = "nameunban",
+        async = true)
+public class NameUnbanCommand implements ICommandExecutor<CommandSource> {
 
     private final String nameKey = "name";
-    private final NameBanHandler handler = getServiceUnchecked(NameBanHandler.class);
 
-    @Override public CommandElement[] getArguments() {
+    @Override public CommandElement[] parameters(INucleusServiceCollection serviceCollection) {
         return new CommandElement[] {
             new RegexArgument(Text.of(this.nameKey), Util.usernameRegexPattern, "command.nameban.notvalid")
         };
     }
 
-    @Override public CommandResult executeCommand(CommandSource src, CommandContext args, Cause cause) throws Exception {
-        String name = args.<String>getOne(this.nameKey).get().toLowerCase();
+    @Override public ICommandResult execute(ICommandContext<? extends CommandSource> context) throws CommandException {
+        String name = context.requireOne(this.nameKey, String.class).toLowerCase();
 
-        if (this.handler.removeName(name, CauseStackHelper.createCause(src))) {
-            src.sendMessage(Nucleus.getNucleus().getMessageProvider().getTextMessageWithFormat("command.nameban.pardon.success", name));
-            return CommandResult.success();
+        try (CauseStackManager.StackFrame frame = Sponge.getCauseStackManager().pushCauseFrame()) {
+            frame.pushCause(context.getCommandSource());
+            if (context.getServiceCollection().getServiceUnchecked(NameBanHandler.class).removeName(name, frame.getCurrentCause())) {
+                context.sendMessage("command.nameban.pardon.success", name);
+                return context.successResult();
+            }
         }
 
-        throw new ReturnMessageException(Nucleus.getNucleus().getMessageProvider().getTextMessageWithFormat("command.nameban.pardon.failed", name));
+        return context.errorResult("command.nameban.pardon.failed", name);
     }
 }

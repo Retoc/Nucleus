@@ -28,6 +28,10 @@ public class ChangeNicknameEventPost extends AbstractEvent implements NucleusCha
         this.target = target;
     }
 
+    @Override public User getUser() {
+        return this.target;
+    }
+
     @Override
     public Optional<Text> getPreviousNickname() {
         return Optional.ofNullable(this.previousNickname);
@@ -40,10 +44,5 @@ public class ChangeNicknameEventPost extends AbstractEvent implements NucleusCha
     @Override
     public Cause getCause() {
         return this.cause;
-    }
-
-    @Override
-    public User getTargetUser() {
-        return this.target;
     }
 }

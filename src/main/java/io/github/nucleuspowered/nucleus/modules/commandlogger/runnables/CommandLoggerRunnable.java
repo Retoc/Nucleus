@@ -4,12 +4,11 @@
  */
 package io.github.nucleuspowered.nucleus.modules.commandlogger.runnables;
 
-import io.github.nucleuspowered.nucleus.Nucleus;
 import io.github.nucleuspowered.nucleus.internal.interfaces.Reloadable;
 import io.github.nucleuspowered.nucleus.internal.interfaces.TaskBase;
 import io.github.nucleuspowered.nucleus.modules.commandlogger.config.CommandLoggerConfig;
-import io.github.nucleuspowered.nucleus.modules.commandlogger.config.CommandLoggerConfigAdapter;
 import io.github.nucleuspowered.nucleus.modules.commandlogger.services.CommandLoggerHandler;
+import io.github.nucleuspowered.nucleus.services.INucleusServiceCollection;
 import org.spongepowered.api.GameState;
 import org.spongepowered.api.Sponge;
 import org.spongepowered.api.scheduler.Task;
@@ -18,11 +17,19 @@ import org.spongepowered.api.util.annotation.NonnullByDefault;
 import java.time.Duration;
 import java.time.temporal.ChronoUnit;
 
+import javax.inject.Inject;
+
 @NonnullByDefault
 public class CommandLoggerRunnable implements TaskBase, Reloadable {
 
-    private final CommandLoggerHandler handler = Nucleus.getNucleus().getInternalServiceManager().getServiceUnchecked(CommandLoggerHandler.class);
-    private CommandLoggerConfig config = new CommandLoggerConfig();
+    private final CommandLoggerHandler handler;
+    private CommandLoggerConfig config;
+
+    @Inject
+    public CommandLoggerRunnable(INucleusServiceCollection serviceCollection) {
+        this.handler = serviceCollection.getServiceUnchecked(CommandLoggerHandler.class);
+        this.config = serviceCollection.moduleDataProvider().getModuleConfig(CommandLoggerConfig.class);
+    }
 
     @Override
     public boolean isAsync() {
@@ -46,7 +53,7 @@ public class CommandLoggerRunnable implements TaskBase, Reloadable {
     }
 
     @Override
-    public void onReload() {
-        this.config = Nucleus.getNucleus().getInternalServiceManager().getServiceUnchecked(CommandLoggerConfigAdapter.class).getNodeOrDefault();
+    public void onReload(INucleusServiceCollection serviceCollection) {
+        this.config = serviceCollection.moduleDataProvider().getModuleConfig(CommandLoggerConfig.class);
     }
 }

@@ -5,6 +5,9 @@
 package io.github.nucleuspowered.nucleus.modules.afk.listeners;
 
 import io.github.nucleuspowered.nucleus.internal.interfaces.ListenerBase;
+import io.github.nucleuspowered.nucleus.modules.afk.config.AFKConfig;
+import io.github.nucleuspowered.nucleus.modules.afk.services.AFKHandler;
+import io.github.nucleuspowered.nucleus.services.INucleusServiceCollection;
 import org.spongepowered.api.entity.Transform;
 import org.spongepowered.api.entity.living.player.Player;
 import org.spongepowered.api.event.Listener;
@@ -14,7 +17,14 @@ import org.spongepowered.api.event.filter.Getter;
 import org.spongepowered.api.event.filter.cause.Root;
 import org.spongepowered.api.world.World;
 
+import javax.inject.Inject;
+
 public class AFKMoveOnlyListener extends AbstractAFKListener implements ListenerBase.Conditional {
+
+    @Inject
+    public AFKMoveOnlyListener(INucleusServiceCollection serviceCollection) {
+        super(serviceCollection.getServiceUnchecked(AFKHandler.class));
+    }
 
     @Listener(order = Order.LAST)
     public void onPlayerMove(final MoveEntityEvent event, @Root Player player,
@@ -26,8 +36,10 @@ public class AFKMoveOnlyListener extends AbstractAFKListener implements Listener
     }
 
     @Override
-    public boolean shouldEnable() {
-        return getTriggerConfigEntry(t -> t.isOnMovement() && !t.isOnRotation());
+    public boolean shouldEnable(INucleusServiceCollection serviceCollection) {
+        AFKConfig.Triggers triggers = serviceCollection.moduleDataProvider().getModuleConfig(AFKConfig.class)
+                .getTriggers();
+        return triggers.isOnMovement() && !triggers.isOnRotation();
     }
 
 }

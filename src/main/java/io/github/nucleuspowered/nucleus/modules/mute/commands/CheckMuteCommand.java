@@ -4,25 +4,22 @@
  */
 package io.github.nucleuspowered.nucleus.modules.mute.commands;
 
-import io.github.nucleuspowered.nucleus.Nucleus;
 import io.github.nucleuspowered.nucleus.Util;
 import io.github.nucleuspowered.nucleus.argumentparsers.UUIDArgument;
-import io.github.nucleuspowered.nucleus.internal.annotations.RunAsync;
-import io.github.nucleuspowered.nucleus.internal.annotations.command.NoModifiers;
-import io.github.nucleuspowered.nucleus.internal.annotations.command.Permissions;
-import io.github.nucleuspowered.nucleus.internal.annotations.command.RegisterCommand;
-import io.github.nucleuspowered.nucleus.internal.command.AbstractCommand;
-import io.github.nucleuspowered.nucleus.internal.permissions.SuggestedLevel;
+import io.github.nucleuspowered.nucleus.internal.command.ICommandContext;
+import io.github.nucleuspowered.nucleus.internal.command.ICommandExecutor;
+import io.github.nucleuspowered.nucleus.internal.command.ICommandResult;
+import io.github.nucleuspowered.nucleus.internal.command.annotation.Command;
+import io.github.nucleuspowered.nucleus.modules.mute.MutePermissions;
 import io.github.nucleuspowered.nucleus.modules.mute.data.MuteData;
 import io.github.nucleuspowered.nucleus.modules.mute.services.MuteHandler;
+import io.github.nucleuspowered.nucleus.services.INucleusServiceCollection;
 import org.spongepowered.api.Sponge;
-import org.spongepowered.api.command.CommandResult;
+import org.spongepowered.api.command.CommandException;
 import org.spongepowered.api.command.CommandSource;
-import org.spongepowered.api.command.args.CommandContext;
 import org.spongepowered.api.command.args.CommandElement;
 import org.spongepowered.api.command.args.GenericArguments;
 import org.spongepowered.api.entity.living.player.User;
-import org.spongepowered.api.event.cause.Cause;
 import org.spongepowered.api.service.user.UserStorageService;
 import org.spongepowered.api.text.Text;
 import org.spongepowered.api.util.annotation.NonnullByDefault;
@@ -30,18 +27,14 @@ import org.spongepowered.api.util.annotation.NonnullByDefault;
 import java.time.Instant;
 import java.util.Optional;
 
-@Permissions(suggestedLevel = SuggestedLevel.MOD)
-@RunAsync
-@NoModifiers
-@RegisterCommand("checkmute")
 @NonnullByDefault
-public class CheckMuteCommand extends AbstractCommand<CommandSource> {
+@Command(async = true, aliases = "checkmute", basePermission = MutePermissions.BASE_CHECKMUTE, commandDescriptionKey = "checkmute")
+public class CheckMuteCommand implements ICommandExecutor<CommandSource> {
 
-    private final MuteHandler handler = getServiceUnchecked(MuteHandler.class);
     private final String playerKey = "user/UUID";
 
     @Override
-    public CommandElement[] getArguments() {
+    public CommandElement[] parameters(INucleusServiceCollection serviceCollection) {
         return new CommandElement[] {
             GenericArguments.firstParsing(
                 GenericArguments.user(Text.of(this.playerKey)),
@@ -50,15 +43,15 @@ public class CheckMuteCommand extends AbstractCommand<CommandSource> {
         };
     }
 
-    @Override
-    public CommandResult executeCommand(CommandSource src, CommandContext args, Cause cause) {
+    @Override public ICommandResult execute(ICommandContext<? extends CommandSource> context) throws CommandException {
         // Get the user.
-        User user = args.<User>getOne(this.playerKey).get();
+        User user = context.requireOne(this.playerKey, User.class);
+        MuteHandler muteHandler = context.getServiceCollection().getServiceUnchecked(MuteHandler.class);
 
-        Optional<MuteData> omd = this.handler.getPlayerMuteData(user);
+        Optional<MuteData> omd = muteHandler.getPlayerMuteData(user);
         if (!omd.isPresent()) {
-            src.sendMessage(Nucleus.getNucleus().getMessageProvider().getTextMessageWithFormat("command.checkmute.none", user.getName()));
-            return CommandResult.success();
+            context.sendMessage("command.checkmute.none", user.getName());
+            return context.successResult();
         }
 
         // Muted, get information.
@@ -69,26 +62,26 @@ public class CheckMuteCommand extends AbstractCommand<CommandSource> {
         } else {
             name = Sponge.getServiceManager().provideUnchecked(UserStorageService.class).get(md.getMuter().get())
                     .map(User::getName)
-                    .orElseGet(() -> Nucleus.getNucleus().getMessageProvider().getMessageWithFormat("standard.unknown"));
+                    .orElseGet(() -> context.getMessageString("standard.unknown"));
         }
 
         if (md.getRemainingTime().isPresent()) {
-            src.sendMessage(Nucleus.getNucleus().getMessageProvider().getTextMessageWithFormat("command.checkmute.mutedfor", user.getName(),
-                    name, Util.getTimeStringFromSeconds(md.getRemainingTime().get().getSeconds())));
+            context.sendMessage("command.checkmute.mutedfor", user.getName(),
+                    name,
+                    context.getTimeString(md.getRemainingTime().get().getSeconds()));
         } else {
-            src.sendMessage(Nucleus.getNucleus().getMessageProvider().getTextMessageWithFormat("command.checkmute.mutedperm", user.getName(),
-                    name));
+            context.sendMessage("command.checkmute.mutedperm", user.getName(), name);
         }
 
         if (md.getCreationTime() > 0) {
-            src.sendMessage(Nucleus.getNucleus().getMessageProvider().getTextMessageWithFormat("command.checkmute.created",
-                    Util.FULL_TIME_FORMATTER.withLocale(src.getLocale()).format(Instant.ofEpochSecond(md.getCreationTime()))));
+            context.sendMessage("command.checkmute.created",
+                    Util.FULL_TIME_FORMATTER.withLocale(context.getCommandSource().getLocale())
+                            .format(Instant.ofEpochSecond(md.getCreationTime())));
         } else {
-            src.sendMessage(Nucleus.getNucleus().getMessageProvider().getTextMessageWithFormat("command.checkmute.created",
-                    Nucleus.getNucleus().getMessageProvider().getMessageWithFormat("standard.unknown")));
+            context.sendMessage("command.checkmute.created", "loc:standard.unknown");
         }
 
-        src.sendMessage(Nucleus.getNucleus().getMessageProvider().getTextMessageWithFormat("standard.reasoncoloured", md.getReason()));
-        return CommandResult.success();
+        context.sendMessage("standard.reasoncoloured", md.getReason());
+        return context.successResult();
     }
 }

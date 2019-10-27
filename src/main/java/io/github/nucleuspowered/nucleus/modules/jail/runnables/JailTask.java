@@ -7,6 +7,8 @@ package io.github.nucleuspowered.nucleus.modules.jail.runnables;
 import io.github.nucleuspowered.nucleus.Nucleus;
 import io.github.nucleuspowered.nucleus.internal.interfaces.TaskBase;
 import io.github.nucleuspowered.nucleus.modules.jail.services.JailHandler;
+import io.github.nucleuspowered.nucleus.services.INucleusServiceCollection;
+import org.checkerframework.checker.nullness.qual.NonNull;
 import org.spongepowered.api.Sponge;
 import org.spongepowered.api.event.cause.Cause;
 import org.spongepowered.api.event.cause.EventContext;
@@ -15,10 +17,17 @@ import org.spongepowered.api.scheduler.Task;
 import java.time.Duration;
 import java.time.temporal.ChronoUnit;
 
-@SuppressWarnings("ALL")
+import javax.annotation.Nonnull;
+import javax.inject.Inject;
+
 public class JailTask implements TaskBase {
 
-    private JailHandler jailHandler = Nucleus.getNucleus().getInternalServiceManager().getServiceUnchecked(JailHandler.class);
+    private JailHandler jailHandler;
+
+    @Inject
+    public JailTask(INucleusServiceCollection serviceCollection) {
+        this.jailHandler = serviceCollection.getServiceUnchecked(JailHandler.class);
+    }
 
     @Override
     public void accept(Task task) {
@@ -36,6 +45,7 @@ public class JailTask implements TaskBase {
     }
 
     @Override
+    @NonNull
     public Duration interval() {
         return Duration.of(1, ChronoUnit.SECONDS);
     }

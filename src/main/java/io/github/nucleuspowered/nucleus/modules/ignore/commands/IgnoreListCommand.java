@@ -4,19 +4,18 @@
  */
 package io.github.nucleuspowered.nucleus.modules.ignore.commands;
 
-import io.github.nucleuspowered.nucleus.Nucleus;
 import io.github.nucleuspowered.nucleus.Util;
-import io.github.nucleuspowered.nucleus.internal.annotations.RunAsync;
-import io.github.nucleuspowered.nucleus.internal.annotations.command.NoModifiers;
-import io.github.nucleuspowered.nucleus.internal.annotations.command.Permissions;
-import io.github.nucleuspowered.nucleus.internal.annotations.command.RegisterCommand;
-import io.github.nucleuspowered.nucleus.internal.command.AbstractCommand;
-import io.github.nucleuspowered.nucleus.internal.permissions.SuggestedLevel;
-import io.github.nucleuspowered.nucleus.internal.traits.MessageProviderTrait;
+import io.github.nucleuspowered.nucleus.internal.command.ICommandContext;
+import io.github.nucleuspowered.nucleus.internal.command.ICommandExecutor;
+import io.github.nucleuspowered.nucleus.internal.command.ICommandResult;
+import io.github.nucleuspowered.nucleus.internal.command.annotation.Command;
+import io.github.nucleuspowered.nucleus.modules.ignore.IgnorePermissions;
 import io.github.nucleuspowered.nucleus.modules.ignore.services.IgnoreService;
-import org.spongepowered.api.command.CommandResult;
+import io.github.nucleuspowered.nucleus.services.INucleusServiceCollection;
+import io.github.nucleuspowered.nucleus.services.IPlayerDisplayNameService;
+import org.spongepowered.api.command.CommandException;
 import org.spongepowered.api.command.CommandSource;
-import org.spongepowered.api.command.args.CommandContext;
+import org.spongepowered.api.command.args.CommandElement;
 import org.spongepowered.api.entity.living.player.User;
 import org.spongepowered.api.text.Text;
 import org.spongepowered.api.util.annotation.NonnullByDefault;
@@ -24,37 +23,47 @@ import org.spongepowered.api.util.annotation.NonnullByDefault;
 import java.util.List;
 import java.util.stream.Collectors;
 
-@NoModifiers
-@RunAsync
-@Permissions(suggestedLevel = SuggestedLevel.USER, supportsOthers = true)
-@RegisterCommand({"ignorelist", "listignore", "ignored"})
 @NonnullByDefault
-public class IgnoreListCommand extends AbstractCommand.SimpleTargetOtherUser implements MessageProviderTrait {
+@Command(
+        aliases = {"ignorelist", "listignore", "ignored"},
+        basePermission = IgnorePermissions.BASE_IGNORELIST,
+        commandDescriptionKey = "ignorelist",
+        async = true
+)
+public class IgnoreListCommand implements ICommandExecutor<CommandSource> {
 
-    private final IgnoreService ignoreService = getServiceUnchecked(IgnoreService.class);
+    @Override public CommandElement[] parameters(INucleusServiceCollection serviceCollection) {
+        return new CommandElement[] {
+                serviceCollection.commandElementSupplier().createOnlyOtherUserPermissionElement(false, IgnorePermissions.OTHERS_IGNORELIST)
+        };
+    }
 
     @Override
-    protected CommandResult executeWithPlayer(CommandSource source, User target, CommandContext args, boolean isSelf) {
-        List<Text> ignoredList = this.ignoreService
+    public ICommandResult execute(ICommandContext<? extends CommandSource> context) throws CommandException {
+        IgnoreService ignoreService = context.getServiceCollection().getServiceUnchecked(IgnoreService.class);
+        User target = context.getPlayerFromArgs();
+        boolean isSelf = context.is(target);
+        final IPlayerDisplayNameService playerDisplayNameService = context.getServiceCollection().playerDisplayNameService();
+
+        List<Text> ignoredList = ignoreService
                 .getAllIgnored(target.getUniqueId())
                 .stream()
-                .map(x -> Nucleus.getNucleus().getNameUtil().getName(x).orElseGet(() ->
-                        getMessage("command.ignorelist.unknown", x.toString())
-                )).collect(Collectors.toList());
+                .map(playerDisplayNameService::getDisplayName)
+                .collect(Collectors.toList());
 
         if (ignoredList.isEmpty()) {
             if (isSelf) {
-                source.sendMessage(getMessage("command.ignorelist.noignores.self"));
+                context.sendMessage("command.ignorelist.noignores.self");
             } else {
-                source.sendMessage(getMessage("command.ignorelist.noignores.other", target));
+                context.sendMessage("command.ignorelist.noignores.other", target);
             }
         } else {
-            Util.getPaginationBuilder(source)
+            Util.getPaginationBuilder(context.getCommandSource())
                     .contents(ignoredList)
-                    .title(getMessage("command.ignorelist.header", target))
-                    .sendTo(source);
+                    .title(context.getMessage("command.ignorelist.header", target))
+                    .sendTo(context.getCommandSource());
         }
-        return CommandResult.success();
+        return context.successResult();
     }
 
 }

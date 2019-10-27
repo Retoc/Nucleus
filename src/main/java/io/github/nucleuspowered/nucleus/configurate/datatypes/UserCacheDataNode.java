@@ -8,7 +8,7 @@ import io.github.nucleuspowered.nucleus.modules.core.CoreKeys;
 import io.github.nucleuspowered.nucleus.modules.jail.JailKeys;
 import io.github.nucleuspowered.nucleus.modules.jail.data.JailData;
 import io.github.nucleuspowered.nucleus.modules.mute.MuteKeys;
-import io.github.nucleuspowered.nucleus.storage.dataobjects.modular.IUserDataObject;
+import io.github.nucleuspowered.nucleus.services.impl.storage.dataobjects.modular.IUserDataObject;
 import ninja.leaping.configurate.objectmapping.Setting;
 import ninja.leaping.configurate.objectmapping.serialize.ConfigSerializable;
 

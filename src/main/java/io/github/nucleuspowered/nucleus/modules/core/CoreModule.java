@@ -5,29 +5,40 @@
 package io.github.nucleuspowered.nucleus.modules.core;
 
 import com.google.common.collect.ImmutableMap;
+import com.google.inject.Inject;
 import io.github.nucleuspowered.nucleus.Nucleus;
 import io.github.nucleuspowered.nucleus.api.catalogkeys.NucleusTeleportHelperFilters;
 import io.github.nucleuspowered.nucleus.internal.CatalogTypeFinalStaticProcessor;
-import io.github.nucleuspowered.nucleus.internal.qsml.module.ConfigurableModule;
-import io.github.nucleuspowered.nucleus.internal.userprefs.UserPreferenceService;
+import io.github.nucleuspowered.nucleus.modules.core.config.CoreConfig;
+import io.github.nucleuspowered.nucleus.quickstart.module.ConfigurableModule;
+import io.github.nucleuspowered.nucleus.services.INucleusServiceCollection;
 import io.github.nucleuspowered.nucleus.modules.core.config.CoreConfigAdapter;
 import io.github.nucleuspowered.nucleus.modules.core.teleport.filters.NoCheckFilter;
 import io.github.nucleuspowered.nucleus.modules.core.teleport.filters.WallCheckFilter;
 import org.spongepowered.api.world.teleport.TeleportHelperFilter;
 import uk.co.drnaylor.quickstart.annotations.ModuleData;
+import uk.co.drnaylor.quickstart.holders.DiscoveryModuleHolder;
+
+import java.util.function.Supplier;
 
 @ModuleData(id = CoreModule.ID, name = "Core", isRequired = true)
-public class CoreModule extends ConfigurableModule<CoreConfigAdapter> {
+public class CoreModule extends ConfigurableModule<CoreConfig, CoreConfigAdapter> {
 
     public static final String ID = "core";
+
+    @Inject
+    public CoreModule(Supplier<DiscoveryModuleHolder<?, ?>> moduleHolder,
+            INucleusServiceCollection collection) {
+        super(moduleHolder, collection);
+    }
 
     @Override
     public CoreConfigAdapter createAdapter() {
         return new CoreConfigAdapter();
     }
 
-    @Override public void performPreTasks() throws Exception {
-        super.performPreTasks();
+    @Override public void performPreTasks(INucleusServiceCollection serviceCollection) throws Exception {
+        super.performPreTasks(serviceCollection);
 
         CatalogTypeFinalStaticProcessor.setFinalStaticFields(
                 NucleusTeleportHelperFilters.class,
@@ -37,12 +48,12 @@ public class CoreModule extends ConfigurableModule<CoreConfigAdapter> {
                     .build()
         );
 
-        Nucleus.getNucleus().reloadMessages();
+        // TODO: Reload provider?
+        this.serviceCollection.messageProvider().reloadMessageFile();
     }
 
-    @Override public void performPostTasks() {
-        super.performPostTasks();
-
-        Nucleus.getNucleus().getInternalServiceManager().getServiceUnchecked(UserPreferenceService.class).postInit();
+    @Override public void performPostTasks(INucleusServiceCollection serviceCollection) {
+        super.performPostTasks(serviceCollection);
+        this.serviceCollection.userPreferenceService().postInit();
     }
 }

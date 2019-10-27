@@ -4,36 +4,27 @@
  */
 package io.github.nucleuspowered.nucleus.modules.misc.commands;
 
-import io.github.nucleuspowered.nucleus.Nucleus;
-import io.github.nucleuspowered.nucleus.internal.annotations.RunAsync;
-import io.github.nucleuspowered.nucleus.internal.annotations.command.NoModifiers;
-import io.github.nucleuspowered.nucleus.internal.annotations.command.Permissions;
-import io.github.nucleuspowered.nucleus.internal.annotations.command.RegisterCommand;
-import io.github.nucleuspowered.nucleus.internal.command.AbstractCommand;
-import org.spongepowered.api.command.CommandResult;
+import io.github.nucleuspowered.nucleus.internal.command.ICommandContext;
+import io.github.nucleuspowered.nucleus.internal.command.ICommandExecutor;
+import io.github.nucleuspowered.nucleus.internal.command.ICommandResult;
+import io.github.nucleuspowered.nucleus.internal.command.annotation.Command;
+import io.github.nucleuspowered.nucleus.modules.misc.MiscPermissions;
+import org.spongepowered.api.command.CommandException;
 import org.spongepowered.api.command.CommandSource;
-import org.spongepowered.api.command.args.CommandContext;
-import org.spongepowered.api.event.cause.Cause;
 import org.spongepowered.api.util.annotation.NonnullByDefault;
 
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.time.format.FormatStyle;
 
-@RunAsync
-@NoModifiers
-@Permissions
-@RegisterCommand({"servertime", "realtime"})
 @NonnullByDefault
-public class ServerTimeCommand extends AbstractCommand<CommandSource> {
+@Command(aliases = { "servertime", "realtime" }, basePermission = MiscPermissions.BASE_SERVERTIME, commandDescriptionKey = "servertime")
+public class ServerTimeCommand implements ICommandExecutor<CommandSource> {
 
     private static DateTimeFormatter dtf = DateTimeFormatter.ofLocalizedDateTime(FormatStyle.MEDIUM);
 
-    @Override protected CommandResult executeCommand(CommandSource src, CommandContext args, Cause cause) {
-        src.sendMessage(
-            Nucleus.getNucleus().getMessageProvider().getTextMessageWithFormat("command.servertime.time", dtf.format(LocalDateTime.now()))
-        );
-
-        return CommandResult.success();
+    @Override public ICommandResult execute(ICommandContext<? extends CommandSource> context) throws CommandException {
+        context.sendMessage("command.servertime.time", dtf.format(LocalDateTime.now()));
+        return context.successResult();
     }
 }

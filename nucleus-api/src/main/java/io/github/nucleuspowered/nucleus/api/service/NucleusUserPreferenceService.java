@@ -51,6 +51,22 @@ public interface NucleusUserPreferenceService {
     void removePreferenceFor(User user, PreferenceKey<?> key);
 
     /**
+     * Gets whether a {@link User} can use a given {@link PreferenceKey}
+     *
+     * @param user The user
+     * @param key The key
+     * @return true if so
+     */
+    boolean canAccess(User user, PreferenceKey<?> key);
+
+    /**
+     * The description of the preference.
+     *
+     * @return The description.
+     */
+    String getDescription(PreferenceKey<?> key);
+
+    /**
      * Contains {@link PreferenceKey}s
      */
     interface Keys {
@@ -142,20 +158,6 @@ public interface NucleusUserPreferenceService {
          */
         Class<T> getValueClass();
 
-        /**
-         * Tests whether a user can change their preference.
-         *
-         * @param user The user to check
-         * @return If they have permission
-         */
-        boolean canAccess(User user);
-
-        /**
-         * The description of the preference.
-         *
-         * @return The description.
-         */
-        String getDescription();
     }
 
 }

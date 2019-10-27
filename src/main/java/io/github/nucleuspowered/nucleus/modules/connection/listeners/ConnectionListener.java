@@ -4,16 +4,12 @@
  */
 package io.github.nucleuspowered.nucleus.modules.connection.listeners;
 
-import com.google.common.collect.Maps;
-import io.github.nucleuspowered.nucleus.Nucleus;
-import io.github.nucleuspowered.nucleus.internal.PermissionRegistry;
 import io.github.nucleuspowered.nucleus.internal.interfaces.ListenerBase;
 import io.github.nucleuspowered.nucleus.internal.interfaces.Reloadable;
-import io.github.nucleuspowered.nucleus.internal.permissions.PermissionInformation;
-import io.github.nucleuspowered.nucleus.internal.permissions.SuggestedLevel;
-import io.github.nucleuspowered.nucleus.modules.connection.ConnectionModule;
+import io.github.nucleuspowered.nucleus.modules.connection.ConnectionPermissions;
 import io.github.nucleuspowered.nucleus.modules.connection.config.ConnectionConfig;
-import io.github.nucleuspowered.nucleus.modules.connection.config.ConnectionConfigAdapter;
+import io.github.nucleuspowered.nucleus.services.INucleusServiceCollection;
+import io.github.nucleuspowered.nucleus.services.IPermissionService;
 import org.spongepowered.api.Sponge;
 import org.spongepowered.api.entity.living.player.User;
 import org.spongepowered.api.event.Listener;
@@ -25,17 +21,21 @@ import org.spongepowered.api.service.ban.BanService;
 import org.spongepowered.api.text.Text;
 import org.spongepowered.api.util.Tristate;
 
-import java.util.Map;
-
 import javax.annotation.Nullable;
+import javax.inject.Inject;
 
 public class ConnectionListener implements Reloadable, ListenerBase {
 
-    private final String joinFullServer = PermissionRegistry.PERMISSIONS_PREFIX + "connection.joinfullserver";
+    private final IPermissionService permissionService;
 
     private int reservedSlots = 0;
     @Nullable private Text whitelistMessage;
     @Nullable private Text fullMessage;
+
+    @Inject
+    public ConnectionListener(IPermissionService permissionService) {
+        this.permissionService = permissionService;
+    }
 
     /**
      * Perform connection events on when a player is currently not permitted to join.
@@ -63,7 +63,7 @@ public class ConnectionListener implements Reloadable, ListenerBase {
 
         int slotsLeft = Sponge.getServer().getMaxPlayers() - Sponge.getServer().getOnlinePlayers().size();
         if (slotsLeft <= 0) {
-            if (hasPermission(user, this.joinFullServer)) {
+            if (this.permissionService.hasPermission(user, ConnectionPermissions.CONNECTION_JOINFULLSERVER)) {
 
                 // That minus sign before slotsLeft is not a typo. Leave it be!
                 // It will be negative, reserved slots is positive - need to account for that.
@@ -81,15 +81,8 @@ public class ConnectionListener implements Reloadable, ListenerBase {
     }
 
     @Override
-    public Map<String, PermissionInformation> getPermissions() {
-        Map<String, PermissionInformation> mp = Maps.newHashMap();
-        mp.put(this.joinFullServer, PermissionInformation.getWithTranslation("permission.connection.joinfullserver", SuggestedLevel.MOD));
-        return mp;
-    }
-
-    @Override
-    public void onReload() {
-        ConnectionConfig connectionConfig = Nucleus.getNucleus().getConfigAdapter(ConnectionModule.ID, ConnectionConfigAdapter.class).get().getNodeOrDefault();
+    public void onReload(INucleusServiceCollection serviceCollection) {
+        ConnectionConfig connectionConfig = serviceCollection.moduleDataProvider().getModuleConfig(ConnectionConfig.class);
         this.reservedSlots = connectionConfig.getReservedSlots();
         this.whitelistMessage = connectionConfig.getWhitelistMessage().orElse(null);
         this.fullMessage = connectionConfig.getServerFullMessage().orElse(null);

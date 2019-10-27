@@ -4,28 +4,23 @@
  */
 package io.github.nucleuspowered.nucleus.modules.staffchat.commands;
 
-import io.github.nucleuspowered.nucleus.Nucleus;
 import io.github.nucleuspowered.nucleus.api.EventContexts;
-import io.github.nucleuspowered.nucleus.internal.annotations.command.NoModifiers;
-import io.github.nucleuspowered.nucleus.internal.annotations.command.Permissions;
-import io.github.nucleuspowered.nucleus.internal.annotations.command.RegisterCommand;
-import io.github.nucleuspowered.nucleus.internal.command.AbstractCommand;
+import io.github.nucleuspowered.nucleus.internal.command.ICommandContext;
+import io.github.nucleuspowered.nucleus.internal.command.ICommandExecutor;
+import io.github.nucleuspowered.nucleus.internal.command.ICommandResult;
 import io.github.nucleuspowered.nucleus.internal.command.NucleusParameters;
-import io.github.nucleuspowered.nucleus.internal.command.ReturnMessageException;
-import io.github.nucleuspowered.nucleus.internal.permissions.SuggestedLevel;
-import io.github.nucleuspowered.nucleus.internal.text.TextParsingUtils;
-import io.github.nucleuspowered.nucleus.internal.userprefs.UserPreferenceService;
+import io.github.nucleuspowered.nucleus.internal.command.annotation.Command;
 import io.github.nucleuspowered.nucleus.modules.staffchat.StaffChatMessageChannel;
+import io.github.nucleuspowered.nucleus.modules.staffchat.StaffChatPermissions;
 import io.github.nucleuspowered.nucleus.modules.staffchat.StaffChatUserPrefKeys;
 import io.github.nucleuspowered.nucleus.modules.staffchat.services.StaffChatService;
+import io.github.nucleuspowered.nucleus.services.INucleusServiceCollection;
 import org.spongepowered.api.Sponge;
-import org.spongepowered.api.command.CommandResult;
+import org.spongepowered.api.command.CommandException;
 import org.spongepowered.api.command.CommandSource;
-import org.spongepowered.api.command.args.CommandContext;
 import org.spongepowered.api.command.args.CommandElement;
 import org.spongepowered.api.entity.living.player.Player;
 import org.spongepowered.api.event.CauseStackManager;
-import org.spongepowered.api.event.cause.Cause;
 import org.spongepowered.api.event.cause.EventContextKeys;
 import org.spongepowered.api.text.channel.MessageChannel;
 import org.spongepowered.api.text.chat.ChatTypes;
@@ -33,62 +28,65 @@ import org.spongepowered.api.util.annotation.NonnullByDefault;
 
 import java.util.Optional;
 
-@Permissions(suggestedLevel = SuggestedLevel.MOD)
-@NoModifiers
-@RegisterCommand({"staffchat", "sc", "a"})
 @NonnullByDefault
-public class StaffChatCommand extends AbstractCommand<CommandSource> {
-
-    private final UserPreferenceService userPreferenceService = getServiceUnchecked(UserPreferenceService.class);
-    private final StaffChatService staffChatService = getServiceUnchecked(StaffChatService.class);
+@Command(
+        aliases = {"staffchat", "sc", "a"},
+        basePermission = StaffChatPermissions.BASE_STAFFCHAT,
+        commandDescriptionKey = "staffchat"
+)
+public class StaffChatCommand implements ICommandExecutor<CommandSource> {
 
     @Override
-    public CommandElement[] getArguments() {
+    public CommandElement[] parameters(INucleusServiceCollection serviceCollection) {
         return new CommandElement[] {
                 NucleusParameters.OPTIONAL_MESSAGE
         };
     }
 
-    @Override
-    public CommandResult executeCommand(CommandSource src, CommandContext args, Cause cause) throws Exception {
-        Optional<String> toSend = args.getOne(NucleusParameters.Keys.MESSAGE);
+    @Override public ICommandResult execute(ICommandContext<? extends CommandSource> context) throws CommandException {
+        Optional<String> toSend = context.getOne(NucleusParameters.Keys.MESSAGE, String.class);
         if (toSend.isPresent()) {
             try (CauseStackManager.StackFrame frame = Sponge.getCauseStackManager().pushCauseFrame()) {
                 frame.addContext(EventContexts.SHOULD_FORMAT_CHANNEL, StaffChatMessageChannel.getInstance().formatMessages());
-                if (src instanceof Player) {
-                    Player pl = (Player) src;
+                if (context.is(Player.class)) {
+                    Player pl = context.getIfPlayer();
                     frame.pushCause(pl);
                     frame.addContext(EventContextKeys.PLAYER_SIMULATED, pl.getProfile());
 
                     MessageChannel mc = pl.getMessageChannel();
                     pl.setMessageChannel(StaffChatMessageChannel.getInstance());
-                    pl.simulateChat(TextParsingUtils.addUrls(toSend.get()), Sponge.getCauseStackManager().getCurrentCause());
+                    pl.simulateChat(
+                            context.getServiceCollection()
+                                    .textStyleService()
+                                    .addUrls(toSend.get()), Sponge.getCauseStackManager().getCurrentCause());
                     pl.setMessageChannel(mc);
 
                     // If you send a message, you're viewing it again.
-                    this.userPreferenceService.setPreferenceFor(pl, StaffChatUserPrefKeys.VIEW_STAFF_CHAT, true);
+                    context.getServiceCollection()
+                            .userPreferenceService()
+                            .setPreferenceFor(pl, StaffChatUserPrefKeys.VIEW_STAFF_CHAT, true);
                 } else {
                     StaffChatMessageChannel.getInstance()
-                            .send(src, TextParsingUtils.addUrls(toSend.get()), ChatTypes.CHAT);
+                            .send(context.getCommandSource(),
+                            context.getServiceCollection().textStyleService().addUrls(toSend.get()), ChatTypes.CHAT);
                 }
 
-                return CommandResult.success();
+                return context.successResult();
             }
         }
 
-        if (!(src instanceof Player)) {
-            throw new ReturnMessageException(Nucleus.getNucleus().getMessageProvider().getTextMessageWithFormat("command.staffchat.consoletoggle"));
+        if (!(context.is(Player.class))) {
+            return context.errorResult("command.staffchat.consoletoggle");
         }
 
-        Player player = (Player)src;
+        Player player = context.getIfPlayer();
 
-        boolean result = this.staffChatService.isToggledChat(player);
-        this.staffChatService.toggle(player, !result);
+        StaffChatService service = context.getServiceCollection().getServiceUnchecked(StaffChatService.class);
+        boolean result = service.isToggledChat(player);
+        service.toggle(player, !result);
 
-        sendMessageTo(src, "command.staffchat." + (result ? "on" : "off"));
-
-        // If you send a message, you're viewing it again.
-        return CommandResult.success();
+        context.sendMessage("command.staffchat." + (result ? "on" : "off"));
+        return context.successResult();
     }
 
 }

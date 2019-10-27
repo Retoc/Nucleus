@@ -9,6 +9,7 @@ import org.spongepowered.api.entity.living.player.User;
 import org.spongepowered.api.text.Text;
 
 import java.util.Optional;
+import java.util.UUID;
 
 import javax.annotation.Nullable;
 
@@ -16,6 +17,8 @@ import javax.annotation.Nullable;
  * Allows plugins to set and inspect a {@link User}'s current nickname.
  */
 public interface NucleusNicknameService {
+
+    Optional<Text> getNicknameWithPrefix(UUID user);
 
     /**
      * Gets the current nickname for a user with prefix, if it exists.
@@ -43,6 +46,8 @@ public interface NucleusNicknameService {
     default void setNickname(User user, @Nullable Text nickname) throws NicknameException {
         setNickname(user, nickname, false);
     }
+
+    Optional<Text> getNickname(UUID user);
 
     /**
      * Sets a user's nickname.

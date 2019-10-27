@@ -4,57 +4,54 @@
  */
 package io.github.nucleuspowered.nucleus.modules.teleport.commands;
 
-import io.github.nucleuspowered.nucleus.Nucleus;
 import io.github.nucleuspowered.nucleus.api.teleport.TeleportScanners;
-import io.github.nucleuspowered.nucleus.internal.annotations.command.NoModifiers;
-import io.github.nucleuspowered.nucleus.internal.annotations.command.Permissions;
-import io.github.nucleuspowered.nucleus.internal.annotations.command.RegisterCommand;
-import io.github.nucleuspowered.nucleus.internal.command.AbstractCommand;
-import io.github.nucleuspowered.nucleus.internal.docgen.annotations.EssentialsEquivalent;
-import io.github.nucleuspowered.nucleus.modules.core.services.SafeTeleportService;
-import io.github.nucleuspowered.nucleus.modules.teleport.services.PlayerTeleporterService;
+import io.github.nucleuspowered.nucleus.internal.command.ICommandContext;
+import io.github.nucleuspowered.nucleus.internal.command.ICommandExecutor;
+import io.github.nucleuspowered.nucleus.internal.command.ICommandResult;
+import io.github.nucleuspowered.nucleus.internal.command.annotation.Command;
+import io.github.nucleuspowered.nucleus.internal.command.annotation.EssentialsEquivalent;
+import io.github.nucleuspowered.nucleus.modules.teleport.TeleportPermissions;
+import io.github.nucleuspowered.nucleus.services.INucleusServiceCollection;
 import org.spongepowered.api.Sponge;
-import org.spongepowered.api.command.CommandResult;
-import org.spongepowered.api.command.args.CommandContext;
+import org.spongepowered.api.command.CommandException;
 import org.spongepowered.api.command.args.CommandElement;
 import org.spongepowered.api.command.args.GenericArguments;
+import org.spongepowered.api.entity.Transform;
 import org.spongepowered.api.entity.living.player.Player;
-import org.spongepowered.api.event.cause.Cause;
 import org.spongepowered.api.text.channel.MessageChannel;
 import org.spongepowered.api.util.annotation.NonnullByDefault;
+import org.spongepowered.api.world.World;
 
-@Permissions(prefix = "teleport")
-@NoModifiers
 @NonnullByDefault
-@RegisterCommand({"tpall", "tpallhere"})
 @EssentialsEquivalent("tpall")
-public class TeleportAllHereCommand extends AbstractCommand<Player> {
-
-    private final PlayerTeleporterService handler = getServiceUnchecked(PlayerTeleporterService.class);
-    private final SafeTeleportService service = getServiceUnchecked(SafeTeleportService.class);
+@Command(aliases = {"tpall", "tpallhere"}, basePermission = TeleportPermissions.BASE_TPALL, commandDescriptionKey = "tpall")
+public class TeleportAllHereCommand implements ICommandExecutor<Player> {
 
     @Override
-    public CommandElement[] getArguments() {
+    public CommandElement[] parameters(INucleusServiceCollection serviceCollection) {
         return new CommandElement[] {
                 GenericArguments.flags().flag("f").buildWith(GenericArguments.none())
         };
     }
 
     @Override
-    public CommandResult executeCommand(Player src, CommandContext args, Cause cause) {
-        MessageChannel.TO_ALL.send(Nucleus.getNucleus().getMessageProvider().getTextMessageWithFormat("command.tpall.broadcast", src.getName()));
+    public ICommandResult execute(ICommandContext<? extends Player> context) throws CommandException {
+        MessageChannel.TO_ALL.getMembers()
+                .forEach(x -> context.sendMessageTo(x, "command.tpall.broadcast", context.getName()));
+        Transform<World> toTransform = context.getIfPlayer().getTransform();
         Sponge.getServer().getOnlinePlayers().forEach(x -> {
-            if (!x.equals(src)) {
-                this.service.teleportPlayerSmart(
-                        x,
-                        src.getTransform(),
-                        false,
-                        !args.<Boolean>getOne("f").orElse(false),
-                        TeleportScanners.NO_SCAN
+            if (!context.is(x)) {
+                context.getServiceCollection()
+                        .teleportService()
+                        .teleportPlayerSmart(x,
+                            toTransform,
+                            false,
+                            !context.getOne("f", Boolean.class).orElse(false),
+                            TeleportScanners.NO_SCAN
                 );
             }
         });
 
-        return CommandResult.success();
+        return context.successResult();
     }
 }

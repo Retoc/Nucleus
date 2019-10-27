@@ -4,25 +4,21 @@
  */
 package io.github.nucleuspowered.nucleus.modules.world.commands;
 
-import io.github.nucleuspowered.nucleus.Nucleus;
 import io.github.nucleuspowered.nucleus.argumentparsers.NucleusWorldPropertiesArgument;
-import io.github.nucleuspowered.nucleus.internal.annotations.command.NoModifiers;
-import io.github.nucleuspowered.nucleus.internal.annotations.command.Permissions;
-import io.github.nucleuspowered.nucleus.internal.annotations.command.RegisterCommand;
-import io.github.nucleuspowered.nucleus.internal.command.AbstractCommand;
+import io.github.nucleuspowered.nucleus.internal.command.ICommandContext;
+import io.github.nucleuspowered.nucleus.internal.command.ICommandExecutor;
+import io.github.nucleuspowered.nucleus.internal.command.ICommandResult;
 import io.github.nucleuspowered.nucleus.internal.command.NucleusParameters;
-import io.github.nucleuspowered.nucleus.internal.command.ReturnMessageException;
-import io.github.nucleuspowered.nucleus.internal.messages.MessageProvider;
-import io.github.nucleuspowered.nucleus.internal.permissions.SuggestedLevel;
+import io.github.nucleuspowered.nucleus.internal.command.annotation.Command;
+import io.github.nucleuspowered.nucleus.modules.world.WorldPermissions;
+import io.github.nucleuspowered.nucleus.services.INucleusServiceCollection;
 import org.spongepowered.api.Sponge;
-import org.spongepowered.api.command.CommandResult;
+import org.spongepowered.api.command.CommandException;
 import org.spongepowered.api.command.CommandSource;
-import org.spongepowered.api.command.args.CommandContext;
 import org.spongepowered.api.command.args.CommandElement;
 import org.spongepowered.api.command.args.CommandFlags;
 import org.spongepowered.api.command.args.GenericArguments;
 import org.spongepowered.api.entity.living.player.Player;
-import org.spongepowered.api.event.cause.Cause;
 import org.spongepowered.api.text.Text;
 import org.spongepowered.api.util.annotation.NonnullByDefault;
 import org.spongepowered.api.world.World;
@@ -32,40 +28,41 @@ import java.util.List;
 import java.util.Optional;
 import java.util.stream.Collectors;
 
-@NoModifiers
 @NonnullByDefault
-@Permissions(prefix = "world", suggestedLevel = SuggestedLevel.ADMIN)
-@RegisterCommand(value = {"unload"}, subcommandOf = WorldCommand.class)
-public class UnloadWorldCommand extends AbstractCommand<CommandSource> {
+@Command(
+        aliases = {"unload"},
+        basePermission = WorldPermissions.BASE_WORLD_UNLOAD,
+        commandDescriptionKey = "world.unload",
+        parentCommand = WorldCommand.class
+)
+public class UnloadWorldCommand implements ICommandExecutor<CommandSource> {
 
     private final String transferWorldKey = "transferWorld";
 
     @Override
-    public CommandElement[] getArguments() {
+    public CommandElement[] parameters(INucleusServiceCollection serviceCollection) {
         return new CommandElement[] {
             GenericArguments.flags()
-                .permissionFlag(Nucleus.getNucleus().getPermissionRegistry().getPermissionsForNucleusCommand(DisableWorldCommand.class).getBase(), "d", "-disable")
+                .permissionFlag(WorldPermissions.BASE_WORLD_DISABLE, "d", "-disable")
                 .valueFlag(new NucleusWorldPropertiesArgument(Text.of(this.transferWorldKey), NucleusWorldPropertiesArgument.Type.ENABLED_ONLY), "t", "-transfer")
                 .setUnknownShortFlagBehavior(CommandFlags.UnknownFlagBehavior.IGNORE)
                 .buildWith(NucleusParameters.WORLD_PROPERTIES_ENABLED_ONLY)
         };
     }
 
-    @Override
-    public CommandResult executeCommand(CommandSource src, CommandContext args, Cause cause) throws Exception {
-        WorldProperties worldProperties = args.<WorldProperties>getOne(NucleusParameters.Keys.WORLD).get();
-        Optional<WorldProperties> transferWorld = args.getOne(this.transferWorldKey);
-        boolean disable = args.hasAny("d");
+    @Override public ICommandResult execute(ICommandContext<? extends CommandSource> context) throws CommandException {
+        WorldProperties worldProperties = context.requireOne(NucleusParameters.Keys.WORLD, WorldProperties.class);
+        Optional<WorldProperties> transferWorld = context.getOne(this.transferWorldKey, WorldProperties.class);
+        boolean disable = context.hasAny("d");
 
         Optional<World> worldOptional = Sponge.getServer().getWorld(worldProperties.getUniqueId());
         if (!worldOptional.isPresent()) {
             // Not loaded.
             if (disable) {
-                disable(worldProperties, src, Nucleus.getNucleus().getMessageProvider(), false);
+                disable(worldProperties, context, false);
             }
 
-            throw new ReturnMessageException(
-                    Nucleus.getNucleus().getMessageProvider().getTextMessageWithFormat("command.world.unload.alreadyunloaded", worldProperties.getWorldName()));
+            return context.errorResult("command.world.unload.alreadyunloaded", worldProperties.getWorldName());
         }
 
         World world = worldOptional.get();
@@ -75,40 +72,34 @@ public class UnloadWorldCommand extends AbstractCommand<CommandSource> {
             playerCollection.forEach(x -> x.transferToWorld(transferWorld.get().getUniqueId(), transferWorld.get().getSpawnPosition().toDouble()));
         }
 
-        if (unloadWorld(src, world, Nucleus.getNucleus().getMessageProvider(), disable)) {
-            return CommandResult.success();
-        } else {
-            return CommandResult.empty();
-        }
+        return unloadWorld(context, world, disable);
     }
 
-    @SuppressWarnings("ConstantConditions")
-    private static void disable(WorldProperties worldProperties, CommandSource sender, MessageProvider provider, boolean messageOnError) {
+    private static ICommandResult disable(WorldProperties worldProperties,
+            ICommandContext<? extends CommandSource> context,
+            boolean messageOnError) {
         if (worldProperties.isEnabled()) {
-            try {
-                DisableWorldCommand.disableWorld(sender, worldProperties);
-            } catch (ReturnMessageException e) {
-                sender.sendMessage(e.getText());
-            }
+            return DisableWorldCommand.disableWorld(context, worldProperties);
         } else if (messageOnError) {
-            sender.sendMessage(provider.getTextMessageWithFormat("command.world.disable.alreadydisabled", worldProperties.getWorldName()));
+            return context.errorResult("command.world.disable.alreadydisabled", worldProperties.getWorldName());
         }
+
+        return context.successResult();
     }
 
-    private static boolean unloadWorld(CommandSource source, World world, MessageProvider provider, boolean disable) {
+    private static ICommandResult unloadWorld(ICommandContext<? extends CommandSource> context, World world, boolean disable) {
         WorldProperties worldProperties = world.getProperties();
-        source.sendMessage(provider.getTextMessageWithFormat("command.world.unload.start", worldProperties.getWorldName()));
+        context.sendMessage("command.world.unload.start", worldProperties.getWorldName());
         boolean unloaded = Sponge.getServer().unloadWorld(world);
         if (unloaded) {
-            source.sendMessage(provider.getTextMessageWithFormat("command.world.unload.success", worldProperties.getWorldName()));
+            context.sendMessage("command.world.unload.success", worldProperties.getWorldName());
             if (disable) {
-                disable(worldProperties, source, provider, true);
+                return disable(worldProperties, context, true);
             }
 
-            return true;
+            return context.successResult();
         } else {
-            source.sendMessage(provider.getTextMessageWithFormat("command.world.unload.failed", worldProperties.getWorldName()));
-            return false;
+            return context.errorResult("command.world.unload.failed", worldProperties.getWorldName());
         }
     }
 }

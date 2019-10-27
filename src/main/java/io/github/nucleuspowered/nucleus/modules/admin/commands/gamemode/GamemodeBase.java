@@ -4,10 +4,11 @@
  */
 package io.github.nucleuspowered.nucleus.modules.admin.commands.gamemode;
 
-import io.github.nucleuspowered.nucleus.Nucleus;
-import io.github.nucleuspowered.nucleus.internal.command.AbstractCommand;
-import io.github.nucleuspowered.nucleus.internal.command.ReturnMessageException;
-import org.spongepowered.api.command.CommandResult;
+import io.github.nucleuspowered.nucleus.internal.command.ICommandContext;
+import io.github.nucleuspowered.nucleus.internal.command.ICommandExecutor;
+import io.github.nucleuspowered.nucleus.internal.command.ICommandResult;
+import io.github.nucleuspowered.nucleus.modules.admin.AdminPermissions;
+import org.spongepowered.api.command.CommandException;
 import org.spongepowered.api.command.CommandSource;
 import org.spongepowered.api.data.DataTransactionResult;
 import org.spongepowered.api.data.key.Keys;
@@ -18,39 +19,39 @@ import org.spongepowered.api.entity.living.player.gamemode.GameModes;
 import java.util.HashMap;
 import java.util.Map;
 
-abstract class GamemodeBase<T extends CommandSource> extends AbstractCommand<T> {
+abstract class GamemodeBase<T extends CommandSource> implements ICommandExecutor<T> {
 
     private static final Map<String, String> MODE_MAP = new HashMap<String, String>() {{
-        put(GameModes.SURVIVAL.getId(), "modes.survival");
-        put(GameModes.CREATIVE.getId(), "modes.creative");
-        put(GameModes.ADVENTURE.getId(), "modes.adventure");
-        put(GameModes.SPECTATOR.getId(), "modes.spectator");
+        put(GameModes.SURVIVAL.getId(), AdminPermissions.GAMEMODE_MODES_SURVIVAL);
+        put(GameModes.CREATIVE.getId(), AdminPermissions.GAMEMODE_MODES_CREATIVE);
+        put(GameModes.ADVENTURE.getId(), AdminPermissions.GAMEMODE_MODES_ADVENTURE);
+        put(GameModes.SPECTATOR.getId(), AdminPermissions.GAMEMODE_MODES_SPECTATOR);
     }};
 
-    CommandResult baseCommand(CommandSource src, Player user, GameMode gm) throws Exception {
+    ICommandResult baseCommand(ICommandContext<? extends CommandSource> context, Player user, GameMode gm) throws CommandException {
 
-        if (!this.permissions.testSuffix(src, MODE_MAP.computeIfAbsent(
+        if (!context.testPermission(MODE_MAP.computeIfAbsent(
                 gm.getId(), key -> {
                     String[] keySplit = key.split(":", 2);
                     String r = keySplit[keySplit.length - 1].toLowerCase();
-                    MODE_MAP.put(key, "modes." + r);
-                    return "modes." + r;
+                    String perm = AdminPermissions.GAMEMODE_MODES_ROOT + "." + r;
+                    MODE_MAP.put(key, perm);
+                    return perm;
                 }
         ))) {
-            throw new ReturnMessageException(
-                    Nucleus.getNucleus().getMessageProvider().getTextMessageWithFormat("command.gamemode.permission", gm.getTranslation().get()));
+            return context.errorResult("command.gamemode.permission", gm.getTranslation().get());
         }
 
         DataTransactionResult dtr = user.offer(Keys.GAME_MODE, gm);
         if (dtr.isSuccessful()) {
-            if (!src.equals(user)) {
-                src.sendMessage(Nucleus.getNucleus().getMessageProvider().getTextMessageWithFormat("command.gamemode.set.other", user.getName(), gm.getName()));
+            if (!context.is(user)) {
+                context.sendMessage("command.gamemode.set.other", user.getName(), gm.getName());
             }
 
-            user.sendMessage(Nucleus.getNucleus().getMessageProvider().getTextMessageWithFormat("command.gamemode.set.base", gm.getName()));
-            return CommandResult.success();
+            context.sendMessageTo(user, "command.gamemode.set.base", gm.getName());
+            return context.successResult();
         }
 
-        throw ReturnMessageException.fromKey("command.gamemode.error", user.getName());
+        return context.errorResult("command.gamemode.error", user.getName());
     }
 }

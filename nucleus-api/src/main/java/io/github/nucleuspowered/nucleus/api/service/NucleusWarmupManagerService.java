@@ -4,9 +4,9 @@
  */
 package io.github.nucleuspowered.nucleus.api.service;
 
-import org.spongepowered.api.scheduler.Task;
+import org.spongepowered.api.entity.living.player.Player;
 
-import java.util.UUID;
+import java.time.Duration;
 
 /**
  * Manages the warmups.
@@ -14,23 +14,48 @@ import java.util.UUID;
 public interface NucleusWarmupManagerService {
 
     /**
-     * Adds a warmup to the warmup manager
+     * Executes a task after the specified time, if the target does
+     * not move or run a command.
      *
-     * @param player The {@link UUID} of the player to add a warmup for.
-     * @param task The {@link Task} that was submitted and is running.
+     * @param duration The {@link Duration} to wait.
+     * @param runnable The {@link WarmupTask} to execute.
      */
-    void addWarmup(UUID player, Task task);
+    void executeAfter(Player target, Duration duration, WarmupTask runnable);
 
     /**
-     * Removes a user's warmup.
+     * Executes a task after the specified time, if the target does
+     * not move or run a command. The task will be run off the main thread
      *
-     * @param player The {@link UUID} of the user to remove the warmpup from.
-     * @return <code>true</code> if the warmup exists and was canceled.
+     * @param duration The {@link Duration} to wait.
+     * @param runnable The {@link WarmupTask} to execute
      */
-    boolean removeWarmup(UUID player);
+    void executeAfterAsync(Player target, Duration duration, WarmupTask runnable);
 
     /**
-     * Removes warmups that have completed.
+     * Cancels a task by {@link Player}
+     *
+     * @param player The player that this task is attached to.
      */
-    void cleanup();
+    boolean cancel(Player player);
+
+    /**
+     * Whether there is a task awaiting execution.
+     *
+     * @param player The player
+     * @return true if so
+     */
+    boolean awaitingExecution(Player player);
+
+    /**
+     * Represents a task that will execute after some time.
+     */
+    interface WarmupTask extends Runnable {
+
+        /**
+         * Runs if the warmup is cancelled.
+         */
+        default void onCancel() {}
+
+    }
+
 }

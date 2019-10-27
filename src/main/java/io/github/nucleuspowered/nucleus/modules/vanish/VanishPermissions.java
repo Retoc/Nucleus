@@ -5,8 +5,8 @@
 package io.github.nucleuspowered.nucleus.modules.vanish;
 
 import io.github.nucleuspowered.nucleus.annotationprocessor.RegisterPermissions;
-import io.github.nucleuspowered.nucleus.internal.permissions.PermissionMetadata;
-import io.github.nucleuspowered.nucleus.internal.permissions.SuggestedLevel;
+import io.github.nucleuspowered.nucleus.services.impl.permission.PermissionMetadata;
+import io.github.nucleuspowered.nucleus.services.impl.permission.SuggestedLevel;
 
 @RegisterPermissions
 public class VanishPermissions {
@@ -15,21 +15,21 @@ public class VanishPermissions {
     }
 
     @PermissionMetadata(descriptionKey = "permission.base", replacements = { "vanish" }, level = SuggestedLevel.ADMIN)
-    public static final String BASE_VANISH = "vanish.base";
+    public static final String BASE_VANISH = "nucleus.vanish.base";
 
     @PermissionMetadata(descriptionKey = "permission.vanish.onlogin", level = SuggestedLevel.NONE)
-    public static final String VANISH_ONLOGIN = "vanish.onlogin";
+    public static final String VANISH_ONLOGIN = "nucleus.vanish.onlogin";
 
     @PermissionMetadata(descriptionKey = "permission.others", replacements = { "vanish" }, level = SuggestedLevel.ADMIN)
-    public static final String OTHERS_VANISH = "vanish.others";
+    public static final String OTHERS_VANISH = "nucleus.vanish.others";
 
     @PermissionMetadata(descriptionKey = "permission.vanish.persist", level = SuggestedLevel.ADMIN)
-    public static final String VANISH_PERSIST = "vanish.persist";
+    public static final String VANISH_PERSIST = "nucleus.vanish.persist";
 
     @PermissionMetadata(descriptionKey = "permission.vanish.see", level = SuggestedLevel.ADMIN)
-    public static final String VANISH_SEE = "vanish.see";
+    public static final String VANISH_SEE = "nucleus.vanish.see";
 
     @PermissionMetadata(descriptionKey = "permission.base", replacements = { "vanishonlogin" }, level = SuggestedLevel.ADMIN)
-    public static final String BASE_VANISHONLOGIN = "vanishonlogin.base";
+    public static final String BASE_VANISHONLOGIN = "nucleus.vanishonlogin.base";
 
 }

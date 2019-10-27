@@ -4,39 +4,50 @@
  */
 package io.github.nucleuspowered.nucleus.modules.misc.commands;
 
-import io.github.nucleuspowered.nucleus.internal.annotations.command.Permissions;
-import io.github.nucleuspowered.nucleus.internal.annotations.command.RegisterCommand;
-import io.github.nucleuspowered.nucleus.internal.command.AbstractCommand;
-import io.github.nucleuspowered.nucleus.internal.command.NucleusParameters;
-import io.github.nucleuspowered.nucleus.internal.command.ReturnMessageException;
-import io.github.nucleuspowered.nucleus.internal.permissions.SuggestedLevel;
-import org.spongepowered.api.command.CommandResult;
+import io.github.nucleuspowered.nucleus.internal.command.ICommandContext;
+import io.github.nucleuspowered.nucleus.internal.command.ICommandExecutor;
+import io.github.nucleuspowered.nucleus.internal.command.ICommandResult;
+import io.github.nucleuspowered.nucleus.internal.command.annotation.Command;
+import io.github.nucleuspowered.nucleus.internal.command.annotation.CommandModifier;
+import io.github.nucleuspowered.nucleus.internal.command.requirements.CommandModifiers;
+import io.github.nucleuspowered.nucleus.modules.misc.MiscPermissions;
+import io.github.nucleuspowered.nucleus.services.INucleusServiceCollection;
+import org.spongepowered.api.command.CommandException;
 import org.spongepowered.api.command.CommandSource;
-import org.spongepowered.api.command.args.CommandContext;
 import org.spongepowered.api.command.args.CommandElement;
 import org.spongepowered.api.data.key.Keys;
 import org.spongepowered.api.entity.living.player.Player;
-import org.spongepowered.api.event.cause.Cause;
+import org.spongepowered.api.util.annotation.NonnullByDefault;
 
-@Permissions(supportsOthers = true, suggestedLevel = SuggestedLevel.MOD)
-@RegisterCommand(value = { "extinguish", "ext" })
-public class ExtinguishCommand extends AbstractCommand<CommandSource> {
+@NonnullByDefault
+@Command(
+        aliases = {"extinguish", "ext"},
+        basePermission = MiscPermissions.BASE_EXTINGUISH,
+        commandDescriptionKey = "extinguish",
+        modifiers = {
+                @CommandModifier(value = CommandModifiers.HAS_COOLDOWN, exemptPermission = MiscPermissions.EXEMPT_COOLDOWN_EXTINGUISH),
+                @CommandModifier(value = CommandModifiers.HAS_WARMUP, exemptPermission = MiscPermissions.EXEMPT_WARMUP_EXTINGUISH),
+                @CommandModifier(value = CommandModifiers.HAS_COST, exemptPermission = MiscPermissions.EXEMPT_COST_EXTINGUISH)
+        }
+)
+public class ExtinguishCommand implements ICommandExecutor<CommandSource> {
 
     @Override
-    protected CommandElement[] getArguments() {
+    public CommandElement[] parameters(INucleusServiceCollection serviceCollection) {
         return new CommandElement[] {
-            requirePermissionArg(NucleusParameters.OPTIONAL_ONE_PLAYER, this.permissions.getOthers())
+                serviceCollection.commandElementSupplier()
+                    .createOnlyOtherUserPermissionElement(true, MiscPermissions.OTHERS_EXTINGUISH)
         };
     }
 
-    @Override
-    protected CommandResult executeCommand(CommandSource src, CommandContext args, Cause cause) throws Exception {
-        Player target = this.getUserFromArgs(Player.class, src, NucleusParameters.Keys.PLAYER, args);
+    @Override public ICommandResult execute(ICommandContext<? extends CommandSource> context) throws CommandException {
+        Player target = context.getPlayerFromArgs();
+                // this.getUserFromArgs(Player.class, src, NucleusParameters.Keys.PLAYER, args);
         if (target.get(Keys.FIRE_TICKS).orElse(-1) > 0 && target.offer(Keys.FIRE_TICKS, 0).isSuccessful()) {
-            sendMessageTo(src, "command.ext.success", target.getName());
-            return CommandResult.success();
+            context.sendMessage("command.extinguish.success", target.getName());
+            return context.successResult();
         }
 
-        throw ReturnMessageException.fromKey("command.ext.failed", target.getName());
+        return context.errorResult("command.extinguish.failed", target.getName());
     }
 }

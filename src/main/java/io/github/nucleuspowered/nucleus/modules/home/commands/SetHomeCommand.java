@@ -4,48 +4,52 @@
  */
 package io.github.nucleuspowered.nucleus.modules.home.commands;
 
-import io.github.nucleuspowered.nucleus.Nucleus;
-import io.github.nucleuspowered.nucleus.api.exceptions.NucleusException;
+import io.github.nucleuspowered.nucleus.api.exceptions.HomeException;
 import io.github.nucleuspowered.nucleus.api.nucleusdata.Home;
 import io.github.nucleuspowered.nucleus.api.service.NucleusHomeService;
-import io.github.nucleuspowered.nucleus.internal.annotations.command.Permissions;
-import io.github.nucleuspowered.nucleus.internal.annotations.command.RegisterCommand;
-import io.github.nucleuspowered.nucleus.internal.command.AbstractCommand;
-import io.github.nucleuspowered.nucleus.internal.command.ReturnMessageException;
-import io.github.nucleuspowered.nucleus.internal.docgen.annotations.EssentialsEquivalent;
+import io.github.nucleuspowered.nucleus.internal.command.ICommandContext;
+import io.github.nucleuspowered.nucleus.internal.command.ICommandExecutor;
+import io.github.nucleuspowered.nucleus.internal.command.ICommandResult;
+import io.github.nucleuspowered.nucleus.internal.command.annotation.Command;
+import io.github.nucleuspowered.nucleus.internal.command.annotation.CommandModifier;
+import io.github.nucleuspowered.nucleus.internal.command.annotation.EssentialsEquivalent;
+import io.github.nucleuspowered.nucleus.internal.command.requirements.CommandModifiers;
 import io.github.nucleuspowered.nucleus.internal.interfaces.Reloadable;
-import io.github.nucleuspowered.nucleus.internal.permissions.PermissionInformation;
-import io.github.nucleuspowered.nucleus.internal.permissions.SuggestedLevel;
-import io.github.nucleuspowered.nucleus.modules.home.config.HomeConfigAdapter;
+import io.github.nucleuspowered.nucleus.modules.home.HomePermissions;
+import io.github.nucleuspowered.nucleus.modules.home.config.HomeConfig;
 import io.github.nucleuspowered.nucleus.modules.home.services.HomeService;
-import org.spongepowered.api.command.CommandResult;
-import org.spongepowered.api.command.args.CommandContext;
+import io.github.nucleuspowered.nucleus.services.INucleusServiceCollection;
+import org.spongepowered.api.command.CommandException;
 import org.spongepowered.api.command.args.CommandElement;
 import org.spongepowered.api.command.args.GenericArguments;
 import org.spongepowered.api.entity.living.player.Player;
-import org.spongepowered.api.event.cause.Cause;
 import org.spongepowered.api.text.Text;
 import org.spongepowered.api.text.action.TextActions;
 import org.spongepowered.api.util.annotation.NonnullByDefault;
 
-import java.util.HashMap;
-import java.util.Map;
 import java.util.Optional;
 
-@SuppressWarnings("ALL")
-@Permissions(prefix = "home", mainOverride = "set", suggestedLevel = SuggestedLevel.USER)
-@RegisterCommand(value = "set", subcommandOf = HomeCommand.class, rootAliasRegister = {"homeset", "sethome"})
 @EssentialsEquivalent({"sethome", "createhome"})
 @NonnullByDefault
-public class SetHomeCommand extends AbstractCommand<Player> implements Reloadable {
+@Command(
+        aliases = { "set", "#homeset", "#sethome" },
+        basePermission = HomePermissions.BASE_HOME_SET,
+        commandDescriptionKey = "home.set",
+        parentCommand = HomeCommand.class,
+        modifiers = {
+                @CommandModifier(value = CommandModifiers.HAS_COOLDOWN, exemptPermission = HomePermissions.EXEMPT_COOLDOWN_HOME_SET),
+                @CommandModifier(value = CommandModifiers.HAS_WARMUP, exemptPermission = HomePermissions.EXEMPT_WARMUP_HOME_SET),
+                @CommandModifier(value = CommandModifiers.HAS_COST, exemptPermission = HomePermissions.EXEMPT_COST_HOME_SET)
+        }
+)
+public class SetHomeCommand implements ICommandExecutor<Player>, Reloadable {
 
     private final String homeKey = "home";
 
-    private final HomeService homeService = Nucleus.getNucleus().getInternalServiceManager().getServiceUnchecked(HomeService.class);
     private boolean preventOverhang = true;
 
     @Override
-    public CommandElement[] getArguments() {
+    public CommandElement[] parameters(INucleusServiceCollection serviceCollection) {
         return new CommandElement[] {
             GenericArguments.flags().flag("o", "-overwrite").buildWith(
                 GenericArguments.onlyOne(GenericArguments.optional(GenericArguments.string(Text.of(homeKey))))
@@ -54,57 +58,54 @@ public class SetHomeCommand extends AbstractCommand<Player> implements Reloadabl
     }
 
     @Override
-    public void onReload() throws Exception {
-        this.preventOverhang = Nucleus.getNucleus().getInternalServiceManager().getServiceUnchecked(HomeConfigAdapter.class)
-                .getNodeOrDefault()
+    public void onReload(INucleusServiceCollection serviceCollection) {
+        this.preventOverhang = serviceCollection.moduleDataProvider()
+                .getModuleConfig(HomeConfig.class)
                 .isPreventHomeCountOverhang();
     }
 
     @Override
-    public Map<String, PermissionInformation> permissionSuffixesToRegister() {
-        Map<String, PermissionInformation> m = new HashMap<>();
-        m.put("unlimited", PermissionInformation.getWithTranslation("permission.homes.unlimited", SuggestedLevel.ADMIN));
-        return m;
-    }
-
-    @Override
-    public CommandResult executeCommand(Player src, CommandContext args, Cause cause) throws Exception {
+    public ICommandResult execute(ICommandContext<? extends Player> context) throws CommandException {
         // Get the home key.
-        String home = args.<String>getOne(homeKey).orElse(NucleusHomeService.DEFAULT_HOME_NAME).toLowerCase();
+        String home = context.getOne(this.homeKey, String.class).orElse(NucleusHomeService.DEFAULT_HOME_NAME).toLowerCase();
 
         if (!NucleusHomeService.HOME_NAME_PATTERN.matcher(home).matches()) {
-            throw new ReturnMessageException(Nucleus.getNucleus().getMessageProvider().getTextMessageWithFormat("command.sethome.name"));
+            return context.errorResult("command.sethome.name");
         }
 
+        Player src = context.getIfPlayer();
+        HomeService homeService = context.getServiceCollection().getServiceUnchecked(HomeService.class);
         Optional<Home> currentHome = homeService.getHome(src, home);
-        boolean overwrite = currentHome.isPresent() && args.hasAny("o");
+        boolean overwrite = currentHome.isPresent() && context.hasAny("o");
         if (currentHome.isPresent() && !overwrite) {
-            src.sendMessage(Nucleus.getNucleus().getMessageProvider().getTextMessageWithFormat("command.sethome.seterror", home));
-            src.sendMessage(Nucleus.getNucleus().getMessageProvider().getTextMessageWithFormat("command.sethome.tooverwrite", home).toBuilder()
-                .onClick(TextActions.runCommand("/sethome " + home + " -o")).build());
-            return CommandResult.empty();
+            context.sendMessage("command.sethome.seterror", home);
+            context.sendMessageText(
+                    context.getMessage("command.sethome.tooverwrite", home).toBuilder()
+                        .onClick(TextActions.runCommand("/sethome " + home + " -o")).build());
+            return context.failResult();
         }
 
         try {
             if (overwrite) {
-                int max = this.homeService.getMaximumHomes(src) ;
-                int c = this.homeService.getHomeCount(src) ;
+                int max = homeService.getMaximumHomes(src) ;
+                int c = homeService.getHomeCount(src) ;
                 if (this.preventOverhang && max < c) {
                     // If the player has too many homes, tell them
-                    throw ReturnMessageException.fromKey("command.sethome.overhang", String.valueOf(max), String.valueOf(c));
+                    context.errorResult("command.sethome.overhang", max, c);
                 }
 
                 Home current = currentHome.get();
-                homeService.modifyHomeInternal(cause, current, src.getLocation(), src.getRotation());
-                src.sendMessage(Nucleus.getNucleus().getMessageProvider().getTextMessageWithFormat("command.sethome.overwrite", home));
+                homeService.modifyHomeInternal(context.getCause(), current, src.getLocation(), src.getRotation());
+                context.sendMessage("command.sethome.overwrite", home);
             } else {
-                homeService.createHomeInternal(cause, src, home, src.getLocation(), src.getRotation());
+                homeService.createHomeInternal(context.getCause(), src, home, src.getLocation(), src.getRotation());
             }
-        } catch (NucleusException e) {
-            throw new ReturnMessageException(e.getText(), e);
+        } catch (HomeException e) {
+            e.printStackTrace();
+            return context.errorResultLiteral(e.getText());
         }
 
-        src.sendMessage(Nucleus.getNucleus().getMessageProvider().getTextMessageWithFormat("command.sethome.set", home));
-        return CommandResult.success();
+        context.sendMessage("command.sethome.set", home);
+        return context.successResult();
     }
 }

@@ -4,27 +4,37 @@
  */
 package io.github.nucleuspowered.nucleus.modules.spawn.listeners;
 
-import io.github.nucleuspowered.nucleus.Nucleus;
 import io.github.nucleuspowered.nucleus.api.events.NucleusFirstJoinEvent;
 import io.github.nucleuspowered.nucleus.configurate.datatypes.LocationNode;
 import io.github.nucleuspowered.nucleus.internal.interfaces.ListenerBase;
 import io.github.nucleuspowered.nucleus.modules.spawn.SpawnKeys;
-import io.github.nucleuspowered.nucleus.modules.spawn.SpawnModule;
 import io.github.nucleuspowered.nucleus.modules.spawn.config.SpawnConfig;
-import io.github.nucleuspowered.nucleus.modules.spawn.config.SpawnConfigAdapter;
+import io.github.nucleuspowered.nucleus.services.INucleusServiceCollection;
+import io.github.nucleuspowered.nucleus.services.IStorageManager;
 import org.spongepowered.api.entity.living.player.Player;
 import org.spongepowered.api.event.Listener;
 import org.spongepowered.api.event.Order;
 import org.spongepowered.api.event.filter.Getter;
+import org.spongepowered.api.plugin.PluginContainer;
 import org.spongepowered.api.scheduler.Task;
 
+import javax.inject.Inject;
+
 public class FirstSpawnConditionalListener implements ListenerBase.Conditional {
+
+    private final IStorageManager storageManager;
+    private final PluginContainer pluginContainer;
+
+    @Inject
+    public FirstSpawnConditionalListener(INucleusServiceCollection serviceCollection) {
+        this.storageManager = serviceCollection.storageManager();
+        this.pluginContainer = serviceCollection.pluginContainer();
+    }
 
     @Listener(order = Order.LATE)
     public void onJoin(NucleusFirstJoinEvent event, @Getter("getTargetEntity") Player player) {
         // Try to force a subject location in a tick.
-        Task.builder().execute(() -> Nucleus.getNucleus()
-                .getStorageManager()
+        Task.builder().execute(() -> this.storageManager
                 .getGeneralService()
                 .getOrNew()
                 .join()
@@ -32,11 +42,11 @@ public class FirstSpawnConditionalListener implements ListenerBase.Conditional {
                 .flatMap(LocationNode::getTransformIfExists)
                 .ifPresent(player::setTransform))
                 .delayTicks(3)
-                .submit(Nucleus.getNucleus());
+                .submit(this.pluginContainer);
     }
 
-    @Override public boolean shouldEnable() {
-        return Nucleus.getNucleus().getConfigValue(SpawnModule.ID, SpawnConfigAdapter.class, SpawnConfig::isForceFirstSpawn).orElse(false);
+    @Override public boolean shouldEnable(INucleusServiceCollection serviceCollection) {
+        return serviceCollection.moduleDataProvider().getModuleConfig(SpawnConfig.class).isForceFirstSpawn();
     }
 
 }

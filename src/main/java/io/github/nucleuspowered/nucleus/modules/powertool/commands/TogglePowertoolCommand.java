@@ -4,48 +4,46 @@
  */
 package io.github.nucleuspowered.nucleus.modules.powertool.commands;
 
-import io.github.nucleuspowered.nucleus.internal.annotations.RunAsync;
-import io.github.nucleuspowered.nucleus.internal.annotations.command.NoModifiers;
-import io.github.nucleuspowered.nucleus.internal.annotations.command.Permissions;
-import io.github.nucleuspowered.nucleus.internal.annotations.command.RegisterCommand;
-import io.github.nucleuspowered.nucleus.internal.command.AbstractCommand;
+import io.github.nucleuspowered.nucleus.internal.command.ICommandContext;
+import io.github.nucleuspowered.nucleus.internal.command.ICommandExecutor;
+import io.github.nucleuspowered.nucleus.internal.command.ICommandResult;
 import io.github.nucleuspowered.nucleus.internal.command.NucleusParameters;
-import io.github.nucleuspowered.nucleus.internal.docgen.annotations.EssentialsEquivalent;
-import io.github.nucleuspowered.nucleus.internal.userprefs.UserPreferenceService;
+import io.github.nucleuspowered.nucleus.internal.command.annotation.Command;
+import io.github.nucleuspowered.nucleus.modules.powertool.PowertoolPermissions;
 import io.github.nucleuspowered.nucleus.modules.powertool.PowertoolUserPreferenceKeys;
-import org.spongepowered.api.command.CommandResult;
-import org.spongepowered.api.command.args.CommandContext;
+import io.github.nucleuspowered.nucleus.services.INucleusServiceCollection;
+import io.github.nucleuspowered.nucleus.services.IUserPreferenceService;
+import org.spongepowered.api.command.CommandException;
 import org.spongepowered.api.command.args.CommandElement;
 import org.spongepowered.api.entity.living.player.Player;
-import org.spongepowered.api.event.cause.Cause;
 import org.spongepowered.api.util.annotation.NonnullByDefault;
 
-@Permissions(mainOverride = "powertool")
-@RunAsync
-@NoModifiers
-@RegisterCommand(value = {"toggle"}, subcommandOf = PowertoolCommand.class)
 @NonnullByDefault
-@EssentialsEquivalent({"powertooltoggle", "ptt", "pttoggle"})
-public class TogglePowertoolCommand extends AbstractCommand<Player> {
+@Command(
+        aliases = {"toggle"},
+        basePermission = PowertoolPermissions.BASE_POWERTOOL,
+        commandDescriptionKey = "powertool.toggle"
+)
+public class TogglePowertoolCommand implements ICommandExecutor<Player> {
 
     @Override
-    public CommandElement[] getArguments() {
+    public CommandElement[] parameters(INucleusServiceCollection serviceCollection) {
         return new CommandElement[] {
                 NucleusParameters.OPTIONAL_ONE_TRUE_FALSE
         };
     }
 
-    @Override
-    public CommandResult executeCommand(Player src, CommandContext args, Cause cause) {
-        UserPreferenceService ups = getServiceManager().getServiceUnchecked(UserPreferenceService.class);
+    @Override public ICommandResult execute(ICommandContext<? extends Player> context) throws CommandException {
+        Player src = context.getCommandSourceUnchecked();
+        IUserPreferenceService ups = context.getServiceCollection().userPreferenceService();
         boolean keys = ups.get(src.getUniqueId(), PowertoolUserPreferenceKeys.POWERTOOL_ENABLED).orElse(true);
 
         // If specified - get the key. Else, the inverse of what we have now.
-        boolean toggle = args.<Boolean>getOne(NucleusParameters.Keys.BOOL).orElse(!keys);
+        boolean toggle = context.getOne(NucleusParameters.Keys.BOOL, Boolean.class).orElse(!keys);
         ups.set(src.getUniqueId(), PowertoolUserPreferenceKeys.POWERTOOL_ENABLED, toggle);
 
-        sendMessageTo(src, "command.powertool.toggle", getMessageFor(src, toggle ? "standard.enabled" : "standard.disabled"));
-        return CommandResult.success();
+        context.sendMessage("command.powertool.toggle", context.getMessage(toggle ? "standard.enabled" : "standard.disabled"));
+        return context.successResult();
     }
 
 }

@@ -4,31 +4,29 @@
  */
 package io.github.nucleuspowered.nucleus.modules.jail.commands;
 
-import io.github.nucleuspowered.nucleus.Nucleus;
 import io.github.nucleuspowered.nucleus.Util;
 import io.github.nucleuspowered.nucleus.internal.LocationData;
-import io.github.nucleuspowered.nucleus.internal.annotations.command.NoModifiers;
-import io.github.nucleuspowered.nucleus.internal.annotations.command.Permissions;
-import io.github.nucleuspowered.nucleus.internal.annotations.command.RegisterCommand;
-import io.github.nucleuspowered.nucleus.internal.command.AbstractCommand;
+import io.github.nucleuspowered.nucleus.internal.command.ICommandContext;
+import io.github.nucleuspowered.nucleus.internal.command.ICommandExecutor;
+import io.github.nucleuspowered.nucleus.internal.command.ICommandResult;
 import io.github.nucleuspowered.nucleus.internal.command.NucleusParameters;
-import io.github.nucleuspowered.nucleus.internal.command.ReturnMessageException;
-import io.github.nucleuspowered.nucleus.internal.docgen.annotations.EssentialsEquivalent;
+import io.github.nucleuspowered.nucleus.internal.command.annotation.Command;
+import io.github.nucleuspowered.nucleus.internal.command.annotation.EssentialsEquivalent;
 import io.github.nucleuspowered.nucleus.internal.interfaces.Reloadable;
-import io.github.nucleuspowered.nucleus.internal.permissions.PermissionInformation;
-import io.github.nucleuspowered.nucleus.internal.permissions.SuggestedLevel;
 import io.github.nucleuspowered.nucleus.modules.jail.JailParameters;
-import io.github.nucleuspowered.nucleus.modules.jail.config.JailConfigAdapter;
+import io.github.nucleuspowered.nucleus.modules.jail.JailPermissions;
+import io.github.nucleuspowered.nucleus.modules.jail.config.JailConfig;
 import io.github.nucleuspowered.nucleus.modules.jail.data.JailData;
 import io.github.nucleuspowered.nucleus.modules.jail.services.JailHandler;
-import io.github.nucleuspowered.nucleus.util.CauseStackHelper;
+import io.github.nucleuspowered.nucleus.services.IMessageProviderService;
+import io.github.nucleuspowered.nucleus.services.INucleusServiceCollection;
 import io.github.nucleuspowered.nucleus.util.PermissionMessageChannel;
-import org.spongepowered.api.command.CommandResult;
+import org.spongepowered.api.Sponge;
+import org.spongepowered.api.command.CommandException;
 import org.spongepowered.api.command.CommandSource;
-import org.spongepowered.api.command.args.CommandContext;
 import org.spongepowered.api.command.args.CommandElement;
 import org.spongepowered.api.entity.living.player.User;
-import org.spongepowered.api.event.cause.Cause;
+import org.spongepowered.api.event.CauseStackManager;
 import org.spongepowered.api.text.Text;
 import org.spongepowered.api.text.channel.MutableMessageChannel;
 import org.spongepowered.api.util.annotation.NonnullByDefault;
@@ -37,35 +35,30 @@ import org.spongepowered.api.world.Locatable;
 import java.time.Duration;
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
-import java.util.HashMap;
-import java.util.Map;
 import java.util.Optional;
 
-@NonnullByDefault
-@Permissions(suggestedLevel = SuggestedLevel.MOD, supportsSelectors = true)
-@NoModifiers
-@RegisterCommand({"jail", "unjail", "togglejail"})
-@EssentialsEquivalent({"togglejail", "tjail", "unjail", "jail"})
-public class JailCommand extends AbstractCommand<CommandSource> implements Reloadable {
+import javax.inject.Inject;
 
-    private final JailHandler handler = Nucleus.getNucleus().getInternalServiceManager().getServiceUnchecked(JailHandler.class);
+@NonnullByDefault
+@Command(
+        aliases = {"jail", "unjail", "togglejail"},
+        basePermission = JailPermissions.BASE_JAIL,
+        commandDescriptionKey = "jail"
+)
+@EssentialsEquivalent({"togglejail", "tjail", "unjail", "jail"})
+public class JailCommand implements ICommandExecutor<CommandSource>, Reloadable {
+
+    private final JailHandler handler;
 
     private boolean requireUnjailPermission = false;
 
-    @Override
-    public Map<String, PermissionInformation> permissionSuffixesToRegister() {
-        Map<String, PermissionInformation> m = new HashMap<>();
-        m.put("unjail", PermissionInformation.getWithTranslation("permission.jail.unjail", SuggestedLevel.MOD));
-        m.put("notify", PermissionInformation.getWithTranslation("permission.jail.notify", SuggestedLevel.MOD));
-        m.put("offline", PermissionInformation.getWithTranslation("permission.jail.offline", SuggestedLevel.MOD));
-        m.put("teleportjailed", PermissionInformation.getWithTranslation("permission.jail.teleportjailed", SuggestedLevel.ADMIN));
-        m.put("teleporttojailed", PermissionInformation.getWithTranslation("permission.jail.teleporttojailed", SuggestedLevel.ADMIN));
-        m.put("exempt.target", PermissionInformation.getWithTranslation("permission.jail.exempt.target", SuggestedLevel.ADMIN));
-        return m;
+    @Inject
+    public JailCommand(INucleusServiceCollection serviceCollection) {
+        this.handler = serviceCollection.getServiceUnchecked(JailHandler.class);
     }
 
     @Override
-    public CommandElement[] getArguments() {
+    public CommandElement[] parameters(INucleusServiceCollection serviceCollection) {
         return new CommandElement[] {
                 NucleusParameters.ONE_USER,
                 JailParameters.OPTIONAL_JAIL,
@@ -74,53 +67,55 @@ public class JailCommand extends AbstractCommand<CommandSource> implements Reloa
         };
     }
 
-    @Override
-    public CommandResult executeCommand(CommandSource src, CommandContext args, Cause cause) throws Exception {
+    @Override public ICommandResult execute(ICommandContext<? extends CommandSource> context) throws CommandException {
         // Get the subject.
-        User pl = args.<User>getOne(NucleusParameters.Keys.USER).get();
-        if (!pl.isOnline() && !this.permissions.testSuffix(src, "offline")) {
-            src.sendMessage(Nucleus.getNucleus().getMessageProvider().getTextMessageWithFormat("command.jail.offline.noperms"));
-            return CommandResult.empty();
+        User pl = context.requireOne(NucleusParameters.Keys.USER, User.class);
+        if (!pl.isOnline() && !context.testPermission(JailPermissions.JAIL_OFFLINE)) {
+            return context.errorResult("command.jail.offline.noperms");
         }
 
         if (this.handler.isPlayerJailed(pl)) {
-            if (!this.requireUnjailPermission || this.permissions.testSuffix(src, "unjail")) {
-                return onUnjail(src, args, pl);
+            if (!this.requireUnjailPermission || context.testPermission(JailPermissions.JAIL_UNJAIL)) {
+                return onUnjail(context, pl);
             }
 
-            throw ReturnMessageException.fromKey("command.jail.unjail.perm");
+            return context.errorResult("command.jail.unjail.perm");
         } else {
-            if (this.permissions.testSuffix(pl, "exempt.target", src, false)) { // only for jailing
-                throw ReturnMessageException.fromKey("command.jail.exempt", pl.getName());
+            if (!context.isConsoleAndBypass() && context.testPermission(JailPermissions.JAIL_EXEMPT_TARGET)) {
+                return context.errorResult("command.jail.exempt", pl.getName());
             }
 
-            return onJail(src, args, pl);
+            return onJail(context, pl);
         }
     }
 
-    private CommandResult onUnjail(CommandSource src, CommandContext args, User user) throws ReturnMessageException {
-        if (CauseStackHelper.createFrameWithCausesWithReturn(c -> this.handler.unjailPlayer(user), src)) {
-            src.sendMessage(Nucleus.getNucleus().getMessageProvider().getTextMessageWithFormat("command.jail.unjail.success", user.getName()));
-            return CommandResult.success();
-        } else {
-            throw ReturnMessageException.fromKey("command.jail.unjail.fail", user.getName());
+    private ICommandResult onUnjail(ICommandContext<? extends CommandSource> context, User user) throws CommandException {
+        try (CauseStackManager.StackFrame frame = Sponge.getCauseStackManager().pushCauseFrame()) {
+            frame.pushCause(context.getCommandSource());
+            if (this.handler.unjailPlayer(user)) {
+                context.sendMessage("command.jail.unjail.success", user.getName());
+                return context.successResult();
+            } else {
+                return context.errorResult("command.jail.unjail.fail", user.getName());
+            }
         }
     }
 
-    private CommandResult onJail(CommandSource src, CommandContext args, User user) throws ReturnMessageException {
-        Optional<LocationData> owl = args.getOne(JailParameters.JAIL_KEY);
+    private ICommandResult onJail(ICommandContext<? extends CommandSource> context, User user) throws CommandException {
+        Optional<LocationData> owl = context.getOne(JailParameters.JAIL_KEY, LocationData.class);
         if (!owl.isPresent()) {
-            throw ReturnMessageException.fromKey("command.jail.jail.nojail");
+            return context.errorResult("command.jail.jail.nojail");
         }
 
         // This might not be there.
-        Optional<Long> duration = args.getOne(NucleusParameters.Keys.DURATION);
-        String reason = args.<String>getOne(NucleusParameters.Keys.REASON)
-                .orElseGet(() -> Nucleus.getNucleus().getMessageProvider().getMessageWithFormat("command.jail.reason"));
+        Optional<Long> duration = context.getOne(NucleusParameters.Keys.DURATION, Long.class);
+        String reason = context.getOne(NucleusParameters.Keys.REASON, String.class)
+                .orElseGet(() -> context.getMessageString("command.jail.reason"));
         JailData jd;
         Text message;
         Text messageTo;
 
+        CommandSource src = context.getCommandSource();
         if (duration.isPresent()) {
             if (user.isOnline()) {
                 jd = new JailData(Util.getUUID(src), owl.get().getName(), reason, user.getPlayer().get().getLocation(),
@@ -129,37 +124,37 @@ public class JailCommand extends AbstractCommand<CommandSource> implements Reloa
                 jd = new JailData(Util.getUUID(src), owl.get().getName(), reason, null, Duration.of(duration.get(), ChronoUnit.SECONDS));
             }
 
-            message = Nucleus.getNucleus().getMessageProvider().getTextMessageWithFormat("command.checkjail.jailedfor", user.getName(), jd.getJailName(),
-                    src.getName(), Util.getTimeStringFromSeconds(duration.get()));
-            messageTo = Nucleus.getNucleus().getMessageProvider().getTextMessageWithFormat("command.jail.jailedfor", owl.get().getName(), src.getName(),
-                    Util.getTimeStringFromSeconds(duration.get()));
+            IMessageProviderService messageProviderService = context.getServiceCollection().messageProvider();
+            message = context.getMessage("command.checkjail.jailedfor", user.getName(), jd.getJailName(),
+                    src.getName(), messageProviderService.getTimeString(src.getLocale(), duration.get()));
+            messageTo = context.getMessage("command.jail.jailedfor", owl.get().getName(), src.getName(),
+                    messageProviderService.getTimeString(src.getLocale(), duration.get()));
         } else {
             jd = new JailData(Util.getUUID(src), owl.get().getName(), reason, user.getPlayer().map(Locatable::getLocation).orElse(null));
-            message = Nucleus.getNucleus()
-                    .getMessageProvider().getTextMessageWithFormat("command.checkjail.jailedperm", user.getName(), owl.get().getName(), src.getName());
-            messageTo = Nucleus.getNucleus().getMessageProvider().getTextMessageWithFormat("command.jail.jailedperm", owl.get().getName(), src.getName());
+            message = context.getMessage("command.checkjail.jailedperm", user.getName(), owl.get().getName(), src.getName());
+            messageTo = context.getMessage("command.jail.jailedperm", owl.get().getName(), src.getName());
         }
 
         if (this.handler.jailPlayer(user, jd)) {
-            MutableMessageChannel mc = new PermissionMessageChannel(this.permissions.getPermissionWithSuffix("notify")).asMutable();
+            MutableMessageChannel mc = new PermissionMessageChannel(context.getServiceCollection().permissionService(),
+                    JailPermissions.JAIL_NOTIFY).asMutable();
             mc.addMember(src);
             mc.send(message);
-            mc.send(Nucleus.getNucleus().getMessageProvider().getTextMessageWithFormat("standard.reasoncoloured", reason));
+            mc.send(context.getMessage("standard.reasoncoloured", reason));
 
             user.getPlayer().ifPresent(x -> {
                 x.sendMessage(messageTo);
-                x.sendMessage(Nucleus.getNucleus().getMessageProvider().getTextMessageWithFormat("standard.reasoncoloured", reason));
+                x.sendMessage(context.getMessage("standard.reasoncoloured", reason));
             });
 
-            return CommandResult.success();
+            return context.successResult();
         }
 
-        throw ReturnMessageException.fromKey("command.jail.error");
+        return context.errorResult("command.jail.error");
     }
 
     @Override
-    public void onReload() {
-        this.requireUnjailPermission = Nucleus.getNucleus().getInternalServiceManager().getServiceUnchecked(JailConfigAdapter.class)
-                .getNodeOrDefault().isRequireUnjailPermission();
+    public void onReload(INucleusServiceCollection serviceCollection) {
+        this.requireUnjailPermission = serviceCollection.moduleDataProvider().getModuleConfig(JailConfig.class).isRequireUnjailPermission();
     }
 }

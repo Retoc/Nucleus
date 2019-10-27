@@ -25,7 +25,7 @@ public class NoModifiersArgument<T> extends WrappedElement {
 
     public static final String NO_COST_ARGUMENT = "nocost";
     public static final String NO_COOLDOWN_ARGUMENT = "nocooldown";
-    private static final String NO_WARMUP_ARGUMENT = "nowarmup";
+    public static final String NO_WARMUP_ARGUMENT = "nowarmup";
 
     public static final BiPredicate<CommandSource, Player> PLAYER_NOT_CALLER_PREDICATE =
         (c, o) -> !(c instanceof Player) || !((Player) c).getUniqueId().equals(o.getUniqueId());

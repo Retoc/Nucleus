@@ -6,28 +6,27 @@ package io.github.nucleuspowered.nucleus.modules.playerinfo.commands;
 
 import com.google.common.collect.Lists;
 import com.google.common.collect.Maps;
-import io.github.nucleuspowered.nucleus.Nucleus;
 import io.github.nucleuspowered.nucleus.Util;
 import io.github.nucleuspowered.nucleus.api.text.NucleusTextTemplate;
-import io.github.nucleuspowered.nucleus.internal.annotations.RunAsync;
-import io.github.nucleuspowered.nucleus.internal.annotations.command.Permissions;
-import io.github.nucleuspowered.nucleus.internal.annotations.command.RegisterCommand;
-import io.github.nucleuspowered.nucleus.internal.command.AbstractCommand;
-import io.github.nucleuspowered.nucleus.internal.command.ReturnMessageException;
-import io.github.nucleuspowered.nucleus.internal.docgen.annotations.EssentialsEquivalent;
+import io.github.nucleuspowered.nucleus.internal.command.ICommandContext;
+import io.github.nucleuspowered.nucleus.internal.command.ICommandExecutor;
+import io.github.nucleuspowered.nucleus.internal.command.ICommandResult;
+import io.github.nucleuspowered.nucleus.internal.command.annotation.Command;
+import io.github.nucleuspowered.nucleus.internal.command.annotation.CommandModifier;
+import io.github.nucleuspowered.nucleus.internal.command.annotation.EssentialsEquivalent;
+import io.github.nucleuspowered.nucleus.internal.command.requirements.CommandModifiers;
 import io.github.nucleuspowered.nucleus.internal.interfaces.Reloadable;
-import io.github.nucleuspowered.nucleus.internal.permissions.PermissionInformation;
-import io.github.nucleuspowered.nucleus.internal.permissions.SuggestedLevel;
 import io.github.nucleuspowered.nucleus.modules.afk.services.AFKHandler;
+import io.github.nucleuspowered.nucleus.modules.playerinfo.PlayerInfoPermissions;
 import io.github.nucleuspowered.nucleus.modules.playerinfo.config.ListConfig;
-import io.github.nucleuspowered.nucleus.modules.playerinfo.config.PlayerInfoConfigAdapter;
+import io.github.nucleuspowered.nucleus.modules.playerinfo.config.PlayerInfoConfig;
+import io.github.nucleuspowered.nucleus.services.INucleusServiceCollection;
+import io.github.nucleuspowered.nucleus.services.IPermissionService;
 import org.spongepowered.api.Sponge;
-import org.spongepowered.api.command.CommandResult;
+import org.spongepowered.api.command.CommandException;
 import org.spongepowered.api.command.CommandSource;
-import org.spongepowered.api.command.args.CommandContext;
 import org.spongepowered.api.data.key.Keys;
 import org.spongepowered.api.entity.living.player.Player;
-import org.spongepowered.api.event.cause.Cause;
 import org.spongepowered.api.service.context.Contextual;
 import org.spongepowered.api.service.pagination.PaginationList;
 import org.spongepowered.api.service.permission.PermissionService;
@@ -38,48 +37,39 @@ import org.spongepowered.api.util.annotation.NonnullByDefault;
 
 import java.util.ArrayList;
 import java.util.Collection;
-import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.concurrent.ExecutionException;
-import java.util.function.Function;
+import java.util.function.BiFunction;
 import java.util.stream.Collectors;
 
 import javax.annotation.Nullable;
 
 @NonnullByDefault
-@RunAsync
-@Permissions(suggestedLevel = SuggestedLevel.USER)
-@RegisterCommand({"list", "listplayers", "ls"})
 @EssentialsEquivalent({"list", "who", "playerlist", "online", "plist"})
-public class ListPlayerCommand extends AbstractCommand<CommandSource> implements Reloadable {
+@Command(
+        async = true,
+        aliases = {"list", "listplayers", "ls"},
+        basePermission = PlayerInfoPermissions.BASE_LIST,
+        commandDescriptionKey = "list",
+        modifiers = {
+                @CommandModifier(value = CommandModifiers.HAS_COOLDOWN, exemptPermission = PlayerInfoPermissions.EXEMPT_COOLDOWN_LIST),
+                @CommandModifier(value = CommandModifiers.HAS_WARMUP, exemptPermission = PlayerInfoPermissions.EXEMPT_WARMUP_LIST),
+                @CommandModifier(value = CommandModifiers.HAS_COST, exemptPermission = PlayerInfoPermissions.EXEMPT_COST_LIST)
+        }
+)
+public class ListPlayerCommand implements ICommandExecutor<CommandSource>, Reloadable {
+
+    public static final String WEIGHT_OPTION = "nucleus.list.weight";
 
     private ListConfig listConfig = new ListConfig();
 
-    @Nullable private AFKHandler handler;
-    private final Text afk;
-    private final Text hidden;
+    public static final BiFunction<IPermissionService, Subject, Integer> weightingFunction =
+            (permissionService, subject) -> permissionService.getIntOptionFromSubject(subject, WEIGHT_OPTION).orElse(0);
 
-    public static final Function<Subject, Integer> weightingFunction = s -> Util.getIntOptionFromSubject(s, "nucleus.list.weight").orElse(0);
-
-    public ListPlayerCommand() {
-        Nucleus plugin = Nucleus.getNucleus();
-        this.afk = plugin.getMessageProvider().getTextMessageWithFormat("command.list.afk");
-        this.hidden = plugin.getMessageProvider().getTextMessageWithFormat("command.list.hidden");
-        this.handler = plugin.getInternalServiceManager().getService(AFKHandler.class).orElse(null);
-    }
-
-    @Override
-    public Map<String, PermissionInformation> permissionSuffixesToRegister() {
-        Map<String, PermissionInformation> m = new HashMap<>();
-        m.put("seevanished", PermissionInformation.getWithTranslation("permission.list.seevanished", SuggestedLevel.ADMIN));
-        return m;
-    }
-
-    @Override
-    public CommandResult executeCommand(CommandSource src, CommandContext args, Cause cause) throws Exception {
-        boolean showVanished = this.permissions.testSuffix(src, "seevanished");
+    @Override public ICommandResult execute(ICommandContext<? extends CommandSource> context) throws CommandException {
+        boolean showVanished = context.testPermission(PlayerInfoPermissions.LIST_SEEVANISHED);
 
         Collection<Player> players = Sponge.getServer().getOnlinePlayers();
         long playerCount = players.size();
@@ -87,44 +77,42 @@ public class ListPlayerCommand extends AbstractCommand<CommandSource> implements
 
         Text header;
         if (showVanished && hiddenCount > 0) {
-            header = Nucleus.getNucleus().getMessageProvider().getTextMessageWithFormat("command.list.playercount.hidden", String.valueOf(playerCount),
+            header = context.getMessage("command.list.playercount.hidden", String.valueOf(playerCount),
                     String.valueOf(Sponge.getServer().getMaxPlayers()), String.valueOf(hiddenCount));
         } else {
-            header = Nucleus.getNucleus().getMessageProvider().getTextMessageWithFormat("command.list.playercount.base", String.valueOf(playerCount - hiddenCount),
+            header = context.getMessage("command.list.playercount.base", String.valueOf(playerCount - hiddenCount),
                     String.valueOf(Sponge.getServer().getMaxPlayers()));
         }
 
-        PaginationList.Builder builder = Util.getPaginationBuilder(src).title(header);
+        PaginationList.Builder builder = Util.getPaginationBuilder(context.getCommandSource()).title(header);
 
         Optional<PermissionService> optPermissionService = Sponge.getServiceManager().provide(PermissionService.class);
         if (this.listConfig.isGroupByPermissionGroup() && optPermissionService.isPresent()) {
-            builder.contents(listByPermissionGroup(optPermissionService.get(), players, showVanished));
+            builder.contents(listByPermissionGroup(context, players, showVanished));
         } else {
             // If we have players, send them on.
-            builder.contents(getPlayerList(players, showVanished));
+            builder.contents(getPlayerList(players, showVanished, context));
         }
 
-        builder.sendTo(src);
-        return CommandResult.success();
+        builder.sendTo(context.getCommandSource());
+        return context.successResult();
     }
 
-    private List<Text> listByPermissionGroup(final PermissionService service, Collection<Player> players, boolean showVanished)
-            throws ReturnMessageException {
+    private List<Text> listByPermissionGroup(ICommandContext<? extends CommandSource> context, Collection<Player> players, boolean showVanished)
+            throws CommandException {
         // Get the groups
         List<Subject> groups = Lists.newArrayList();
+        PermissionService service = Sponge.getServiceManager().provideUnchecked(PermissionService.class);
         try {
             service.getGroupSubjects().applyToAll(groups::add).get();
         } catch (InterruptedException | ExecutionException e) {
-            if (Nucleus.getNucleus().isDebugMode()) {
-                e.printStackTrace();
-            }
-
-            throw ReturnMessageException.fromKey("command.list.permission.failed");
+            e.printStackTrace();
+            throw context.createException("command.list.permission.failed");
         }
 
         // If weights are the same, sort them in reverse order - that way we get the most inherited
         // groups first and display them first.
-        groups.sort((x, y) -> groupComparison(weightingFunction, x, y));
+        groups.sort((x, y) -> groupComparison(weightingFunction, context.getServiceCollection().permissionService(), x, y));
 
         // Keep a copy of the players that we will remove from.
         final Map<Player, List<String>> playersToList = players.stream()
@@ -146,7 +134,7 @@ public class ListPlayerCommand extends AbstractCommand<CommandSource> implements
             if (plList != null && !plList.isEmpty()) {
                 // Get and put the player list into the map, if there is a
                 // player to show. There might not be, they might be vanished!
-                getList(plList, showVanished, messages, alias);
+                getList(plList, showVanished, messages, alias, context);
             }
 
             groupToPlayer.remove(alias);
@@ -156,26 +144,27 @@ public class ListPlayerCommand extends AbstractCommand<CommandSource> implements
         if (this.listConfig.isUseAliasOnly()) {
             List<Player> playersLeft = groupToPlayer.entrySet().stream().flatMap(x -> x.getValue().stream()).collect(Collectors.toList());
             if (!playersLeft.isEmpty()) {
-                getList(playersLeft, showVanished, messages, defaultGroupName);
+                getList(playersLeft, showVanished, messages, defaultGroupName, context);
             }
         } else {
             groupToPlayer.entrySet().stream()
                     .filter(x -> !x.getValue().isEmpty())
                     .filter(x -> !x.getKey().equals(this.listConfig.getDefaultGroupName()))
                     .sorted((x, y) -> x.getKey().compareToIgnoreCase(y.getKey()))
-                    .forEach(x -> getList(x.getValue(), showVanished, messages, x.getKey()));
+                    .forEach(x -> getList(x.getValue(), showVanished, messages, x.getKey(), context));
 
             List<Player> pl = groupToPlayer.get(defaultGroupName);
             if (pl != null && !pl.isEmpty()) {
-                getList(pl, showVanished, messages, defaultGroupName);
+                getList(pl, showVanished, messages, defaultGroupName, context);
             }
         }
 
         return messages;
     }
 
-    @Override public void onReload() {
-        this.listConfig = getServiceUnchecked(PlayerInfoConfigAdapter.class).getNodeOrDefault().getList();
+    @Override
+    public void onReload(INucleusServiceCollection serviceCollection) {
+        this.listConfig = serviceCollection.moduleDataProvider().getModuleConfig(PlayerInfoConfig.class).getList();
     }
 
     public static Map<String, List<Player>> linkPlayersToGroups(List<Subject> groups, Map<String, String> groupAliases,
@@ -206,9 +195,13 @@ public class ListPlayerCommand extends AbstractCommand<CommandSource> implements
 
     // For testing
 
-    public static int groupComparison(Function<Subject, Integer> weightingFunction, Subject x, Subject y)  {
+    public static int groupComparison(
+            BiFunction<IPermissionService, Subject, Integer> weightingFunction,
+            IPermissionService permissionService,
+            Subject x,
+            Subject y)  {
         // If the weight of x is bigger than y, x should go first. We therefore need a large x to provide a negative number.
-        int res = weightingFunction.apply(y) - weightingFunction.apply(x);
+        int res = weightingFunction.apply(permissionService, y) - weightingFunction.apply(permissionService, x);
         if (res == 0) {
             // If x is bigger than y, x should go first. We therefore need a large x to provide a negative number,
             // so x is above y.
@@ -218,8 +211,9 @@ public class ListPlayerCommand extends AbstractCommand<CommandSource> implements
         return res;
     }
 
-    private void getList(Collection<Player> player, boolean showVanished, List<Text> messages, @Nullable String groupName) {
-        List<Text> m = getPlayerList(player, showVanished);
+    private void getList(Collection<Player> player, boolean showVanished, List<Text> messages, @Nullable String groupName,
+            ICommandContext<? extends CommandSource> context) {
+        List<Text> m = getPlayerList(player, showVanished, context);
         if (this.listConfig.isCompact()) {
             boolean isFirst = true;
             for (Text y : m) {
@@ -248,19 +242,23 @@ public class ListPlayerCommand extends AbstractCommand<CommandSource> implements
      *         <code>empty</code> if the player list is of zero length.
      */
     @SuppressWarnings("ConstantConditions")
-    private List<Text> getPlayerList(Collection<Player> playersToList, boolean showVanished) {
+    private List<Text> getPlayerList(Collection<Player> playersToList, boolean showVanished, ICommandContext<? extends CommandSource> context) {
         NucleusTextTemplate template = this.listConfig.getListTemplate();
+        final AFKHandler handler = context.getServiceCollection().getService(AFKHandler.class).orElse(null);
+        final Text afk = context.getMessage("command.list.afk");
+        final Text hidden = context.getMessage("command.list.hidden");
+
         List<Text> playerList = playersToList.stream().filter(x -> showVanished || !x.get(Keys.VANISH).orElse(false))
                 .sorted((x, y) -> x.getName().compareToIgnoreCase(y.getName())).map(x -> {
                     Text.Builder tb = Text.builder();
                     boolean appendSpace = false;
-                    if (this.handler != null && this.handler.isAFK(x)) {
-                        tb.append(this.afk);
+                    if (handler != null && handler.isAFK(x)) {
+                        tb.append(afk);
                         appendSpace = true;
                     }
 
                     if (x.get(Keys.VANISH).orElse(false)) {
-                        tb.append(this.hidden);
+                        tb.append(hidden);
                         appendSpace = true;
                     }
 
@@ -271,7 +269,7 @@ public class ListPlayerCommand extends AbstractCommand<CommandSource> implements
                     if (template != null) { // it shouldn't be, but if it is, fallback...
                         return tb.append(template.getForCommandSource(x)).build();
                     } else {
-                        return tb.append(Nucleus.getNucleus().getNameUtil().getName(x)).build();
+                        return tb.append(context.getDisplayName(x.getUniqueId())).build();
                     }
                 }).collect(Collectors.toList());
 

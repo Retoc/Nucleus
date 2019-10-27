@@ -4,8 +4,6 @@
  */
 package io.github.nucleuspowered.nucleus.dataservices.dataproviders;
 
-import static io.github.nucleuspowered.nucleus.configurate.ConfigurateHelper.setOptions;
-
 import com.google.common.base.Preconditions;
 import ninja.leaping.configurate.ConfigurationNode;
 import ninja.leaping.configurate.ConfigurationOptions;

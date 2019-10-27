@@ -6,16 +6,19 @@ package io.github.nucleuspowered.nucleus.modules.admin.commands;
 
 import com.flowpowered.math.vector.Vector3d;
 import com.google.common.collect.Sets;
-import io.github.nucleuspowered.nucleus.Nucleus;
-import io.github.nucleuspowered.nucleus.internal.annotations.command.Permissions;
-import io.github.nucleuspowered.nucleus.internal.annotations.command.RegisterCommand;
-import io.github.nucleuspowered.nucleus.internal.command.AbstractCommand;
+import io.github.nucleuspowered.nucleus.internal.TypeTokens;
+import io.github.nucleuspowered.nucleus.internal.command.ICommandContext;
+import io.github.nucleuspowered.nucleus.internal.command.ICommandExecutor;
+import io.github.nucleuspowered.nucleus.internal.command.ICommandResult;
 import io.github.nucleuspowered.nucleus.internal.command.NucleusParameters;
-import io.github.nucleuspowered.nucleus.internal.command.ReturnMessageException;
+import io.github.nucleuspowered.nucleus.internal.command.annotation.CommandModifier;
+import io.github.nucleuspowered.nucleus.internal.command.annotation.Command;
+import io.github.nucleuspowered.nucleus.internal.command.requirements.CommandModifiers;
+import io.github.nucleuspowered.nucleus.modules.admin.AdminPermissions;
+import io.github.nucleuspowered.nucleus.services.INucleusServiceCollection;
 import org.spongepowered.api.Sponge;
-import org.spongepowered.api.command.CommandResult;
+import org.spongepowered.api.command.CommandException;
 import org.spongepowered.api.command.CommandSource;
-import org.spongepowered.api.command.args.CommandContext;
 import org.spongepowered.api.command.args.CommandElement;
 import org.spongepowered.api.command.args.GenericArguments;
 import org.spongepowered.api.data.key.Keys;
@@ -25,7 +28,6 @@ import org.spongepowered.api.entity.Item;
 import org.spongepowered.api.entity.living.Living;
 import org.spongepowered.api.entity.living.monster.Monster;
 import org.spongepowered.api.entity.living.player.Player;
-import org.spongepowered.api.event.cause.Cause;
 import org.spongepowered.api.text.Text;
 import org.spongepowered.api.util.annotation.NonnullByDefault;
 import org.spongepowered.api.world.Locatable;
@@ -37,10 +39,14 @@ import java.util.Set;
 import java.util.function.Predicate;
 import java.util.stream.Collectors;
 
-@Permissions
-@RegisterCommand("killentity")
+@Command(aliases = "kill", basePermission = AdminPermissions.BASE_KILL, commandDescriptionKey = "kill",
+        modifiers = {
+                @CommandModifier(value = CommandModifiers.HAS_WARMUP, exemptPermission = AdminPermissions.EXEMPT_WARMUP_KILLENTITY),
+                @CommandModifier(value = CommandModifiers.HAS_COOLDOWN, exemptPermission = AdminPermissions.EXEMPT_COOLDOWN_KILLENTITY),
+                @CommandModifier(value = CommandModifiers.HAS_COST, exemptPermission = AdminPermissions.EXEMPT_COST_KILLENTITY)
+        })
 @NonnullByDefault
-public class KillEntityCommand extends AbstractCommand<CommandSource> {
+public class KillEntityCommand implements ICommandExecutor<CommandSource> {
 
     private static final String radius = "radius";
     private static final String world = "world";
@@ -62,7 +68,7 @@ public class KillEntityCommand extends AbstractCommand<CommandSource> {
     }};
 
     @Override
-    public CommandElement[] getArguments() {
+    public CommandElement[] parameters(INucleusServiceCollection serviceCollection) {
         return new CommandElement[] {
                 GenericArguments.flags()
                         .setAnchorFlags(true)
@@ -73,33 +79,39 @@ public class KillEntityCommand extends AbstractCommand<CommandSource> {
     }
 
     @Override
-    protected CommandResult executeCommand(CommandSource src, CommandContext args, Cause cause) throws Exception {
-        if (!(src instanceof Locatable) && args.hasAny(radius)) {
+    public ICommandResult execute(ICommandContext<? extends CommandSource> context) throws CommandException {
+        CommandSource src = context.getCommandSource();
+        if (!(src instanceof Locatable) && context.hasAny(radius)) {
             // We can't do that.
-            throw ReturnMessageException.fromKey("command.killentity.commandsourceradius");
+            return context.errorResult("command.killentity.commandsourceradius");
         }
 
-        if (args.hasAny(radius) && args.hasAny(world)) {
+        if (context.hasAny(radius) && context.hasAny(world)) {
             // Can't do that, either.
-            throw ReturnMessageException.fromKey("command.killentity.radiusworld");
+            return context.errorResult("command.killentity.radiusworld");
         }
 
         Set<Entity> currentEntities;
-        if (args.hasAny(radius)) {
+        if (context.hasAny(radius)) {
             Locatable l = ((Locatable) src);
             Vector3d locationTest = l.getLocation().getPosition();
-            int r = args.<Integer>getOne(radius).get();
+            int r = context.requireOne(radius, int.class);
             currentEntities = Sets.newHashSet(l.getWorld().getEntities(entity -> entity.getTransform().getPosition().distance(locationTest) <= r));
         } else {
-            WorldProperties worldProperties = this.getWorldFromUserOrArgs(src, world, args);
+            WorldProperties worldProperties;
+            if (context.hasAny(world)) {
+                worldProperties = context.requireOne(world, WorldProperties.class);
+            } else {
+                worldProperties = ((Locatable) src).getWorld().getProperties();
+            }
             currentEntities = Sets.newHashSet(Sponge.getServer().getWorld(worldProperties.getUniqueId()).get().getEntities());
         }
 
-        Predicate<Entity> entityPredicate = args.<Predicate<Entity>>getAll(type).stream().reduce(Predicate::or)
-                .orElseThrow(() -> ReturnMessageException.fromKey("command.killentity.noselection"));
+        Predicate<Entity> entityPredicate = context.getAll(type, TypeTokens.PREDICATE_ENTITY).stream().reduce(Predicate::or)
+                .orElseThrow(() -> context.createException("command.killentity.noselection"));
         Set<Entity> toKill = currentEntities.stream().filter(entityPredicate).collect(Collectors.toSet());
         if (toKill.isEmpty()) {
-            throw ReturnMessageException.fromKey("command.killentity.nothing");
+            return context.errorResult("command.killentity.nothing");
         }
 
         int killCount = toKill.size();
@@ -108,7 +120,7 @@ public class KillEntityCommand extends AbstractCommand<CommandSource> {
             x.remove();
         });
 
-        src.sendMessage(Nucleus.getNucleus().getMessageProvider().getTextMessageWithFormat("command.killentity.success", String.valueOf(killCount)));
-        return CommandResult.affectedEntities(killCount);
+        context.sendMessage("command.killentity.success", String.valueOf(killCount));
+        return context.successResult();
     }
 }

@@ -4,48 +4,44 @@
  */
 package io.github.nucleuspowered.nucleus.modules.mute.commands;
 
-import io.github.nucleuspowered.nucleus.Nucleus;
-import io.github.nucleuspowered.nucleus.internal.annotations.RunAsync;
-import io.github.nucleuspowered.nucleus.internal.annotations.command.NoModifiers;
-import io.github.nucleuspowered.nucleus.internal.annotations.command.Permissions;
-import io.github.nucleuspowered.nucleus.internal.annotations.command.RegisterCommand;
-import io.github.nucleuspowered.nucleus.internal.command.AbstractCommand;
+import io.github.nucleuspowered.nucleus.internal.command.ICommandContext;
+import io.github.nucleuspowered.nucleus.internal.command.ICommandExecutor;
+import io.github.nucleuspowered.nucleus.internal.command.ICommandResult;
 import io.github.nucleuspowered.nucleus.internal.command.NucleusParameters;
+import io.github.nucleuspowered.nucleus.internal.command.annotation.Command;
+import io.github.nucleuspowered.nucleus.modules.mute.MutePermissions;
 import io.github.nucleuspowered.nucleus.modules.mute.services.MuteHandler;
-import org.spongepowered.api.command.CommandResult;
+import io.github.nucleuspowered.nucleus.services.INucleusServiceCollection;
+import org.spongepowered.api.Sponge;
+import org.spongepowered.api.command.CommandException;
 import org.spongepowered.api.command.CommandSource;
-import org.spongepowered.api.command.args.CommandContext;
 import org.spongepowered.api.command.args.CommandElement;
-import org.spongepowered.api.event.cause.Cause;
-import org.spongepowered.api.text.channel.MessageChannel;
+import org.spongepowered.api.entity.living.player.Player;
 import org.spongepowered.api.util.annotation.NonnullByDefault;
 
-@RunAsync
-@NoModifiers
 @NonnullByDefault
-@Permissions
-@RegisterCommand("globalmute")
-public class GlobalMuteCommand extends AbstractCommand<CommandSource> {
-
-    private final MuteHandler muteHandler = getServiceUnchecked(MuteHandler.class);
+@Command(aliases = "globalmute", basePermission = MutePermissions.BASE_GLOBALMUTE, commandDescriptionKey = "globalmute", async = true)
+public class GlobalMuteCommand implements ICommandExecutor<CommandSource> {
 
     @Override
-    public CommandElement[] getArguments() {
+    public CommandElement[] parameters(INucleusServiceCollection serviceCollection) {
         return new CommandElement[] {
                 NucleusParameters.OPTIONAL_ONE_TRUE_FALSE
         };
     }
 
-    @Override
-    public CommandResult executeCommand(CommandSource src, CommandContext args, Cause cause) {
-        boolean turnOn = args.<Boolean>getOne(NucleusParameters.Keys.BOOL).orElse(!this.muteHandler.isGlobalMuteEnabled());
+    @Override public ICommandResult execute(ICommandContext<? extends CommandSource> context) throws CommandException {
+        MuteHandler muteHandler = context.getServiceCollection().getServiceUnchecked(MuteHandler.class);
+        boolean turnOn = context.getOne(NucleusParameters.Keys.BOOL, Boolean.class).orElse(!muteHandler.isGlobalMuteEnabled());
 
-        this.muteHandler.setGlobalMuteEnabled(turnOn);
-        String onOff = Nucleus.getNucleus().getMessageProvider().getMessageFromKey(turnOn ? "standard.enabled" : "standard.disabled").get();
-        src.sendMessage(Nucleus.getNucleus().getMessageProvider().getTextMessageWithFormat("command.globalmute.status", onOff));
-        MessageChannel.TO_ALL.send(
-                Nucleus.getNucleus().getMessageProvider().getTextMessageWithFormat("command.globalmute.broadcast." + (turnOn ? "enabled" : "disabled")));
-
-        return CommandResult.success();
+        muteHandler.setGlobalMuteEnabled(turnOn);
+        String onOff = context.getMessageString(turnOn ? "standard.enabled" : "standard.disabled");
+        context.sendMessage("command.globalmute.status", onOff);
+        String key = "command.globalmute.broadcast." + (turnOn ? "enabled" : "disabled");
+        for (Player player : Sponge.getServer().getOnlinePlayers()) {
+            context.sendMessageTo(player, key);
+        }
+        context.sendMessageTo(Sponge.getServer().getConsole(), key);
+        return context.successResult();
     }
 }

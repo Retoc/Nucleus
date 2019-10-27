@@ -4,24 +4,26 @@
  */
 package io.github.nucleuspowered.nucleus.modules.fun.commands;
 
-import io.github.nucleuspowered.nucleus.Nucleus;
-import io.github.nucleuspowered.nucleus.internal.annotations.command.Permissions;
-import io.github.nucleuspowered.nucleus.internal.annotations.command.RegisterCommand;
-import io.github.nucleuspowered.nucleus.internal.command.AbstractCommand;
+import io.github.nucleuspowered.nucleus.internal.command.ICommandContext;
+import io.github.nucleuspowered.nucleus.internal.command.ICommandExecutor;
+import io.github.nucleuspowered.nucleus.internal.command.ICommandResult;
 import io.github.nucleuspowered.nucleus.internal.command.NucleusParameters;
-import io.github.nucleuspowered.nucleus.internal.command.ReturnMessageException;
-import io.github.nucleuspowered.nucleus.internal.docgen.annotations.EssentialsEquivalent;
-import io.github.nucleuspowered.nucleus.util.CauseStackHelper;
-import org.spongepowered.api.command.CommandResult;
+import io.github.nucleuspowered.nucleus.internal.command.annotation.Command;
+import io.github.nucleuspowered.nucleus.internal.command.annotation.CommandModifier;
+import io.github.nucleuspowered.nucleus.internal.command.annotation.EssentialsEquivalent;
+import io.github.nucleuspowered.nucleus.internal.command.requirements.CommandModifiers;
+import io.github.nucleuspowered.nucleus.modules.fun.FunPermissions;
+import io.github.nucleuspowered.nucleus.services.INucleusServiceCollection;
+import org.spongepowered.api.Sponge;
+import org.spongepowered.api.command.CommandException;
 import org.spongepowered.api.command.CommandSource;
-import org.spongepowered.api.command.args.CommandContext;
 import org.spongepowered.api.command.args.CommandElement;
 import org.spongepowered.api.command.args.GenericArguments;
 import org.spongepowered.api.entity.Entity;
 import org.spongepowered.api.entity.EntityTypes;
 import org.spongepowered.api.entity.living.Living;
 import org.spongepowered.api.entity.living.player.Player;
-import org.spongepowered.api.event.cause.Cause;
+import org.spongepowered.api.event.CauseStackManager;
 import org.spongepowered.api.util.annotation.NonnullByDefault;
 import org.spongepowered.api.util.blockray.BlockRay;
 import org.spongepowered.api.util.blockray.BlockRayHit;
@@ -33,33 +35,37 @@ import java.util.Optional;
 
 import javax.annotation.Nullable;
 
-@Permissions(supportsOthers = true)
 @NonnullByDefault
-@RegisterCommand({"lightning", "strike", "smite", "thor", "shock"})
 @EssentialsEquivalent(value = {"lightning", "strike", "smite", "thor", "shock"}, isExact = false,
         notes = "Selectors can be used, entities can be struck.")
-public class LightningCommand extends AbstractCommand<CommandSource> {
+@Command(
+        aliases = {"lightning", "strike", "smite", "thor", "shock"},
+        basePermission = FunPermissions.BASE_LIGHTNING,
+        commandDescriptionKey = "lightning",
+        modifiers = {
+                @CommandModifier(value = CommandModifiers.HAS_COOLDOWN, exemptPermission = FunPermissions.EXEMPT_COOLDOWN_LIGHTNING),
+                @CommandModifier(value = CommandModifiers.HAS_WARMUP, exemptPermission = FunPermissions.EXEMPT_WARMUP_LIGHTNING),
+                @CommandModifier(value = CommandModifiers.HAS_COST, exemptPermission = FunPermissions.EXEMPT_COST_LIGHTNING)
+        }
+)
+public class LightningCommand implements ICommandExecutor<CommandSource> {
 
     @Override
-    public CommandElement[] getArguments() {
+    public CommandElement[] parameters(INucleusServiceCollection serviceCollection) {
         return new CommandElement[]{
                 GenericArguments.optional(
-                    requirePermissionArg(NucleusParameters.MANY_LIVING, this.permissions.getPermissionWithSuffix("others")))
+                    serviceCollection.commandElementSupplier().createPermissionParameter(
+                            NucleusParameters.MANY_LIVING,
+                            FunPermissions.OTHERS_LIGHTNING))
         };
     }
 
-    @Override
-    public CommandResult executeCommand(final CommandSource src, CommandContext args, Cause cause) throws Exception {
-        Collection<Living> playerCollection = args.getAll(NucleusParameters.Keys.SUBJECT);
+    @Override public ICommandResult execute(ICommandContext<? extends CommandSource> context) throws CommandException {
+        Collection<Living> playerCollection = context.getAll(NucleusParameters.Keys.SUBJECT, Living.class);
 
         // No argument, let's not smite the subject.
         if (playerCollection.isEmpty()) {
-            if (!(src instanceof Player)) {
-                src.sendMessage(Nucleus.getNucleus().getMessageProvider().getTextMessageWithFormat("command.playeronly"));
-                return CommandResult.empty();
-            }
-
-            Player pl = (Player)src;
+            Player pl = context.getIfPlayer();
 
             // 100 is a good limit here.
             BlockRay<World> playerBlockRay = BlockRay.from(pl).distanceLimit(100).stopFilter(BlockRay.continueAfterFilter(BlockRay.onlyAirFilter(), 1)).build();
@@ -68,38 +74,41 @@ public class LightningCommand extends AbstractCommand<CommandSource> {
             // Smite above, but not on.
             lightningLocation = obh.map(BlockRayHit::getLocation).orElseGet(() -> pl.getLocation().add(0, 3, 0));
 
-            return this.spawnLightning(lightningLocation, src, null);
+            this.spawnLightning(lightningLocation, context, null);
+            return context.successResult();
         }
 
-        int successCount = 0;
         for (Living pl : playerCollection) {
-            CommandResult cr = this.spawnLightning(
+            this.spawnLightning(
                     pl.getLocation(),
-                    src,
+                    context,
                     pl instanceof Player ? (Player)pl : null);
-            successCount += cr.getSuccessCount().orElse(0);
         }
 
-        return CommandResult.builder().successCount(successCount).build();
+        return context.successResult();
     }
 
-    private CommandResult spawnLightning(Location<World> location, CommandSource src, @Nullable Player target) throws ReturnMessageException {
+    private void spawnLightning(
+            Location<World> location,
+            ICommandContext<? extends CommandSource> context,
+            @Nullable Player target) throws CommandException {
+
         World world = location.getExtent();
         Entity bolt = world.createEntity(EntityTypes.LIGHTNING, location.getPosition());
 
-        if (CauseStackHelper.createFrameWithCausesWithReturn(c -> world.spawnEntity(bolt), src)) {
+        try (CauseStackManager.StackFrame frame = Sponge.getCauseStackManager().pushCauseFrame()) {
+            frame.pushCause(context.getCommandSource());
+            world.spawnEntity(bolt);
             if (target != null) {
-                src.sendMessage(Nucleus.getNucleus().getMessageProvider().getTextMessageWithTextFormat("command.lightning.success.other", Nucleus.getNucleus().getNameUtil()
-                        .getName(target)));
+                context.sendMessage("command.lightning.success.other",
+                        context.getServiceCollection().playerDisplayNameService().getDisplayName(target.getUniqueId()));
             }
-
-            return CommandResult.success();
         }
 
         if (target != null) {
-            throw ReturnMessageException.fromKey("command.lightning.errorplayer", Nucleus.getNucleus().getNameUtil().getName(target));
+            throw context.createException("command.lightning.errorplayer", context.getServiceCollection().playerDisplayNameService().getDisplayName(target.getUniqueId()));
         } else {
-            throw ReturnMessageException.fromKey("command.lightning.error");
+            throw context.createException("command.lightning.error");
         }
 
     }

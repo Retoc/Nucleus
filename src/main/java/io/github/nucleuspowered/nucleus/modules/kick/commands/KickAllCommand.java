@@ -4,59 +4,48 @@
  */
 package io.github.nucleuspowered.nucleus.modules.kick.commands;
 
-import io.github.nucleuspowered.nucleus.Nucleus;
-import io.github.nucleuspowered.nucleus.internal.annotations.command.NoModifiers;
-import io.github.nucleuspowered.nucleus.internal.annotations.command.Permissions;
-import io.github.nucleuspowered.nucleus.internal.annotations.command.RegisterCommand;
-import io.github.nucleuspowered.nucleus.internal.command.AbstractCommand;
+import io.github.nucleuspowered.nucleus.internal.command.ICommandContext;
+import io.github.nucleuspowered.nucleus.internal.command.ICommandExecutor;
+import io.github.nucleuspowered.nucleus.internal.command.ICommandResult;
 import io.github.nucleuspowered.nucleus.internal.command.NucleusParameters;
-import io.github.nucleuspowered.nucleus.internal.docgen.annotations.EssentialsEquivalent;
-import io.github.nucleuspowered.nucleus.internal.permissions.PermissionInformation;
-import io.github.nucleuspowered.nucleus.internal.permissions.SuggestedLevel;
+import io.github.nucleuspowered.nucleus.internal.command.annotation.Command;
+import io.github.nucleuspowered.nucleus.internal.command.annotation.EssentialsEquivalent;
+import io.github.nucleuspowered.nucleus.modules.kick.KickPermissions;
+import io.github.nucleuspowered.nucleus.services.INucleusServiceCollection;
 import org.spongepowered.api.Sponge;
-import org.spongepowered.api.command.CommandResult;
+import org.spongepowered.api.command.CommandException;
 import org.spongepowered.api.command.CommandSource;
-import org.spongepowered.api.command.args.CommandContext;
 import org.spongepowered.api.command.args.CommandElement;
 import org.spongepowered.api.command.args.GenericArguments;
-import org.spongepowered.api.entity.living.player.Player;
-import org.spongepowered.api.event.cause.Cause;
-import org.spongepowered.api.text.channel.MessageChannel;
+import org.spongepowered.api.command.source.ConsoleSource;
 import org.spongepowered.api.text.serializer.TextSerializers;
 import org.spongepowered.api.util.annotation.NonnullByDefault;
 
-import java.util.HashMap;
-import java.util.Map;
 import java.util.stream.Collectors;
 
-@Permissions(suggestedLevel = SuggestedLevel.MOD)
-@NoModifiers
 @NonnullByDefault
-@RegisterCommand("kickall")
 @EssentialsEquivalent("kickall")
-public class KickAllCommand extends AbstractCommand<CommandSource> {
+@Command(
+        aliases = "kickall",
+        basePermission = KickPermissions.BASE_KICKALL,
+        commandDescriptionKey = "kickall"
+)
+public class KickAllCommand implements ICommandExecutor<CommandSource> {
 
     @Override
-    public CommandElement[] getArguments() {
+    public CommandElement[] parameters(INucleusServiceCollection serviceCollection) {
         return new CommandElement[] {
                 GenericArguments.flags()
-                        .permissionFlag(this.permissions.getPermissionWithSuffix("whitelist"), "w", "f")
+                        .permissionFlag(KickPermissions.KICKALL_WHITELIST, "w", "f")
                         .buildWith(NucleusParameters.OPTIONAL_REASON)
         };
     }
 
     @Override
-    public Map<String, PermissionInformation> permissionSuffixesToRegister() {
-        Map<String, PermissionInformation> m = new HashMap<>();
-        m.put("whitelist", PermissionInformation.getWithTranslation("permission.kickall.whitelist", SuggestedLevel.ADMIN));
-        return m;
-    }
-
-    @Override
-    public CommandResult executeCommand(CommandSource src, CommandContext args, Cause cause) {
-        String r = args.<String>getOne(NucleusParameters.Keys.REASON)
-                .orElseGet(() -> Nucleus.getNucleus().getMessageProvider().getMessageWithFormat("command.kick.defaultreason"));
-        boolean f = args.<Boolean>getOne("w").orElse(false);
+    public ICommandResult execute(ICommandContext<? extends CommandSource> context) throws CommandException {
+        String r = context.getOne(NucleusParameters.Keys.REASON, String.class)
+                .orElseGet(() -> context.getMessageString("command.kick.defaultreason"));
+        boolean f = context.getOne("w", Boolean.class).orElse(false);
 
         if (f) {
             Sponge.getServer().setHasWhitelist(true);
@@ -64,17 +53,21 @@ public class KickAllCommand extends AbstractCommand<CommandSource> {
 
         // Don't kick self
         Sponge.getServer().getOnlinePlayers().stream()
-                .filter(x -> !(src instanceof Player) || !((Player) src).getUniqueId().equals(x.getUniqueId()))
+                .filter(context::is)
                 .collect(Collectors.toList())
                 .forEach(x -> x.kick(TextSerializers.FORMATTING_CODE.deserialize(r)));
 
-        MessageChannel mc = MessageChannel.fixed(Sponge.getServer().getConsole(), src);
-        mc.send(Nucleus.getNucleus().getMessageProvider().getTextMessageWithFormat("command.kickall.message"));
-        mc.send(Nucleus.getNucleus().getMessageProvider().getTextMessageWithFormat("command.reason", r));
+        // MessageChannel mc = MessageChannel.fixed(Sponge.getServer().getConsole(), src);
+        ConsoleSource console = Sponge.getServer().getConsole();
+        context.sendMessage("command.kickall.message");
+        context.sendMessageTo(console, "command.kickall.message");
+        context.sendMessage("command.reason", r);
+        context.sendMessageTo(console, "command.reason", r);
         if (f) {
-            mc.send(Nucleus.getNucleus().getMessageProvider().getTextMessageWithFormat("command.kickall.whitelist"));
+            context.sendMessage("command.kickall.whitelist");
+            context.sendMessageTo(console, "command.kickall.whitelist");
         }
 
-        return CommandResult.success();
+        return context.successResult();
     }
 }

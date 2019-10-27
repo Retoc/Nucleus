@@ -5,8 +5,8 @@
 package io.github.nucleuspowered.nucleus.modules.kit;
 
 import io.github.nucleuspowered.nucleus.annotationprocessor.RegisterPermissions;
-import io.github.nucleuspowered.nucleus.internal.permissions.PermissionMetadata;
-import io.github.nucleuspowered.nucleus.internal.permissions.SuggestedLevel;
+import io.github.nucleuspowered.nucleus.services.impl.permission.PermissionMetadata;
+import io.github.nucleuspowered.nucleus.services.impl.permission.SuggestedLevel;
 
 @RegisterPermissions
 public class KitPermissions {
@@ -15,102 +15,97 @@ public class KitPermissions {
     }
 
     @PermissionMetadata(descriptionKey = "permission.base", replacements = { "kit add" }, level = SuggestedLevel.ADMIN)
-    public static final String BASE_KIT_ADD = "kit.add.base";
+    public static final String BASE_KIT_ADD = "nucleus.kit.add.base";
 
     @PermissionMetadata(descriptionKey = "permission.base", replacements = { "kit autoredeem" }, level = SuggestedLevel.ADMIN)
-    public static final String BASE_KIT_AUTOREDEEM = "kit.autoredeem.base";
+    public static final String BASE_KIT_AUTOREDEEM = "nucleus.kit.autoredeem.base";
 
     @PermissionMetadata(descriptionKey = "permission.base", replacements = { "kit" }, level = SuggestedLevel.USER)
-    public static final String BASE_KIT = "kit.base";
+    public static final String BASE_KIT = "nucleus.kit.base";
 
     @PermissionMetadata(descriptionKey = "permission.base", replacements = { "command add" }, level = SuggestedLevel.OWNER)
-    public static final String BASE_COMMAND_ADD = "kit.command.add.base";
+    public static final String BASE_KIT_COMMAND_ADD = "nucleus.kit.command.add.base";
 
     @PermissionMetadata(descriptionKey = "permission.base", replacements = { "kit command" }, level = SuggestedLevel.ADMIN)
-    public static final String BASE_KIT_COMMAND = "kit.command.base";
+    public static final String BASE_KIT_COMMAND = "nucleus.kit.command.base";
 
     @PermissionMetadata(descriptionKey = "permission.base", replacements = { "command clear" }, level = SuggestedLevel.OWNER)
-    public static final String BASE_COMMAND_CLEAR = "kit.command.remove.base";
+    public static final String BASE_KIT_COMMAND_REMOVE = "nucleus.kit.command.remove.base";
 
     @PermissionMetadata(descriptionKey = "permission.base", replacements = { "kit cost" }, level = SuggestedLevel.ADMIN)
-    public static final String BASE_KIT_COST = "kit.cost.base";
+    public static final String BASE_KIT_COST = "nucleus.kit.cost.base";
 
     @PermissionMetadata(descriptionKey = "permission.base", replacements = { "kit create" }, level = SuggestedLevel.ADMIN)
-    public static final String BASE_KIT_CREATE = "kit.create.base";
+    public static final String BASE_KIT_CREATE = "nucleus.kit.create.base";
 
     @PermissionMetadata(descriptionKey = "permission.base", replacements = { "kit edit" }, level = SuggestedLevel.ADMIN)
-    public static final String BASE_KIT_EDIT = "kit.edit.base";
+    public static final String BASE_KIT_EDIT = "nucleus.kit.edit.base";
 
     @PermissionMetadata(descriptionKey = "permission.kit.exempt.cooldown", level = SuggestedLevel.ADMIN)
-    public static final String KIT_EXEMPT_COOLDOWN = "kit.exempt.cooldown";
+    public static final String KIT_EXEMPT_COOLDOWN = "nucleus.kit.exempt.cooldown";
 
     @PermissionMetadata(descriptionKey = "permission.kit.exempt.cost", level = SuggestedLevel.ADMIN)
-    public static final String KIT_EXEMPT_COST = "kit.exempt.cost";
+    public static final String KIT_EXEMPT_COST = "nucleus.kit.exempt.cost";
 
     @PermissionMetadata(descriptionKey = "permission.kit.exempt.onetime", level = SuggestedLevel.ADMIN)
-    public static final String KIT_EXEMPT_ONETIME = "kit.exempt.onetime";
+    public static final String KIT_EXEMPT_ONETIME = "nucleus.kit.exempt.onetime";
 
     @PermissionMetadata(descriptionKey = "permission.exempt.warmup", replacements = { "kit" }, level = SuggestedLevel.ADMIN)
-    public static final String EXEMPT_WARMUP_KIT = "kit.exempt.warmup";
+    public static final String EXEMPT_WARMUP_KIT = "nucleus.kit.exempt.warmup";
 
     @PermissionMetadata(descriptionKey = "permission.base", replacements = { "kit give" }, level = SuggestedLevel.ADMIN)
-    public static final String BASE_KIT_GIVE = "kit.give.base";
-
-    @PermissionMetadata(descriptionKey = "permission.exempt.cooldown", replacements = { "kit give" }, level = SuggestedLevel.ADMIN)
-    public static final String EXEMPT_COOLDOWN_KIT_GIVE = "kit.give.exempt.cooldown";
-
-    @PermissionMetadata(descriptionKey = "permission.exempt.cost", replacements = { "kit give" }, level = SuggestedLevel.ADMIN)
-    public static final String EXEMPT_COST_KIT_GIVE = "kit.give.exempt.cost";
-
-    @PermissionMetadata(descriptionKey = "permission.exempt.warmup", replacements = { "kit give" }, level = SuggestedLevel.ADMIN)
-    public static final String EXEMPT_WARMUP_KIT_GIVE = "kit.give.exempt.warmup";
+    public static final String BASE_KIT_GIVE = "nucleus.kit.give.base";
 
     @PermissionMetadata(descriptionKey = "permission.kit.give.override", level = SuggestedLevel.ADMIN)
-    public static final String KIT_GIVE_OVERRIDE = "kit.give.overridecheck";
+    public static final String KIT_GIVE_OVERRIDE = "nucleus.kit.give.overridecheck";
 
     @PermissionMetadata(descriptionKey = "permission.base", replacements = { "kit hidden" }, level = SuggestedLevel.ADMIN)
-    public static final String BASE_KIT_HIDDEN = "kit.hidden.base";
+    public static final String BASE_KIT_HIDDEN = "nucleus.kit.hidden.base";
 
     @PermissionMetadata(descriptionKey = "permission.base", replacements = { "kit info" }, level = SuggestedLevel.ADMIN)
-    public static final String BASE_KIT_INFO = "kit.info.base";
+    public static final String BASE_KIT_INFO = "nucleus.kit.info.base";
 
     @PermissionMetadata(descriptionKey = "permission.base", replacements = { "kit list" }, level = SuggestedLevel.USER)
-    public static final String BASE_KIT_LIST = "kit.list.base";
+    public static final String BASE_KIT_LIST = "nucleus.kit.list.base";
 
     @PermissionMetadata(descriptionKey = "permission.base", replacements = { "kit onetime" }, level = SuggestedLevel.ADMIN)
-    public static final String BASE_KIT_ONETIME = "kit.onetime.base";
+    public static final String BASE_KIT_ONETIME = "nucleus.kit.onetime.base";
 
     @PermissionMetadata(descriptionKey = "permission.base", replacements = { "kit permissionbypass" }, level = SuggestedLevel.ADMIN)
-    public static final String BASE_KIT_PERMISSIONBYPASS = "kit.permissionbypass.base";
+    public static final String BASE_KIT_PERMISSIONBYPASS = "nucleus.kit.permissionbypass.base";
 
     @PermissionMetadata(descriptionKey = "permission.base", replacements = { "kit remove" }, level = SuggestedLevel.ADMIN)
-    public static final String BASE_KIT_REMOVE = "kit.remove.base";
+    public static final String BASE_KIT_REMOVE = "nucleus.kit.remove.base";
 
     @PermissionMetadata(descriptionKey = "permission.base", replacements = { "kit rename" }, level = SuggestedLevel.ADMIN)
-    public static final String BASE_KIT_RENAME = "kit.rename.base";
+    public static final String BASE_KIT_RENAME = "nucleus.kit.rename.base";
 
     @PermissionMetadata(descriptionKey = "permission.base", replacements = { "kit resetusage" }, level = SuggestedLevel.ADMIN)
-    public static final String BASE_KIT_RESETUSAGE = "kit.resetusage.base";
+    public static final String BASE_KIT_RESETUSAGE = "nucleus.kit.resetusage.base";
 
     @PermissionMetadata(descriptionKey = "permission.base", replacements = { "kit set" }, level = SuggestedLevel.ADMIN)
-    public static final String BASE_KIT_SET = "kit.set.base";
+    public static final String BASE_KIT_SET = "nucleus.kit.set.base";
 
     @PermissionMetadata(descriptionKey = "permission.base", replacements = { "kit setcooldown" }, level = SuggestedLevel.ADMIN)
-    public static final String BASE_KIT_SETCOOLDOWN = "kit.setcooldown.base";
+    public static final String BASE_KIT_SETCOOLDOWN = "nucleus.kit.setcooldown.base";
 
     @PermissionMetadata(descriptionKey = "permission.base", replacements = { "kit setfirstjoin" }, level = SuggestedLevel.ADMIN)
-    public static final String BASE_KIT_SETFIRSTJOIN = "kit.setfirstjoin.base";
+    public static final String BASE_KIT_SETFIRSTJOIN = "nucleus.kit.setfirstjoin.base";
 
     @PermissionMetadata(descriptionKey = "permission.kit.showhidden", level = SuggestedLevel.ADMIN)
-    public static final String KIT_SHOWHIDDEN = "kit.showhidden";
+    public static final String KIT_SHOWHIDDEN = "nucleus.kit.showhidden";
 
     @PermissionMetadata(descriptionKey = "permission.base", replacements = { "kit toggleredeemmessage" }, level = SuggestedLevel.ADMIN)
-    public static final String BASE_KIT_TOGGLEREDEEMMESSAGE = "kit.toggleredeemmessage.base";
+    public static final String BASE_KIT_TOGGLEREDEEMMESSAGE = "nucleus.kit.toggleredeemmessage.base";
 
     @PermissionMetadata(descriptionKey = "permission.base", replacements = { "kit view" }, level = SuggestedLevel.ADMIN)
-    public static final String BASE_KIT_VIEW = "kit.view.base";
+    public static final String BASE_KIT_VIEW = "nucleus.kit.view.base";
 
     @PermissionMetadata(descriptionKey = "permission.kits", level = SuggestedLevel.ADMIN, isPrefix = true)
-    public static final String KITS = "kits";
+    public static final String KITS = "nucleus.kits";
+
+    public static String getKitPermission(String kit) {
+        return KITS + "." + kit.toLowerCase();
+    }
 
 }

@@ -5,10 +5,12 @@
 package io.github.nucleuspowered.nucleus.modules.core.services;
 
 import io.github.nucleuspowered.nucleus.Nucleus;
+import io.github.nucleuspowered.nucleus.internal.interfaces.Reloadable;
 import io.github.nucleuspowered.nucleus.internal.interfaces.ServiceBase;
-import io.github.nucleuspowered.nucleus.modules.core.config.CoreConfigAdapter;
-import io.github.nucleuspowered.nucleus.storage.dataobjects.modular.IUserDataObject;
-import io.github.nucleuspowered.nucleus.storage.queryobjects.IUserQueryObject;
+import io.github.nucleuspowered.nucleus.modules.core.config.CoreConfig;
+import io.github.nucleuspowered.nucleus.services.INucleusServiceCollection;
+import io.github.nucleuspowered.nucleus.services.impl.storage.dataobjects.modular.IUserDataObject;
+import io.github.nucleuspowered.nucleus.services.impl.storage.queryobjects.IUserQueryObject;
 import io.github.nucleuspowered.storage.services.IStorageService;
 import org.spongepowered.api.Sponge;
 import org.spongepowered.api.data.manipulator.mutable.entity.JoinData;
@@ -22,17 +24,22 @@ import java.util.UUID;
 import java.util.function.Consumer;
 
 import javax.annotation.Nullable;
+import javax.inject.Inject;
 import javax.inject.Singleton;
 
 @Singleton
-public class UniqueUserService implements ServiceBase {
+public class UniqueUserService implements ServiceBase, Reloadable {
 
     public static UniqueUserService INSTANCE;
+    private final INucleusServiceCollection serviceCollection;
+    private boolean isMoreAccurate = false;
 
-    public UniqueUserService() {
+    @Inject
+    public UniqueUserService(INucleusServiceCollection serviceCollection) {
         if (INSTANCE == null) {
             INSTANCE = this;
         }
+        this.serviceCollection = serviceCollection;
     }
 
     private static boolean ERROR_REPORTED = false;
@@ -67,13 +74,12 @@ public class UniqueUserService implements ServiceBase {
     }
 
     private void doTask(@Nullable final Consumer<Long> resultConsumer) {
-        boolean accurate = Nucleus.getNucleus().getInternalServiceManager()
-                .getServiceUnchecked(CoreConfigAdapter.class).getNodeOrDefault().isMoreAccurate();
         UserStorageService uss = Sponge.getServiceManager().provideUnchecked(UserStorageService.class);
-        IStorageService.Keyed<UUID, IUserQueryObject, IUserDataObject> service = Nucleus.getNucleus().getStorageManager().getUserService();
+        IStorageService.Keyed<UUID, IUserQueryObject, IUserDataObject> service =
+                this.serviceCollection.storageManager().getUserService();
 
         // This could be slow...
-        if (accurate) {
+        if (this.isMoreAccurate) {
             this.userCount = uss.getAll().stream().filter(GameProfile::isFilled)
                     .map(uss::get).filter(Optional::isPresent)
                     .filter(x -> {
@@ -106,5 +112,10 @@ public class UniqueUserService implements ServiceBase {
         if (resultConsumer != null) {
             resultConsumer.accept(this.userCount);
         }
+    }
+
+    @Override public void onReload(INucleusServiceCollection serviceCollection) {
+        this.isMoreAccurate = serviceCollection.moduleDataProvider().getModuleConfig(CoreConfig.class)
+                .isMoreAccurate();
     }
 }

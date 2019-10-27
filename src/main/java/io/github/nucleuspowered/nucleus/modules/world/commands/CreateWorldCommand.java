@@ -7,17 +7,19 @@ package io.github.nucleuspowered.nucleus.modules.world.commands;
 import io.github.nucleuspowered.nucleus.Nucleus;
 import io.github.nucleuspowered.nucleus.argumentparsers.ImprovedCatalogTypeArgument;
 import io.github.nucleuspowered.nucleus.argumentparsers.ImprovedGameModeArgument;
-import io.github.nucleuspowered.nucleus.internal.annotations.command.Permissions;
-import io.github.nucleuspowered.nucleus.internal.annotations.command.RegisterCommand;
-import io.github.nucleuspowered.nucleus.internal.command.AbstractCommand;
-import io.github.nucleuspowered.nucleus.internal.command.ReturnMessageException;
+import io.github.nucleuspowered.nucleus.internal.command.ICommandContext;
+import io.github.nucleuspowered.nucleus.internal.command.ICommandExecutor;
+import io.github.nucleuspowered.nucleus.internal.command.ICommandResult;
+import io.github.nucleuspowered.nucleus.internal.command.annotation.Command;
 import io.github.nucleuspowered.nucleus.internal.interfaces.Reloadable;
-import io.github.nucleuspowered.nucleus.internal.permissions.SuggestedLevel;
-import io.github.nucleuspowered.nucleus.modules.world.config.WorldConfigAdapter;
+import io.github.nucleuspowered.nucleus.modules.world.WorldPermissions;
+import io.github.nucleuspowered.nucleus.modules.world.config.WorldConfig;
+import io.github.nucleuspowered.nucleus.services.IMessageProviderService;
+import io.github.nucleuspowered.nucleus.services.INucleusServiceCollection;
 import org.spongepowered.api.CatalogType;
 import org.spongepowered.api.CatalogTypes;
 import org.spongepowered.api.Sponge;
-import org.spongepowered.api.command.CommandResult;
+import org.spongepowered.api.command.CommandException;
 import org.spongepowered.api.command.CommandSource;
 import org.spongepowered.api.command.args.ArgumentParseException;
 import org.spongepowered.api.command.args.CommandArgs;
@@ -29,8 +31,8 @@ import org.spongepowered.api.data.DataQuery;
 import org.spongepowered.api.data.persistence.DataFormats;
 import org.spongepowered.api.entity.living.player.gamemode.GameMode;
 import org.spongepowered.api.entity.living.player.gamemode.GameModes;
-import org.spongepowered.api.event.cause.Cause;
 import org.spongepowered.api.text.Text;
+import org.spongepowered.api.text.format.TextColors;
 import org.spongepowered.api.util.annotation.NonnullByDefault;
 import org.spongepowered.api.world.DimensionType;
 import org.spongepowered.api.world.DimensionTypes;
@@ -63,11 +65,14 @@ import java.util.zip.GZIPOutputStream;
 
 import javax.annotation.Nullable;
 
-@SuppressWarnings("ALL")
-@Permissions(prefix = "world", suggestedLevel = SuggestedLevel.ADMIN)
-@RegisterCommand(value = {"create"}, subcommandOf = WorldCommand.class)
 @NonnullByDefault
-public class CreateWorldCommand extends AbstractCommand<CommandSource> implements Reloadable {
+@Command(
+        aliases = {"create"},
+        basePermission = WorldPermissions.BASE_WORLD_CREATE,
+        commandDescriptionKey = "world.create",
+        parentCommand = WorldCommand.class
+)
+public class CreateWorldCommand implements ICommandExecutor<CommandSource>, Reloadable {
 
     private final DataQuery uuidLeast = DataQuery.of("SpongeData", "UUIDLeast");
     private final DataQuery uuidMost = DataQuery.of("SpongeData", "UUIDMost");
@@ -85,11 +90,12 @@ public class CreateWorldCommand extends AbstractCommand<CommandSource> implement
     @Nullable private Long worldBorderDefault;
 
     @Override
-    public CommandElement[] getArguments() {
+    public CommandElement[] parameters(INucleusServiceCollection serviceCollection) {
         return new CommandElement[] {
             GenericArguments.flags()
                 .valueFlag(GenericArguments.onlyOne(new ImprovedCatalogTypeArgument(Text.of(preset), WorldArchetype.class)), "p", "-" + preset)
-                .valueFlag(GenericArguments.onlyOne(new ExtendedDimensionArgument(Text.of(dimension))), "d", "-" + dimension)
+                .valueFlag(GenericArguments.onlyOne(
+                        new ExtendedDimensionArgument(Text.of(dimension), serviceCollection.messageProvider())), "d", "-" + dimension)
                 .valueFlag(GenericArguments.onlyOne(new ImprovedCatalogTypeArgument(Text.of(generator), CatalogTypes.GENERATOR_TYPE)), "g", "-" + generator)
                 .valueFlag(new ImprovedCatalogTypeArgument(Text.of(modifier), CatalogTypes.WORLD_GENERATOR_MODIFIER), "m", "-" + modifier)
                 .valueFlag(GenericArguments.onlyOne(GenericArguments.longNum(Text.of(seed))), "s", "-" + seed)
@@ -105,41 +111,40 @@ public class CreateWorldCommand extends AbstractCommand<CommandSource> implement
         };
     }
 
-    @Override
-    public CommandResult executeCommand(final CommandSource src, CommandContext args, Cause cause) throws Exception {
-        String nameInput = args.<String>getOne(name).get();
-        Optional<DimensionType> dimensionInput = args.getOne(dimension);
-        Optional<GeneratorType> generatorInput = args.getOne(generator);
-        Optional<GameMode> gamemodeInput = args.getOne(gamemode);
-        Optional<Difficulty> difficultyInput = args.getOne(difficulty);
-        Collection<WorldGeneratorModifier> modifiers = args.getAll(modifier);
-        Optional<Long> seedInput = args.getOne(seed);
-        boolean genStructures = !args.hasAny("n");
-        boolean loadOnStartup = !args.hasAny("l") || args.<Boolean>getOne("l").orElse(true);
-        boolean keepSpawnLoaded = !args.hasAny("k") || args.<Boolean>getOne("k").orElse(true);
-        boolean allowCommands = !args.hasAny("c") || args.<Boolean>getOne("c").orElse(true);
-        boolean bonusChest = !args.hasAny("b") || args.<Boolean>getOne("b").orElse(true);
+    @Override public ICommandResult execute(ICommandContext<? extends CommandSource> context) throws CommandException {
+        String nameInput = context.requireOne(this.name, String.class);
+        Optional<DimensionType> dimensionInput = context.getOne(this.dimension, DimensionType.class);
+        Optional<GeneratorType> generatorInput = context.getOne(this.generator, GeneratorType.class);
+        Optional<GameMode> gamemodeInput = context.getOne(this.gamemode, GameMode.class);
+        Optional<Difficulty> difficultyInput = context.getOne(this.difficulty, Difficulty.class);
+        Collection<WorldGeneratorModifier> modifiers = context.getAll(this.modifier, WorldGeneratorModifier.class);
+        Optional<Long> seedInput = context.getOne(this.seed, Long.class);
+        boolean genStructures = !context.hasAny("n");
+        boolean loadOnStartup = !context.hasAny("l") || context.getOne("l", Boolean.class).orElse(true);
+        boolean keepSpawnLoaded = !context.hasAny("k") || context.getOne("k", Boolean.class).orElse(true);
+        boolean allowCommands = !context.hasAny("c") || context.getOne("c", Boolean.class).orElse(true);
+        boolean bonusChest = !context.hasAny("b") || context.getOne("b", Boolean.class).orElse(true);
 
         if (Sponge.getServer().getAllWorldProperties().stream().anyMatch(x -> x.getWorldName().equalsIgnoreCase(nameInput))) {
-            throw new ReturnMessageException(Nucleus.getNucleus().getMessageProvider().getTextMessageWithFormat("command.world.create.exists", nameInput));
+            return context.errorResult("command.world.create.exists", nameInput);
         }
 
         // Does the world exist?
         Path worldPath = Sponge.getGame().getGameDirectory().resolve("world");
         Path worldDir = worldPath.resolve(nameInput);
-        if (!args.hasAny("i") && Files.exists(worldDir)) {
-            throw new ReturnMessageException(Nucleus.getNucleus().getMessageProvider().getTextMessageWithFormat("command.world.import.noexist", nameInput));
+        if (!context.hasAny("i") && Files.exists(worldDir)) {
+            context.errorResult("command.world.import.noexist", nameInput);
         }
 
-        if (args.hasAny("i") && Files.exists(worldDir)) {
-            onImport(worldDir, nameInput);
+        if (context.hasAny("i") && Files.exists(worldDir)) {
+            onImport(context, worldDir, nameInput);
         }
 
 
         WorldArchetype.Builder worldSettingsBuilder = WorldArchetype.builder().enabled(true);
 
-        if (args.hasAny(preset)) {
-            WorldArchetype preset1 = args.<WorldArchetype>getOne(preset).get();
+        if (context.hasAny(this.preset)) {
+            WorldArchetype preset1 = context.requireOne(this.preset, WorldArchetype.class);
             worldSettingsBuilder.from(preset1);
             dimensionInput.ifPresent(worldSettingsBuilder::dimension);
             generatorInput.ifPresent(worldSettingsBuilder::generator);
@@ -147,7 +152,7 @@ public class CreateWorldCommand extends AbstractCommand<CommandSource> implement
             difficultyInput.ifPresent(worldSettingsBuilder::difficulty);
             if (!modifiers.isEmpty()) {
                 modifiers.addAll(preset1.getGeneratorModifiers());
-                worldSettingsBuilder.generatorModifiers(modifiers.toArray(new WorldGeneratorModifier[modifiers.size()]));
+                worldSettingsBuilder.generatorModifiers(modifiers.toArray(new WorldGeneratorModifier[0]));
             }
         } else {
             worldSettingsBuilder
@@ -157,7 +162,7 @@ public class CreateWorldCommand extends AbstractCommand<CommandSource> implement
                 .difficulty(difficultyInput.orElse(Difficulties.NORMAL));
 
                 if (!modifiers.isEmpty()) {
-                    worldSettingsBuilder.generatorModifiers(modifiers.toArray(new WorldGeneratorModifier[modifiers.size()]));
+                    worldSettingsBuilder.generatorModifiers(modifiers.toArray(new WorldGeneratorModifier[0]));
                 }
         }
 
@@ -171,21 +176,27 @@ public class CreateWorldCommand extends AbstractCommand<CommandSource> implement
 
         WorldArchetype wa = worldSettingsBuilder.build(nameInput.toLowerCase(), nameInput);
 
-        src.sendMessage(Nucleus.getNucleus().getMessageProvider().getTextMessageWithFormat("command.world.create.begin", nameInput));
-        src.sendMessage(Nucleus.getNucleus().getMessageProvider().getTextMessageWithFormat("command.world.create.newparams",
+        context.sendMessage("command.world.create.begin", nameInput);
+        context.sendMessage("command.world.create.newparams",
                 wa.getDimensionType().getName(),
                 wa.getGeneratorType().getName(),
-                modifierString(modifiers),
+                modifierString(context, modifiers),
                 wa.getGameMode().getName(),
-                wa.getDifficulty().getName()));
-        src.sendMessage(Nucleus.getNucleus().getMessageProvider().getTextMessageWithFormat("command.world.create.newparams2",
+                wa.getDifficulty().getName());
+        context.sendMessage("command.world.create.newparams2",
                 String.valueOf(loadOnStartup),
                 String.valueOf(keepSpawnLoaded),
                 String.valueOf(genStructures),
                 String.valueOf(allowCommands),
-                String.valueOf(bonusChest)));
+                String.valueOf(bonusChest));
 
-        WorldProperties worldProperties = Sponge.getGame().getServer().createWorldProperties(nameInput, wa);
+        WorldProperties worldProperties;
+        try {
+            worldProperties = Sponge.getGame().getServer().createWorldProperties(nameInput, wa);
+        } catch (IOException e) {
+            e.printStackTrace();
+            return context.errorResultLiteral(Text.of(TextColors.RED, e.getMessage()));
+        }
 
         if (this.worldBorderDefault != null && this.worldBorderDefault > 0) {
             worldProperties.setWorldBorderDiameter(this.worldBorderDefault);
@@ -194,17 +205,17 @@ public class CreateWorldCommand extends AbstractCommand<CommandSource> implement
         worldProperties.setDifficulty(wa.getDifficulty());
 
         if (!Sponge.getServer().saveWorldProperties(worldProperties)) {
-            throw ReturnMessageException.fromKey("command.world.create.couldnotsave", nameInput);
+            return context.errorResult("command.world.create.couldnotsave", nameInput);
         }
 
         Optional<World> world = Sponge.getGame().getServer().loadWorld(worldProperties);
 
         if (world.isPresent()) {
             world.get().getProperties().setDifficulty(wa.getDifficulty());
-            src.sendMessage(Nucleus.getNucleus().getMessageProvider().getTextMessageWithFormat("command.world.create.success", nameInput));
-            return CommandResult.success();
+            context.sendMessage("command.world.create.success", nameInput);
+            return context.successResult();
         } else {
-            throw ReturnMessageException.fromKey("command.world.create.worldfailedtoload", nameInput);
+            return context.errorResult("command.world.create.worldfailedtoload", nameInput);
         }
     }
 
@@ -217,7 +228,7 @@ public class CreateWorldCommand extends AbstractCommand<CommandSource> implement
         return os;
     }
 
-    private void onImport(Path world, String name) {
+    private void onImport(ICommandContext<? extends CommandSource> context, Path world, String name) {
         // Get the file
         Path level = world.resolve("level.dat");
         Path levelSponge = world.resolve("level_sponge.dat");
@@ -243,10 +254,7 @@ public class CreateWorldCommand extends AbstractCommand<CommandSource> implement
                     os.flush();
                 }
             } catch (IOException e) {
-                if (Nucleus.getNucleus().isDebugMode()) {
-                    e.printStackTrace();
-                }
-
+                e.printStackTrace();
                 Nucleus.getNucleus().getLogger().warn("Could not read the level.dat. Ignoring.");
             }
         }
@@ -265,11 +273,8 @@ public class CreateWorldCommand extends AbstractCommand<CommandSource> implement
                     }
                 }
             } catch (IOException e) {
-                if (Nucleus.getNucleus().isDebugMode()) {
-                    e.printStackTrace();
-                }
-
-                Nucleus.getNucleus().getLogger().warn("Could not read the level_sponge.dat. Ignoring.");
+                e.printStackTrace();
+                context.getServiceCollection().logger().warn("Could not read the level_sponge.dat. Ignoring.");
                 return;
             }
 
@@ -294,11 +299,8 @@ public class CreateWorldCommand extends AbstractCommand<CommandSource> implement
             try {
                 Files.copy(levelSponge, world.resolve("level_sponge.dat.nbak"), StandardCopyOption.REPLACE_EXISTING);
             } catch (IOException e) {
-                if (Nucleus.getNucleus().isDebugMode()) {
-                    e.printStackTrace();
-                }
-
-                Nucleus.getNucleus().getLogger().warn("Could not backup the level_sponge.dat. Ignoring.");
+                e.printStackTrace();
+                context.getServiceCollection().logger().warn("Could not backup the level_sponge.dat. Ignoring.");
                 return;
             }
 
@@ -312,9 +314,9 @@ public class CreateWorldCommand extends AbstractCommand<CommandSource> implement
         }
     }
 
-    static String modifierString(Collection<WorldGeneratorModifier> cw) {
+    static String modifierString(ICommandContext<? extends CommandSource> context, Collection<WorldGeneratorModifier> cw) {
         if (cw.isEmpty()) {
-            return Nucleus.getNucleus().getMessageProvider().getMessageWithFormat("command.world.create.nomodifiers");
+            return context.getMessageString("command.world.create.nomodifiers");
         }
 
         StringBuilder sb = new StringBuilder();
@@ -329,12 +331,18 @@ public class CreateWorldCommand extends AbstractCommand<CommandSource> implement
         return sb.toString();
     }
 
-    @Override public void onReload() throws Exception {
-        this.worldBorderDefault = getServiceUnchecked(WorldConfigAdapter.class).getNodeOrDefault().getWorldBorderDefault().orElse(null);
+    @Override public void onReload(INucleusServiceCollection serviceCollection) {
+        this.worldBorderDefault = serviceCollection
+                .moduleDataProvider()
+                .getModuleConfig(WorldConfig.class)
+                .getWorldBorderDefault()
+                .orElse(null);
     }
 
     @NonnullByDefault
     public static class ExtendedDimensionArgument extends CommandElement {
+
+        private final IMessageProviderService messageProviderService;
 
         private static HashMap<String, DimensionType> replacement = new HashMap<String, DimensionType>() {{
             put("dim0", DimensionTypes.OVERWORLD);
@@ -342,8 +350,9 @@ public class CreateWorldCommand extends AbstractCommand<CommandSource> implement
             put("dim1", DimensionTypes.THE_END);
         }};
 
-        private ExtendedDimensionArgument(@Nullable Text key) {
+        private ExtendedDimensionArgument(@Nullable Text key, IMessageProviderService messageProviderService) {
             super(key);
+            this.messageProviderService = messageProviderService;
         }
 
         @Nullable @Override protected Object parseValue(CommandSource source, CommandArgs args) throws ArgumentParseException {
@@ -358,7 +367,7 @@ public class CreateWorldCommand extends AbstractCommand<CommandSource> implement
             }
 
             return Sponge.getRegistry().getType(DimensionType.class, arg2)
-                .orElseThrow(() -> args.createError(Nucleus.getNucleus().getMessageProvider().getTextMessageWithFormat("args.dimensiontype.notfound", arg)));
+                .orElseThrow(() -> args.createError(this.messageProviderService.getMessageFor(source, "args.dimensiontype.notfound", arg)));
         }
 
         @Override public List<String> complete(CommandSource src, CommandArgs args, CommandContext context) {

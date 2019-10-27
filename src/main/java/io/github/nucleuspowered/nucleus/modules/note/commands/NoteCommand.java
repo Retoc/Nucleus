@@ -4,81 +4,65 @@
  */
 package io.github.nucleuspowered.nucleus.modules.note.commands;
 
-import io.github.nucleuspowered.nucleus.Nucleus;
 import io.github.nucleuspowered.nucleus.Util;
-import io.github.nucleuspowered.nucleus.internal.PermissionRegistry;
-import io.github.nucleuspowered.nucleus.internal.annotations.command.NoModifiers;
-import io.github.nucleuspowered.nucleus.internal.annotations.command.Permissions;
-import io.github.nucleuspowered.nucleus.internal.annotations.command.RegisterCommand;
-import io.github.nucleuspowered.nucleus.internal.command.AbstractCommand;
+import io.github.nucleuspowered.nucleus.internal.command.ICommandContext;
+import io.github.nucleuspowered.nucleus.internal.command.ICommandExecutor;
+import io.github.nucleuspowered.nucleus.internal.command.ICommandResult;
 import io.github.nucleuspowered.nucleus.internal.command.NucleusParameters;
-import io.github.nucleuspowered.nucleus.internal.permissions.PermissionInformation;
-import io.github.nucleuspowered.nucleus.internal.permissions.SuggestedLevel;
+import io.github.nucleuspowered.nucleus.internal.command.annotation.Command;
+import io.github.nucleuspowered.nucleus.modules.note.NotePermissions;
 import io.github.nucleuspowered.nucleus.modules.note.data.NoteData;
 import io.github.nucleuspowered.nucleus.modules.note.services.NoteHandler;
-import io.github.nucleuspowered.nucleus.util.PermissionMessageChannel;
-import org.spongepowered.api.command.CommandResult;
+import io.github.nucleuspowered.nucleus.services.IMessageProviderService;
+import io.github.nucleuspowered.nucleus.services.INucleusServiceCollection;
+import org.spongepowered.api.command.CommandException;
 import org.spongepowered.api.command.CommandSource;
-import org.spongepowered.api.command.args.CommandContext;
 import org.spongepowered.api.command.args.CommandElement;
-import org.spongepowered.api.entity.living.player.Player;
 import org.spongepowered.api.entity.living.player.User;
-import org.spongepowered.api.event.cause.Cause;
 import org.spongepowered.api.text.channel.MutableMessageChannel;
 import org.spongepowered.api.util.annotation.NonnullByDefault;
 
 import java.time.Instant;
-import java.util.HashMap;
-import java.util.Map;
 import java.util.UUID;
 
-@Permissions(suggestedLevel = SuggestedLevel.MOD)
-@NoModifiers
 @NonnullByDefault
-@RegisterCommand({"note", "addnote"})
-public class NoteCommand extends AbstractCommand<CommandSource> {
-    private static final String notifyPermission = PermissionRegistry.PERMISSIONS_PREFIX + "note.notify";
-
-    private final NoteHandler noteHandler = getServiceUnchecked(NoteHandler.class);
-
-    @Override
-    public Map<String, PermissionInformation> permissionsToRegister() {
-        Map<String, PermissionInformation> m = new HashMap<>();
-        m.put(notifyPermission, PermissionInformation.getWithTranslation("permission.note.notify", SuggestedLevel.MOD));
-        return m;
-    }
+@Command(
+        aliases = {"note", "addnote"},
+        basePermission = NotePermissions.NOTE_NOTIFY,
+        commandDescriptionKey = "note",
+        async = true
+)
+public class NoteCommand implements ICommandExecutor<CommandSource> {
 
     @Override
-    public CommandElement[] getArguments() {
+    public CommandElement[] parameters(INucleusServiceCollection serviceCollection) {
         return new CommandElement[] {
                 NucleusParameters.ONE_USER,
                 NucleusParameters.MESSAGE
         };
     }
 
-    @Override
-    public CommandResult executeCommand(CommandSource src, CommandContext args, Cause cause) {
-        User user = args.<User>getOne(NucleusParameters.Keys.USER).get();
-        String note = args.<String>getOne(NucleusParameters.Keys.MESSAGE).get();
+    @Override public ICommandResult execute(ICommandContext<? extends CommandSource> context) throws CommandException {
+        User user = context.requireOne(NucleusParameters.Keys.USER, User.class);
+        String note = context.requireOne(NucleusParameters.Keys.MESSAGE, String.class);
 
-        UUID noter = Util.consoleFakeUUID;
-        if (src instanceof Player) {
-            noter = ((Player) src).getUniqueId();
-        }
-
+        UUID noter = context.getUniqueId().orElse(Util.CONSOLE_FAKE_UUID);
         NoteData noteData = new NoteData(Instant.now(), noter, note);
 
-        if (this.noteHandler.addNote(user, noteData)) {
-            MutableMessageChannel messageChannel = new PermissionMessageChannel(notifyPermission).asMutable();
-            messageChannel.addMember(src);
+        if (context.getServiceCollection().getServiceUnchecked(NoteHandler.class).addNote(user, noteData)) {
+            MutableMessageChannel messageChannel =
+                    context.getServiceCollection().permissionService().permissionMessageChannel(NotePermissions.NOTE_NOTIFY).asMutable();
+            messageChannel.addMember(context.getCommandSource());
+            IMessageProviderService messageProviderService = context.getServiceCollection().messageProvider();
+            messageChannel.getMembers().forEach(messageReceiver ->
+                    messageProviderService
+                            .sendMessageTo(messageReceiver, "command.note.success", context.getName(), noteData.getNote(), user.getName())
+            );
 
-            messageChannel.send(
-                    Nucleus.getNucleus().getMessageProvider().getTextMessageWithFormat("command.note.success", src.getName(), noteData.getNote(), user.getName()));
-
-            return CommandResult.success();
+            return context.successResult();
         }
 
-        src.sendMessage(Nucleus.getNucleus().getMessageProvider().getTextMessageWithFormat("command.warn.fail", user.getName()));
-        return CommandResult.empty();
+        context.sendMessage("command.warn.fail", user.getName());
+        return context.successResult();
     }
 }

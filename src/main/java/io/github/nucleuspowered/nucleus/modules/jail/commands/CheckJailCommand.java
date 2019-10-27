@@ -4,27 +4,24 @@
  */
 package io.github.nucleuspowered.nucleus.modules.jail.commands;
 
-import io.github.nucleuspowered.nucleus.Nucleus;
+import com.google.inject.Inject;
 import io.github.nucleuspowered.nucleus.Util;
 import io.github.nucleuspowered.nucleus.argumentparsers.UUIDArgument;
-import io.github.nucleuspowered.nucleus.internal.annotations.RunAsync;
-import io.github.nucleuspowered.nucleus.internal.annotations.command.NoModifiers;
-import io.github.nucleuspowered.nucleus.internal.annotations.command.Permissions;
-import io.github.nucleuspowered.nucleus.internal.annotations.command.RegisterCommand;
-import io.github.nucleuspowered.nucleus.internal.command.AbstractCommand;
-import io.github.nucleuspowered.nucleus.internal.command.ReturnMessageException;
-import io.github.nucleuspowered.nucleus.internal.messages.MessageProvider;
-import io.github.nucleuspowered.nucleus.internal.permissions.SuggestedLevel;
+import io.github.nucleuspowered.nucleus.internal.command.ICommandContext;
+import io.github.nucleuspowered.nucleus.internal.command.ICommandExecutor;
+import io.github.nucleuspowered.nucleus.internal.command.ICommandResult;
+import io.github.nucleuspowered.nucleus.internal.command.annotation.Command;
+import io.github.nucleuspowered.nucleus.modules.jail.JailPermissions;
 import io.github.nucleuspowered.nucleus.modules.jail.data.JailData;
 import io.github.nucleuspowered.nucleus.modules.jail.services.JailHandler;
+import io.github.nucleuspowered.nucleus.services.IMessageProviderService;
+import io.github.nucleuspowered.nucleus.services.INucleusServiceCollection;
 import org.spongepowered.api.Sponge;
-import org.spongepowered.api.command.CommandResult;
+import org.spongepowered.api.command.CommandException;
 import org.spongepowered.api.command.CommandSource;
-import org.spongepowered.api.command.args.CommandContext;
 import org.spongepowered.api.command.args.CommandElement;
 import org.spongepowered.api.command.args.GenericArguments;
 import org.spongepowered.api.entity.living.player.User;
-import org.spongepowered.api.event.cause.Cause;
 import org.spongepowered.api.service.user.UserStorageService;
 import org.spongepowered.api.text.Text;
 import org.spongepowered.api.util.annotation.NonnullByDefault;
@@ -32,18 +29,25 @@ import org.spongepowered.api.util.annotation.NonnullByDefault;
 import java.time.Instant;
 import java.util.Optional;
 
-@Permissions(prefix = "jail", suggestedLevel = SuggestedLevel.MOD)
-@RunAsync
-@NoModifiers
 @NonnullByDefault
-@RegisterCommand({"checkjail"})
-public class CheckJailCommand extends AbstractCommand<CommandSource> {
+@Command(
+        aliases = "checkjail",
+        basePermission = JailPermissions.BASE_CHECKJAIL,
+        commandDescriptionKey = "checkjail",
+        async = true
+)
+public class CheckJailCommand implements ICommandExecutor<CommandSource> {
 
     private final String playerKey = "user/UUID";
-    private final JailHandler handler = Nucleus.getNucleus().getInternalServiceManager().getServiceUnchecked(JailHandler.class);
+    private final JailHandler handler;
+
+    @Inject
+    public CheckJailCommand(INucleusServiceCollection serviceCollection) {
+        this.handler = serviceCollection.getServiceUnchecked(JailHandler.class);
+    }
 
     @Override
-    public CommandElement[] getArguments() {
+    public CommandElement[] parameters(INucleusServiceCollection serviceCollection) {
         return new CommandElement[] {
             GenericArguments.firstParsing(
                 GenericArguments.user(Text.of(this.playerKey)),
@@ -52,41 +56,42 @@ public class CheckJailCommand extends AbstractCommand<CommandSource> {
         };
     }
 
-    @Override
-    public CommandResult executeCommand(CommandSource src, CommandContext args, Cause cause) throws Exception {
-        User user = args.<User>getOne(this.playerKey).get();
+    @Override public ICommandResult execute(ICommandContext<? extends CommandSource> context) throws CommandException {
+        User user = context.requireOne(this.playerKey, User.class);
         Optional<JailData> jail = this.handler.getPlayerJailDataInternal(user);
-        MessageProvider mp = Nucleus.getNucleus().getMessageProvider();
 
         if (!jail.isPresent()) {
-            throw ReturnMessageException.fromKey("command.checkjail.nojail", user.getName());
+            return context.errorResult("command.checkjail.nojail", user.getName());
         }
 
+        IMessageProviderService messageProviderService = context.getServiceCollection().messageProvider();
         JailData md = jail.get();
         String name;
-        if (md.getJailerInternal().equals(Util.consoleFakeUUID)) {
+        if (md.getJailerInternal().equals(Util.CONSOLE_FAKE_UUID)) {
             name = Sponge.getServer().getConsole().getName();
         } else {
-            name = Sponge.getServiceManager().provideUnchecked(UserStorageService.class).get(md.getJailerInternal())
-                    .map(User::getName).orElseGet(() -> mp.getMessageWithFormat("standard.unknown"));
+            name = Sponge.getServiceManager().provideUnchecked(UserStorageService.class)
+                    .get(md.getJailerInternal())
+                    .map(User::getName).orElseGet(() -> context.getMessageString("standard.unknown"));
         }
 
         if (md.getRemainingTime().isPresent()) {
-            src.sendMessage(mp.getTextMessageWithFormat("command.checkjail.jailedfor", user.getName(), md.getJailName(),
-                    name, Util.getTimeStringFromSeconds(md.getRemainingTime().get().getSeconds())));
+            context.sendMessage("command.checkjail.jailedfor", user.getName(), md.getJailName(),
+                    name, messageProviderService.getTimeString(
+                            context.getCommandSource().getLocale(),
+                            md.getRemainingTime().get().getSeconds()));
         } else {
-            src.sendMessage(mp.getTextMessageWithFormat("command.checkjail.jailedperm", user.getName(), md.getJailName(),
-                    name));
+            context.sendMessage("command.checkjail.jailedperm", user.getName(), md.getJailName(), name);
         }
 
         if (md.getCreationTime() > 0) {
-            src.sendMessage(mp.getTextMessageWithFormat("command.checkjail.created",
-                    Util.FULL_TIME_FORMATTER.withLocale(src.getLocale()).format(Instant.ofEpochSecond(md.getCreationTime()))));
+            context.sendMessage("command.checkjail.created",
+                    Util.FULL_TIME_FORMATTER.withLocale(context.getCommandSource().getLocale()).format(Instant.ofEpochSecond(md.getCreationTime())));
         } else {
-            src.sendMessage(mp.getTextMessageWithFormat("command.checkjail.created", mp.getMessageWithFormat("standard.unknown")));
+            context.sendMessage("command.checkjail.created", "loc:standard.unknown");
         }
 
-        src.sendMessage(mp.getTextMessageWithFormat("standard.reasoncoloured", md.getReason()));
-        return CommandResult.success();
+        context.sendMessage("standard.reasoncoloured", md.getReason());
+        return context.successResult();
     }
 }

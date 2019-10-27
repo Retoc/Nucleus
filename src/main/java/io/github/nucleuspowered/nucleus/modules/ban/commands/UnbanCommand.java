@@ -4,39 +4,40 @@
  */
 package io.github.nucleuspowered.nucleus.modules.ban.commands;
 
-import io.github.nucleuspowered.nucleus.Nucleus;
-import io.github.nucleuspowered.nucleus.internal.annotations.command.NoModifiers;
-import io.github.nucleuspowered.nucleus.internal.annotations.command.Permissions;
-import io.github.nucleuspowered.nucleus.internal.annotations.command.RegisterCommand;
-import io.github.nucleuspowered.nucleus.internal.command.AbstractCommand;
+import io.github.nucleuspowered.nucleus.Util;
+import io.github.nucleuspowered.nucleus.internal.command.ICommandContext;
+import io.github.nucleuspowered.nucleus.internal.command.ICommandExecutor;
+import io.github.nucleuspowered.nucleus.internal.command.ICommandResult;
 import io.github.nucleuspowered.nucleus.internal.command.NucleusParameters;
-import io.github.nucleuspowered.nucleus.internal.docgen.annotations.EssentialsEquivalent;
-import io.github.nucleuspowered.nucleus.internal.permissions.SuggestedLevel;
-import io.github.nucleuspowered.nucleus.util.PermissionMessageChannel;
+import io.github.nucleuspowered.nucleus.internal.command.annotation.Command;
+import io.github.nucleuspowered.nucleus.internal.command.annotation.EssentialsEquivalent;
+import io.github.nucleuspowered.nucleus.modules.ban.BanPermissions;
+import io.github.nucleuspowered.nucleus.services.INucleusServiceCollection;
 import org.spongepowered.api.Sponge;
-import org.spongepowered.api.command.CommandResult;
+import org.spongepowered.api.command.CommandException;
 import org.spongepowered.api.command.CommandSource;
-import org.spongepowered.api.command.args.CommandContext;
 import org.spongepowered.api.command.args.CommandElement;
 import org.spongepowered.api.command.args.GenericArguments;
-import org.spongepowered.api.event.cause.Cause;
 import org.spongepowered.api.profile.GameProfile;
 import org.spongepowered.api.service.ban.BanService;
+import org.spongepowered.api.text.channel.MessageReceiver;
 import org.spongepowered.api.text.channel.MutableMessageChannel;
 import org.spongepowered.api.util.annotation.NonnullByDefault;
 import org.spongepowered.api.util.ban.Ban;
 
 import java.util.Optional;
 
-@RegisterCommand({"unban", "pardon"})
-@Permissions(suggestedLevel = SuggestedLevel.MOD)
-@NoModifiers
+@Command(
+        aliases = {"unban", "pardon"},
+        basePermission = BanPermissions.BASE_TEMPBAN,
+        commandDescriptionKey = "unban"
+)
 @EssentialsEquivalent({"unban", "pardon"})
 @NonnullByDefault
-public class UnbanCommand extends AbstractCommand<CommandSource> {
+public class UnbanCommand implements ICommandExecutor<CommandSource> {
 
     @Override
-    public CommandElement[] getArguments() {
+    public CommandElement[] parameters(INucleusServiceCollection serviceCollection) {
         return new CommandElement[] {
             GenericArguments.firstParsing(
                     NucleusParameters.ONE_GAME_PROFILE_UUID,
@@ -46,28 +47,29 @@ public class UnbanCommand extends AbstractCommand<CommandSource> {
     }
 
     @Override
-    public CommandResult executeCommand(CommandSource src, CommandContext args, Cause cause) {
+    public ICommandResult execute(ICommandContext<? extends CommandSource> context) throws CommandException {
         GameProfile gp;
-        if (args.hasAny(NucleusParameters.Keys.USER_UUID)) {
-            gp = args.<GameProfile>getOne(NucleusParameters.Keys.USER_UUID).get();
+        if (context.hasAny(NucleusParameters.Keys.USER_UUID)) {
+            gp = context.requireOne(NucleusParameters.Keys.USER_UUID, GameProfile.class);
         } else {
-            gp = args.<GameProfile>getOne(NucleusParameters.Keys.USER).get();
+            gp = context.requireOne(NucleusParameters.Keys.USER, GameProfile.class);
         }
 
         BanService service = Sponge.getServiceManager().provideUnchecked(BanService.class);
 
         Optional<Ban.Profile> obp = service.getBanFor(gp);
         if (!obp.isPresent()) {
-            src.sendMessage(Nucleus.getNucleus().getMessageProvider().getTextMessageWithFormat("command.checkban.notset", gp.getName().orElse(
-                    Nucleus.getNucleus().getMessageProvider().getMessageWithFormat("standard.unknown"))));
-            return CommandResult.empty();
+            return context.errorResult(
+                    "command.checkban.notset", Util.getNameOrUnkown(context, gp));
         }
 
         service.removeBan(obp.get());
 
-        MutableMessageChannel notify = new PermissionMessageChannel(BanCommand.notifyPermission).asMutable();
-        notify.addMember(src);
-        notify.send(Nucleus.getNucleus().getMessageProvider().getTextMessageWithFormat("command.unban.success", obp.get().getProfile().getName().orElse("standard.unknown"), src.getName()));
-        return CommandResult.success();
+        MutableMessageChannel notify = context.getServiceCollection().permissionService().permissionMessageChannel(BanPermissions.BAN_NOTIFY).asMutable();
+        notify.addMember(context.getCommandSource());
+        for (MessageReceiver receiver : notify.getMembers()) {
+            context.sendMessageTo(receiver, "command.unban.success", Util.getNameOrUnkown(context, obp.get().getProfile()));
+        }
+        return context.successResult();
     }
 }

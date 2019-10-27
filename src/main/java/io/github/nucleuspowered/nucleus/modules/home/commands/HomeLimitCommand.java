@@ -4,66 +4,55 @@
  */
 package io.github.nucleuspowered.nucleus.modules.home.commands;
 
-import io.github.nucleuspowered.nucleus.Nucleus;
-import io.github.nucleuspowered.nucleus.internal.annotations.RunAsync;
-import io.github.nucleuspowered.nucleus.internal.annotations.command.NoModifiers;
-import io.github.nucleuspowered.nucleus.internal.annotations.command.Permissions;
-import io.github.nucleuspowered.nucleus.internal.annotations.command.RegisterCommand;
-import io.github.nucleuspowered.nucleus.internal.command.AbstractCommand;
-import io.github.nucleuspowered.nucleus.internal.permissions.SuggestedLevel;
+import io.github.nucleuspowered.nucleus.internal.command.ICommandContext;
+import io.github.nucleuspowered.nucleus.internal.command.ICommandExecutor;
+import io.github.nucleuspowered.nucleus.internal.command.ICommandResult;
+import io.github.nucleuspowered.nucleus.internal.command.annotation.Command;
+import io.github.nucleuspowered.nucleus.modules.home.HomePermissions;
 import io.github.nucleuspowered.nucleus.modules.home.services.HomeService;
-import org.spongepowered.api.command.CommandResult;
+import io.github.nucleuspowered.nucleus.services.INucleusServiceCollection;
+import org.spongepowered.api.command.CommandException;
 import org.spongepowered.api.command.CommandSource;
-import org.spongepowered.api.command.args.CommandContext;
 import org.spongepowered.api.command.args.CommandElement;
-import org.spongepowered.api.command.args.GenericArguments;
 import org.spongepowered.api.entity.living.player.User;
-import org.spongepowered.api.event.cause.Cause;
-import org.spongepowered.api.text.Text;
 import org.spongepowered.api.util.annotation.NonnullByDefault;
 
-@RunAsync
-@NoModifiers
 @NonnullByDefault
-@Permissions(prefix = "home", supportsOthers = true, suggestedLevel = SuggestedLevel.USER)
-@RegisterCommand(value = "limit", subcommandOf = HomeCommand.class)
-public class HomeLimitCommand extends AbstractCommand<CommandSource> {
-
-    private final String player = "player";
-    private final HomeService handler = getServiceUnchecked(HomeService.class);
+@Command(
+        aliases = {"limit"},
+        basePermission = HomePermissions.BASE_HOME_LIMIT,
+        commandDescriptionKey = "home.limit",
+        parentCommand = HomeCommand.class,
+        async = true
+)
+public class HomeLimitCommand implements ICommandExecutor<CommandSource> {
 
     @Override
-    protected CommandElement[] getArguments() {
+    public CommandElement[] parameters(INucleusServiceCollection serviceCollection) {
         return new CommandElement[] {
-                GenericArguments.optional(
-                        requirePermissionArg(
-                                GenericArguments.user(Text.of(this.player)), this.permissions.getOthers()))
+                serviceCollection.commandElementSupplier().createOnlyOtherUserPermissionElement(false, HomePermissions.OTHERS_LIMIT)
         };
     }
 
-    @Override
-    protected CommandResult executeCommand(CommandSource src, CommandContext args, Cause cause) throws Exception {
-        User user = this.getUserFromArgs(User.class, src, this.player, args);
-        int current = this.handler.getHomeCount(user);
-        int max = this.handler.getMaximumHomes(user);
-        if (user.getPlayer().map(src::equals).orElse(false)) {
+    @Override public ICommandResult execute(ICommandContext<? extends CommandSource> context) throws CommandException {
+        User user = context.getUserFromArgs();
+        HomeService service = context.getServiceCollection().getServiceUnchecked(HomeService.class);
+        int current = service.getHomeCount(user);
+        int max = service.getMaximumHomes(user);
+        if (context.is(user)) {
             if (max == Integer.MAX_VALUE) {
-                src.sendMessage(Nucleus.getNucleus().getMessageProvider()
-                        .getTextMessageWithFormat("command.home.limit.selfu", String.valueOf(current)));
+                context.sendMessage("command.home.limit.selfu", current);
             } else {
-                src.sendMessage(Nucleus.getNucleus().getMessageProvider()
-                        .getTextMessageWithFormat("command.home.limit.self", String.valueOf(current), String.valueOf(max)));
+                context.sendMessage("command.home.limit.self", current, max);
             }
         } else {
             if (max == Integer.MAX_VALUE) {
-                src.sendMessage(Nucleus.getNucleus().getMessageProvider()
-                        .getTextMessageWithFormat("command.home.limit.otheru", user.getName(), String.valueOf(current)));
+                context.sendMessage("command.home.limit.otheru", user.getName(), current);
             } else {
-                src.sendMessage(Nucleus.getNucleus().getMessageProvider()
-                        .getTextMessageWithFormat("command.home.limit.other", user.getName(), String.valueOf(current), String.valueOf(max)));
+                context.sendMessage("command.home.limit.other", user.getName(), current, max);
             }
         }
 
-        return CommandResult.success();
+        return context.successResult();
     }
 }

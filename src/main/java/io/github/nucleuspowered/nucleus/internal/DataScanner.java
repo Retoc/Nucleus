@@ -5,7 +5,7 @@
 package io.github.nucleuspowered.nucleus.internal;
 
 import com.google.common.collect.ImmutableMap;
-import io.github.nucleuspowered.nucleus.Nucleus;
+import io.github.nucleuspowered.nucleus.services.IMessageProviderService;
 import org.spongepowered.api.command.CommandSource;
 import org.spongepowered.api.data.DataHolder;
 import org.spongepowered.api.data.key.Key;
@@ -50,10 +50,11 @@ public final class DataScanner {
 
     private static DataScanner instance = null;
     private static final NumberFormat nf = new DecimalFormat("0.000");
+    private final IMessageProviderService messageProviderService;
 
-    public static DataScanner getInstance() {
+    public static DataScanner getInstance(IMessageProviderService messageProviderService) {
         if (instance == null) {
-            instance = new DataScanner();
+            instance = new DataScanner(messageProviderService);
         }
 
         return instance;
@@ -61,7 +62,8 @@ public final class DataScanner {
 
     private final Map<String, Key<? extends BaseValue<?>>> reportableKeys;
 
-    private DataScanner() {
+    private DataScanner(IMessageProviderService messageProviderService) {
+        this.messageProviderService = messageProviderService;
         this.reportableKeys = new HashMap<>();
 
         // Start Key Scanning
@@ -109,20 +111,21 @@ public final class DataScanner {
         return ImmutableMap.copyOf(this.reportableKeys);
     }
 
-    public static Optional<Text> getText(CommandSource src, String translationKey, String key, Object x) {
+    public Optional<Text> getText(CommandSource src, String translationKey, String key, Object x) {
         // src - for any translation that may be required later.
         String v = String.valueOf(x);
         Class<?> c = x.getClass();
         if (!v.equals(String.format("%s@%s", c.getName(), Integer.toHexString(x.hashCode())))) {
             if (x instanceof Double || x instanceof Float || x instanceof BigDecimal) {
-                return Optional.of(Nucleus.getNucleus().getMessageProvider().getTextMessageWithFormat(translationKey, key, nf.format(x)));
+                return Optional.of(this.messageProviderService.getMessageFor(src, translationKey, key, nf.format(x)));
             }
 
             if (x instanceof Text) {
-                return Optional.of(Nucleus.getNucleus().getMessageProvider().getTextMessageWithFormat(translationKey, key, TextSerializers.FORMATTING_CODE.serialize((Text)x)));
+                return Optional.of(this.messageProviderService.getMessageFor(src, translationKey, key,
+                        TextSerializers.FORMATTING_CODE.serialize((Text)x)));
             }
 
-            return Optional.of(Nucleus.getNucleus().getMessageProvider().getTextMessageWithFormat(translationKey, key, v));
+            return Optional.of(this.messageProviderService.getMessageFor(src, translationKey, key, v));
         }
 
         return Optional.empty();

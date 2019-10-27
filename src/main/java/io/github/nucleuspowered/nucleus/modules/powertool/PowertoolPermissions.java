@@ -5,8 +5,8 @@
 package io.github.nucleuspowered.nucleus.modules.powertool;
 
 import io.github.nucleuspowered.nucleus.annotationprocessor.RegisterPermissions;
-import io.github.nucleuspowered.nucleus.internal.permissions.PermissionMetadata;
-import io.github.nucleuspowered.nucleus.internal.permissions.SuggestedLevel;
+import io.github.nucleuspowered.nucleus.services.impl.permission.PermissionMetadata;
+import io.github.nucleuspowered.nucleus.services.impl.permission.SuggestedLevel;
 
 @RegisterPermissions
 public class PowertoolPermissions {
@@ -15,6 +15,6 @@ public class PowertoolPermissions {
     }
 
     @PermissionMetadata(descriptionKey = "permission.base", replacements = { "powertool" }, level = SuggestedLevel.ADMIN)
-    public static final String BASE_POWERTOOL = "powertool.base";
+    public static final String BASE_POWERTOOL = "nucleus.powertool.base";
 
 }

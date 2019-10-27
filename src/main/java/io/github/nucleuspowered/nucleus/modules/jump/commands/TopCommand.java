@@ -4,25 +4,23 @@
  */
 package io.github.nucleuspowered.nucleus.modules.jump.commands;
 
-import io.github.nucleuspowered.nucleus.Nucleus;
 import io.github.nucleuspowered.nucleus.api.catalogkeys.NucleusTeleportHelperFilters;
 import io.github.nucleuspowered.nucleus.api.teleport.TeleportResult;
 import io.github.nucleuspowered.nucleus.api.teleport.TeleportResults;
 import io.github.nucleuspowered.nucleus.api.teleport.TeleportScanners;
-import io.github.nucleuspowered.nucleus.internal.annotations.command.Permissions;
-import io.github.nucleuspowered.nucleus.internal.annotations.command.RegisterCommand;
-import io.github.nucleuspowered.nucleus.internal.command.AbstractCommand;
-import io.github.nucleuspowered.nucleus.internal.command.NucleusParameters;
-import io.github.nucleuspowered.nucleus.internal.command.ReturnMessageException;
-import io.github.nucleuspowered.nucleus.internal.docgen.annotations.EssentialsEquivalent;
-import io.github.nucleuspowered.nucleus.modules.core.services.SafeTeleportService;
-import org.spongepowered.api.command.CommandResult;
+import io.github.nucleuspowered.nucleus.internal.command.ICommandContext;
+import io.github.nucleuspowered.nucleus.internal.command.ICommandExecutor;
+import io.github.nucleuspowered.nucleus.internal.command.ICommandResult;
+import io.github.nucleuspowered.nucleus.internal.command.annotation.Command;
+import io.github.nucleuspowered.nucleus.internal.command.annotation.CommandModifier;
+import io.github.nucleuspowered.nucleus.internal.command.requirements.CommandModifiers;
+import io.github.nucleuspowered.nucleus.modules.jump.JumpPermissions;
+import io.github.nucleuspowered.nucleus.services.INucleusServiceCollection;
+import org.spongepowered.api.command.CommandException;
 import org.spongepowered.api.command.CommandSource;
-import org.spongepowered.api.command.args.CommandContext;
 import org.spongepowered.api.command.args.CommandElement;
 import org.spongepowered.api.command.args.GenericArguments;
 import org.spongepowered.api.entity.living.player.Player;
-import org.spongepowered.api.event.cause.Cause;
 import org.spongepowered.api.util.annotation.NonnullByDefault;
 import org.spongepowered.api.util.blockray.BlockRay;
 import org.spongepowered.api.util.blockray.BlockRayHit;
@@ -30,23 +28,30 @@ import org.spongepowered.api.world.Location;
 import org.spongepowered.api.world.World;
 import org.spongepowered.api.world.teleport.TeleportHelperFilters;
 
-@Permissions(supportsSelectors = true, supportsOthers = true)
-@RegisterCommand({"top", "tosurface", "totop"})
-@EssentialsEquivalent("top")
 @NonnullByDefault
-public class TopCommand extends AbstractCommand<CommandSource> {
+@Command(
+        aliases = {"top", "tosurface", "totop"},
+        basePermission = JumpPermissions.BASE_TOP,
+        commandDescriptionKey = "top",
+        modifiers = {
+                @CommandModifier(value = CommandModifiers.HAS_COOLDOWN, exemptPermission = JumpPermissions.EXEMPT_COOLDOWN_TOP),
+                @CommandModifier(value = CommandModifiers.HAS_WARMUP, exemptPermission = JumpPermissions.EXEMPT_WARMUP_TOP),
+                @CommandModifier(value = CommandModifiers.HAS_COST, exemptPermission = JumpPermissions.EXEMPT_COST_TOP)
+        }
+)
+public class TopCommand implements ICommandExecutor<CommandSource> {
 
-    @Override public CommandElement[] getArguments() {
+    @Override public CommandElement[] parameters(INucleusServiceCollection serviceCollection) {
         return new CommandElement[] {
             GenericArguments.flags().flag("f").buildWith(
-                GenericArguments.optional(
-                        requirePermissionArg(NucleusParameters.ONE_PLAYER, this.permissions.getOthers()))
+                    serviceCollection.commandElementSupplier()
+                        .createOnlyOtherUserPermissionElement(true, JumpPermissions.OTHERS_TOP)
             )
         };
     }
 
-    @Override public CommandResult executeCommand(CommandSource src, CommandContext args, Cause cause) throws Exception {
-        Player playerToTeleport = this.getUserFromArgs(Player.class, src, NucleusParameters.Keys.PLAYER, args);
+    @Override public ICommandResult execute(ICommandContext<? extends CommandSource> context) throws CommandException {
+        Player playerToTeleport = context.getPlayerFromArgs();
 
         // Get the topmost block for the subject.
         Location<World> location = playerToTeleport.getLocation();
@@ -55,20 +60,21 @@ public class TopCommand extends AbstractCommand<CommandSource> {
         Location<World> start = new Location<>(location.getExtent(), x, location.getExtent().getBlockMax().getY(), z);
         BlockRayHit<World> end = BlockRay.from(start).stopFilter(BlockRay.onlyAirFilter())
             .to(playerToTeleport.getLocation().getPosition().sub(0, 1, 0)).end()
-            .orElseThrow(() -> ReturnMessageException.fromKey(src, "command.top.nothingfound"));
+            .orElseThrow(() -> context.createException("command.top.nothingfound"));
 
         if (playerToTeleport.getLocation().getBlockPosition().equals(end.getBlockPosition())) {
-            if (!playerToTeleport.equals(src)) {
-                throw ReturnMessageException.fromKey(src,
+            if (!context.is(playerToTeleport)) {
+                return context.errorResult(
                         "command.top.attop.other",
-                        Nucleus.getNucleus().getNameUtil().getName(playerToTeleport));
+                        context.getDisplayName(playerToTeleport.getUniqueId()));
             } else {
-                throw ReturnMessageException.fromKey(src, "command.top.attop.self");
+                return context.errorResult("command.top.attop.self");
             }
         }
 
-        boolean isSafe = !args.hasAny("f");
-        TeleportResult result = getServiceUnchecked(SafeTeleportService.class)
+        boolean isSafe = !context.hasAny("f");
+        TeleportResult result = context.getServiceCollection()
+                .teleportService()
                 .teleportPlayer(
                         playerToTeleport,
                         end.getLocation(),
@@ -80,19 +86,18 @@ public class TopCommand extends AbstractCommand<CommandSource> {
 
         if (result.isSuccessful()) {
             // OK
-            if (!playerToTeleport.equals(src)) {
-                sendMessageTo(src,"command.top.success.other",
-                        Nucleus.getNucleus().getNameUtil().getName(playerToTeleport));
+            if (!context.is(playerToTeleport)) {
+                context.sendMessage("command.top.success.other", context.getDisplayName(playerToTeleport.getUniqueId()));
             }
 
-            sendMessageTo(src, "command.top.success.self");
-            return CommandResult.success();
+            context.sendMessageTo(playerToTeleport, "command.top.success.self");
+            return context.successResult();
         }
 
         if (result == TeleportResults.FAIL_NO_LOCATION) {
-            throw ReturnMessageException.fromKey(src, "command.top.notsafe");
+            return context.errorResult("command.top.notsafe");
         } else {
-            throw ReturnMessageException.fromKey(src, "command.top.cancelled");
+            return context.errorResult("command.top.cancelled");
         }
     }
 }

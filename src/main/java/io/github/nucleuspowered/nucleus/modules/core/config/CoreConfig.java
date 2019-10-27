@@ -6,7 +6,7 @@ package io.github.nucleuspowered.nucleus.modules.core.config;
 
 import com.google.common.collect.Maps;
 import io.github.nucleuspowered.neutrino.annotations.DoNotGenerate;
-import io.github.nucleuspowered.nucleus.internal.text.NucleusTextTemplateImpl;
+import io.github.nucleuspowered.nucleus.services.impl.texttemplatefactory.NucleusTextTemplateImpl;
 import ninja.leaping.configurate.objectmapping.Setting;
 import ninja.leaping.configurate.objectmapping.serialize.ConfigSerializable;
 import uk.co.drnaylor.quickstart.config.NoMergeIfPresent;
@@ -87,6 +87,9 @@ public class CoreConfig {
 
     @Setting(value = "print-message-when-permission-isnt-registered", comment = "config.core.printMissingPerms")
     private boolean printWhenPermissionIsntRegistered = false;
+
+    @Setting(value = "use-client-locale-where-possible", comment = "config.core.clientlocale")
+    private boolean clientLocale = false;
 
     public boolean isDebugmode() {
         return this.debugmode;
@@ -178,5 +181,9 @@ public class CoreConfig {
 
     public boolean isPrintWhenPermissionIsntRegistered() {
         return this.printWhenPermissionIsntRegistered;
+    }
+
+    public boolean isClientLocaleWhenPossible() {
+        return this.clientLocale;
     }
 }

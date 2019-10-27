@@ -6,9 +6,6 @@ package io.github.nucleuspowered.nucleus.argumentparsers;
 
 import com.google.common.collect.ImmutableSet;
 import io.github.nucleuspowered.nucleus.Nucleus;
-import io.github.nucleuspowered.nucleus.internal.traits.InternalServiceManagerTrait;
-import io.github.nucleuspowered.nucleus.internal.traits.MessageProviderTrait;
-import io.github.nucleuspowered.nucleus.internal.traits.PermissionTrait;
 import io.github.nucleuspowered.nucleus.modules.core.config.CoreConfig;
 import io.github.nucleuspowered.nucleus.modules.core.config.CoreConfigAdapter;
 import io.github.nucleuspowered.nucleus.modules.nickname.services.NicknameService;
@@ -39,7 +36,7 @@ import java.util.stream.Collectors;
 
 import javax.annotation.Nullable;
 
-public class NicknameArgument extends CommandElement implements MessageProviderTrait, InternalServiceManagerTrait, PermissionTrait {
+public class NicknameArgument extends CommandElement {
 
     private static boolean init = false;
     private static int USER_LIMIT = 20;

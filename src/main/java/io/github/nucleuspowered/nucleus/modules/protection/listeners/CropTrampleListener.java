@@ -4,12 +4,10 @@
  */
 package io.github.nucleuspowered.nucleus.modules.protection.listeners;
 
-import io.github.nucleuspowered.nucleus.Nucleus;
 import io.github.nucleuspowered.nucleus.internal.interfaces.ListenerBase;
 import io.github.nucleuspowered.nucleus.internal.interfaces.Reloadable;
-import io.github.nucleuspowered.nucleus.modules.protection.ProtectionModule;
 import io.github.nucleuspowered.nucleus.modules.protection.config.ProtectionConfig;
-import io.github.nucleuspowered.nucleus.modules.protection.config.ProtectionConfigAdapter;
+import io.github.nucleuspowered.nucleus.services.INucleusServiceCollection;
 import org.spongepowered.api.block.BlockTypes;
 import org.spongepowered.api.data.Transaction;
 import org.spongepowered.api.entity.Entity;
@@ -39,14 +37,14 @@ public class CropTrampleListener implements Reloadable, ListenerBase.Conditional
     }
 
     @Override
-    public void onReload() {
-        ProtectionConfigAdapter protectionConfigAdapter = getServiceUnchecked(ProtectionConfigAdapter.class);
-        this.cropentity = protectionConfigAdapter.getNodeOrDefault().isDisableMobCropTrample();
-        this.cropplayer = protectionConfigAdapter.getNodeOrDefault().isDisablePlayerCropTrample();
+    public void onReload(INucleusServiceCollection serviceCollection) {
+        ProtectionConfig protectionConfig = serviceCollection.moduleDataProvider().getModuleConfig(ProtectionConfig.class);
+        this.cropentity = protectionConfig.isDisableMobCropTrample();
+        this.cropplayer = protectionConfig.isDisablePlayerCropTrample();
     }
 
-    @Override public boolean shouldEnable() {
-        return Nucleus.getNucleus().getConfigValue(ProtectionModule.ID, ProtectionConfigAdapter.class, ProtectionConfig::isDisableAnyCropTrample)
-                .orElse(false);
+    @Override
+    public boolean shouldEnable(INucleusServiceCollection serviceCollection) {
+        return serviceCollection.moduleDataProvider().getModuleConfig(ProtectionConfig.class).isDisableAnyCropTrample();
     }
 }

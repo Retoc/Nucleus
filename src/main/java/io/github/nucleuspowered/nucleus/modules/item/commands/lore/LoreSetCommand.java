@@ -4,22 +4,31 @@
  */
 package io.github.nucleuspowered.nucleus.modules.item.commands.lore;
 
-import io.github.nucleuspowered.nucleus.internal.annotations.command.Permissions;
-import io.github.nucleuspowered.nucleus.internal.annotations.command.RegisterCommand;
+import io.github.nucleuspowered.nucleus.internal.command.ICommandContext;
+import io.github.nucleuspowered.nucleus.internal.command.ICommandResult;
 import io.github.nucleuspowered.nucleus.internal.command.NucleusParameters;
-import org.spongepowered.api.command.CommandResult;
-import org.spongepowered.api.command.args.CommandContext;
+import io.github.nucleuspowered.nucleus.internal.command.annotation.Command;
+import io.github.nucleuspowered.nucleus.internal.command.annotation.CommandModifier;
+import io.github.nucleuspowered.nucleus.internal.command.requirements.CommandModifiers;
+import io.github.nucleuspowered.nucleus.modules.item.ItemPermissions;
+import org.spongepowered.api.command.CommandException;
 import org.spongepowered.api.entity.living.player.Player;
-import org.spongepowered.api.event.cause.Cause;
-import org.spongepowered.api.util.annotation.NonnullByDefault;
 
-@NonnullByDefault
-@Permissions(prefix = "lore")
-@RegisterCommand(value = "set", subcommandOf = LoreCommand.class)
+@Command(
+        aliases = { "set" },
+        basePermission = ItemPermissions.BASE_LORE_SET,
+        commandDescriptionKey = "lore.set",
+        parentCommand = LoreCommand.class,
+        modifiers = {
+                @CommandModifier(value = CommandModifiers.HAS_COOLDOWN, exemptPermission = ItemPermissions.EXEMPT_COOLDOWN_LORE_SET),
+                @CommandModifier(value = CommandModifiers.HAS_WARMUP, exemptPermission = ItemPermissions.EXEMPT_WARMUP_LORE_SET),
+                @CommandModifier(value = CommandModifiers.HAS_COST, exemptPermission = ItemPermissions.EXEMPT_COST_LORE_SET)
+        }
+)
 public class LoreSetCommand extends LoreSetBaseCommand {
 
     @Override
-    public CommandResult executeCommand(Player src, CommandContext args, Cause cause) throws Exception {
-        return setLore(src, args.<String>getOne(NucleusParameters.Keys.LORE).get(), true);
+    public ICommandResult execute(ICommandContext<? extends Player> context) throws CommandException {
+        return setLore(context, context.requireOne(NucleusParameters.Keys.LORE, String.class), true);
     }
 }

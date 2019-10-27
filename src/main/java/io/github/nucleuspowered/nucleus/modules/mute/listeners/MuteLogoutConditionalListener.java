@@ -4,13 +4,12 @@
  */
 package io.github.nucleuspowered.nucleus.modules.mute.listeners;
 
-import io.github.nucleuspowered.nucleus.Nucleus;
 import io.github.nucleuspowered.nucleus.internal.interfaces.ListenerBase;
 import io.github.nucleuspowered.nucleus.modules.mute.MuteKeys;
-import io.github.nucleuspowered.nucleus.modules.mute.MuteModule;
 import io.github.nucleuspowered.nucleus.modules.mute.config.MuteConfig;
-import io.github.nucleuspowered.nucleus.modules.mute.config.MuteConfigAdapter;
 import io.github.nucleuspowered.nucleus.modules.mute.data.MuteData;
+import io.github.nucleuspowered.nucleus.services.INucleusServiceCollection;
+import io.github.nucleuspowered.nucleus.services.IStorageManager;
 import io.github.nucleuspowered.storage.dataobjects.keyed.IKeyedDataObject;
 import org.spongepowered.api.Sponge;
 import org.spongepowered.api.entity.living.player.Player;
@@ -24,10 +23,16 @@ import java.util.UUID;
 
 public class MuteLogoutConditionalListener implements ListenerBase.Conditional {
 
+    private final IStorageManager storageManager;
+
+    public MuteLogoutConditionalListener(INucleusServiceCollection serviceCollection) {
+        this.storageManager = serviceCollection.storageManager();
+    }
+
     @Listener
     public void onLogout(ClientConnectionEvent.Disconnect event, @Getter("getTargetEntity") Player player) {
         final UUID uuid = player.getUniqueId();
-        Nucleus.getNucleus().getStorageManager()
+        this.storageManager
                 .getUserService()
                 .getOrNew(uuid)
                 .thenAccept(x -> {
@@ -40,13 +45,14 @@ public class MuteLogoutConditionalListener implements ListenerBase.Conditional {
                             }
                         }
 
-                        Nucleus.getNucleus().getStorageManager().getUserService().save(uuid, x);
+                        this.storageManager.getUserService().save(uuid, x);
                     }
                 });
     }
 
-    @Override public boolean shouldEnable() {
-        return Nucleus.getNucleus().getConfigValue(MuteModule.ID, MuteConfigAdapter.class, MuteConfig::isMuteOnlineOnly).orElse(false);
+    @Override
+    public boolean shouldEnable(INucleusServiceCollection serviceCollection) {
+        return serviceCollection.moduleDataProvider().getModuleConfig(MuteConfig.class).isMuteOnlineOnly();
     }
 
 }

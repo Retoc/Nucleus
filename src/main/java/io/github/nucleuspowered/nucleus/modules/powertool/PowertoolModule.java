@@ -4,15 +4,22 @@
  */
 package io.github.nucleuspowered.nucleus.modules.powertool;
 
-import io.github.nucleuspowered.nucleus.internal.qsml.module.StandardModule;
+import io.github.nucleuspowered.nucleus.quickstart.module.StandardModule;
 import io.github.nucleuspowered.nucleus.modules.core.CoreModule;
+import io.github.nucleuspowered.nucleus.services.INucleusServiceCollection;
 import uk.co.drnaylor.quickstart.annotations.ModuleData;
+import uk.co.drnaylor.quickstart.holders.DiscoveryModuleHolder;
+
+import java.util.function.Supplier;
+
+import javax.inject.Inject;
 
 @ModuleData(id = "powertool", name = "Powertool", dependencies = CoreModule.ID)
 public class PowertoolModule extends StandardModule {
 
-    @Override public void performEnableTasks() throws Exception {
-        super.performEnableTasks();
-
+    @Inject
+    public PowertoolModule(Supplier<DiscoveryModuleHolder<?, ?>> moduleHolder, INucleusServiceCollection collection) {
+        super(moduleHolder, collection);
     }
+
 }

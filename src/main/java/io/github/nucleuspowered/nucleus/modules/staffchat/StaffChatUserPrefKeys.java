@@ -4,11 +4,9 @@
  */
 package io.github.nucleuspowered.nucleus.modules.staffchat;
 
-import io.github.nucleuspowered.nucleus.Nucleus;
-import io.github.nucleuspowered.nucleus.internal.userprefs.NucleusKeysProvider;
-import io.github.nucleuspowered.nucleus.internal.userprefs.PreferenceKeyImpl;
-import io.github.nucleuspowered.nucleus.internal.userprefs.UserPrefKeys;
-import io.github.nucleuspowered.nucleus.modules.staffchat.commands.StaffChatCommand;
+import io.github.nucleuspowered.nucleus.services.impl.userprefs.NucleusKeysProvider;
+import io.github.nucleuspowered.nucleus.services.impl.userprefs.PreferenceKeyImpl;
+import io.github.nucleuspowered.nucleus.services.impl.userprefs.UserPrefKeys;
 
 public class StaffChatUserPrefKeys implements UserPrefKeys {
 
@@ -16,7 +14,7 @@ public class StaffChatUserPrefKeys implements UserPrefKeys {
     public static final PreferenceKeyImpl<Boolean> VIEW_STAFF_CHAT = new PreferenceKeyImpl.BooleanKey(
             NucleusKeysProvider.VIEW_STAFF_CHAT_KEY,
             true,
-            Nucleus.getNucleus().getPermissionRegistry().getPermissionsForNucleusCommand(StaffChatCommand.class).getBase(),
+            StaffChatPermissions.BASE_STAFFCHAT,
             "userpref.viewstaffchat"
     );
 

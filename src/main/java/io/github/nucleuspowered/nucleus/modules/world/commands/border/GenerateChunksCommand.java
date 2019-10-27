@@ -4,52 +4,41 @@
  */
 package io.github.nucleuspowered.nucleus.modules.world.commands.border;
 
-import io.github.nucleuspowered.nucleus.NucleusPlugin;
 import io.github.nucleuspowered.nucleus.argumentparsers.BoundedIntegerArgument;
 import io.github.nucleuspowered.nucleus.argumentparsers.TimespanArgument;
-import io.github.nucleuspowered.nucleus.internal.annotations.command.Permissions;
-import io.github.nucleuspowered.nucleus.internal.annotations.command.RegisterCommand;
-import io.github.nucleuspowered.nucleus.internal.command.AbstractCommand;
+import io.github.nucleuspowered.nucleus.internal.command.ICommandContext;
+import io.github.nucleuspowered.nucleus.internal.command.ICommandExecutor;
+import io.github.nucleuspowered.nucleus.internal.command.ICommandResult;
 import io.github.nucleuspowered.nucleus.internal.command.NucleusParameters;
-import io.github.nucleuspowered.nucleus.internal.command.ReturnMessageException;
-import io.github.nucleuspowered.nucleus.internal.permissions.PermissionInformation;
-import io.github.nucleuspowered.nucleus.internal.permissions.SuggestedLevel;
+import io.github.nucleuspowered.nucleus.internal.command.annotation.Command;
+import io.github.nucleuspowered.nucleus.modules.world.WorldPermissions;
 import io.github.nucleuspowered.nucleus.modules.world.services.WorldHelper;
+import io.github.nucleuspowered.nucleus.services.INucleusServiceCollection;
 import org.spongepowered.api.Sponge;
-import org.spongepowered.api.command.CommandResult;
+import org.spongepowered.api.command.CommandException;
 import org.spongepowered.api.command.CommandSource;
-import org.spongepowered.api.command.args.CommandContext;
 import org.spongepowered.api.command.args.CommandElement;
 import org.spongepowered.api.command.args.GenericArguments;
-import org.spongepowered.api.event.cause.Cause;
 import org.spongepowered.api.text.Text;
 import org.spongepowered.api.util.annotation.NonnullByDefault;
 import org.spongepowered.api.world.World;
 import org.spongepowered.api.world.storage.WorldProperties;
 
-import java.util.HashMap;
-import java.util.Map;
-
-@Permissions(prefix = "world.border")
-@RegisterCommand(value = {"gen", "genchunks", "generatechunks", "chunkgen"}, subcommandOf = BorderCommand.class)
 @NonnullByDefault
-public class GenerateChunksCommand extends AbstractCommand<CommandSource> {
+@Command(
+        aliases = { "gen", "genchunks", "generatechunks", "chunkgen" },
+        basePermission = WorldPermissions.BASE_BORDER_GEN,
+        commandDescriptionKey = "world.border.gen",
+        parentCommand = BorderCommand.class
+)
+public class GenerateChunksCommand implements ICommandExecutor<CommandSource> {
 
     private static final String ticksKey = "tickPercent";
     private static final String tickFrequency = "tickFrequency";
     private static final String saveTimeKey = "time between saves";
 
-    private final WorldHelper worldHelper = getServiceUnchecked(WorldHelper.class);
-
     @Override
-    protected Map<String, PermissionInformation> permissionSuffixesToRegister() {
-        return new HashMap<String, PermissionInformation>() {{
-            put("notify", PermissionInformation.getWithTranslation("permission.world.border.gen.notify", SuggestedLevel.ADMIN));
-        }};
-    }
-
-    @Override
-    public CommandElement[] getArguments() {
+    public CommandElement[] parameters(INucleusServiceCollection serviceCollection) {
         return new CommandElement[] {
                 GenericArguments.flags()
                     .flag("a")
@@ -61,24 +50,25 @@ public class GenerateChunksCommand extends AbstractCommand<CommandSource> {
         };
     }
 
-    @Override
-    public CommandResult executeCommand(CommandSource src, CommandContext args, Cause cause) throws Exception {
-        WorldProperties wp = getWorldFromUserOrArgs(src, NucleusParameters.Keys.WORLD, args);
-        if (this.worldHelper.isPregenRunningForWorld(wp.getUniqueId())) {
-            throw ReturnMessageException.fromKey("command.world.gen.alreadyrunning", wp.getWorldName());
+    @Override public ICommandResult execute(ICommandContext<? extends CommandSource> context) throws CommandException {
+        WorldProperties wp = context.getWorldPropertiesOrFromSelf(NucleusParameters.Keys.WORLD)
+                .orElseThrow(() -> context.createException("command.world.player"));
+
+        WorldHelper worldHelper = context.getServiceCollection().getServiceUnchecked(WorldHelper.class);
+        if (worldHelper.isPregenRunningForWorld(wp.getUniqueId())) {
+            return context.errorResult("command.world.gen.alreadyrunning", wp.getWorldName());
         }
 
         World w = Sponge.getServer().getWorld(wp.getUniqueId())
-                .orElseThrow(() -> ReturnMessageException.fromKey("command.world.gen.notloaded", wp.getWorldName()));
-        this.worldHelper.startPregenningForWorld(w,
-                args.hasAny("a"),
-                args.<Long>getOne(Text.of(GenerateChunksCommand.saveTimeKey)).orElse(20L) * 1000L,
-                args.<Integer>getOne(ticksKey).orElse(null),
-                args.<Integer>getOne(tickFrequency).orElse(null),
-                args.hasAny("r"));
+                .orElseThrow(() -> context.createException("command.world.gen.notloaded", wp.getWorldName()));
+        worldHelper.startPregenningForWorld(w,
+                context.hasAny("a"),
+                context.getOne(GenerateChunksCommand.saveTimeKey, Long.class).orElse(20L) * 1000L,
+                context.getOne(ticksKey, Integer.class).orElse(null),
+                context.getOne(tickFrequency, Integer.class).orElse(null),
+                context.hasAny("r"));
 
-        src.sendMessage(NucleusPlugin.getNucleus().getMessageProvider().getTextMessageWithFormat("command.world.gen.started", wp.getWorldName()));
-
-        return CommandResult.success();
+        context.sendMessage("command.world.gen.started", wp.getWorldName());
+        return context.successResult();
     }
 }

@@ -6,78 +6,80 @@ package io.github.nucleuspowered.nucleus.modules.teleport.services;
 
 import com.google.common.collect.HashMultimap;
 import com.google.common.collect.Multimap;
-import io.github.nucleuspowered.nucleus.Nucleus;
 import io.github.nucleuspowered.nucleus.api.teleport.TeleportResult;
 import io.github.nucleuspowered.nucleus.api.teleport.TeleportResults;
 import io.github.nucleuspowered.nucleus.api.teleport.TeleportScanners;
-import io.github.nucleuspowered.nucleus.internal.PermissionRegistry;
 import io.github.nucleuspowered.nucleus.internal.interfaces.Reloadable;
 import io.github.nucleuspowered.nucleus.internal.interfaces.ServiceBase;
-import io.github.nucleuspowered.nucleus.internal.messages.MessageProvider;
-import io.github.nucleuspowered.nucleus.internal.traits.InternalServiceManagerTrait;
-import io.github.nucleuspowered.nucleus.internal.traits.MessageProviderTrait;
-import io.github.nucleuspowered.nucleus.internal.traits.PermissionTrait;
-import io.github.nucleuspowered.nucleus.internal.userprefs.UserPreferenceService;
-import io.github.nucleuspowered.nucleus.modules.core.services.SafeTeleportService;
+import io.github.nucleuspowered.nucleus.modules.teleport.TeleportPermissions;
 import io.github.nucleuspowered.nucleus.modules.teleport.TeleportUserPrefKeys;
-import io.github.nucleuspowered.nucleus.modules.teleport.commands.TeleportAcceptCommand;
-import io.github.nucleuspowered.nucleus.modules.teleport.commands.TeleportDenyCommand;
 import io.github.nucleuspowered.nucleus.modules.teleport.config.TeleportConfig;
-import io.github.nucleuspowered.nucleus.modules.teleport.config.TeleportConfigAdapter;
+import io.github.nucleuspowered.nucleus.services.IMessageProviderService;
+import io.github.nucleuspowered.nucleus.services.INucleusServiceCollection;
+import io.github.nucleuspowered.nucleus.services.INucleusTeleportService;
+import io.github.nucleuspowered.nucleus.services.IPermissionService;
+import io.github.nucleuspowered.nucleus.services.IUserPreferenceService;
+import io.github.nucleuspowered.nucleus.services.IWarmupService;
 import org.spongepowered.api.Sponge;
-import org.spongepowered.api.command.CommandResult;
 import org.spongepowered.api.command.CommandSource;
 import org.spongepowered.api.entity.living.player.Player;
 import org.spongepowered.api.entity.living.player.User;
-import org.spongepowered.api.scheduler.Task;
 import org.spongepowered.api.service.permission.Subject;
 import org.spongepowered.api.service.user.UserStorageService;
 import org.spongepowered.api.text.Text;
 import org.spongepowered.api.text.action.TextActions;
 import org.spongepowered.api.text.format.TextStyles;
 
+import java.time.Duration;
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
-import java.util.concurrent.TimeUnit;
 import java.util.function.Consumer;
 
 import javax.annotation.Nullable;
+import javax.inject.Inject;
 
-public class PlayerTeleporterService implements ServiceBase, MessageProviderTrait, PermissionTrait, InternalServiceManagerTrait, Reloadable {
+public class PlayerTeleporterService implements ServiceBase, Reloadable {
 
     private boolean showAcceptDeny = true;
 
-    private final SafeTeleportService safeTeleportService = Nucleus.getNucleus()
-            .getInternalServiceManager()
-            .getServiceUnchecked(SafeTeleportService.class);
+    private final INucleusServiceCollection serviceCollection;
+    private final INucleusTeleportService safeTeleportService;
+    private final IMessageProviderService messageProviderService;
+    private final IUserPreferenceService userPreferenceService;
+    private final IPermissionService permissionService;
+    private final IWarmupService warmupService;
 
-    private static final String TP_TOGGLE_BYPASS_PERMISSION = PermissionRegistry.PERMISSIONS_PREFIX + "teleport.tptoggle.exempt";
-    private static final String TPA_ACCEPT_PERM =
-            Nucleus.getNucleus().getPermissionRegistry().getPermissionsForNucleusCommand(TeleportAcceptCommand.class).getBase();
-    private static final String TPA_DENY_PERM =
-            Nucleus.getNucleus().getPermissionRegistry().getPermissionsForNucleusCommand(TeleportDenyCommand.class).getBase();
     private boolean refundOnDeny = false;
     private boolean useRequestLocation = true;
     private boolean useCommandsOnClickAcceptDeny = false;
     private boolean isOnlySameDimension = false;
 
+    @Inject
+    public PlayerTeleporterService(INucleusServiceCollection serviceCollection) {
+        this.safeTeleportService = serviceCollection.teleportService();
+        this.messageProviderService = serviceCollection.messageProvider();
+        this.userPreferenceService = serviceCollection.userPreferenceService();
+        this.permissionService = serviceCollection.permissionService();
+        this.warmupService = serviceCollection.warmupService();
+        this.serviceCollection = serviceCollection;
+    }
+
     public boolean canTeleportTo(CommandSource source, User to)  {
         if (source instanceof Player && !canBypassTpToggle(source)) {
-            UserPreferenceService ups = Nucleus.getNucleus().getInternalServiceManager().getServiceUnchecked(UserPreferenceService.class);
-            if (!ups.get(to.getUniqueId(), TeleportUserPrefKeys.TELEPORT_TARGETABLE).orElse(true)) {
-                sendMessageTo(source, "teleport.fail.targettoggle", to.getName());
+            if (!this.userPreferenceService.get(to.getUniqueId(), TeleportUserPrefKeys.TELEPORT_TARGETABLE).orElse(true)) {
+                this.messageProviderService.sendMessageTo(source, "teleport.fail.targettoggle", to.getName());
                 return false;
             }
         }
 
-        if (isOnlySameDimension && source instanceof Player) {
-            if (!to.getWorldUniqueId().orElse(UUID.randomUUID()).equals(((Player) source).getWorldUniqueId().orElse(UUID.randomUUID()))) {
-                if (!hasPermission(source, "nucleus.teleport.exempt.samedimension", true)) {
-                    source.sendMessage(Nucleus.getNucleus().getMessageProvider().getTextMessageWithFormat("teleport.fail.samedimension", to.getName()));
+        if (this.isOnlySameDimension && source instanceof Player) {
+            if (!to.getWorldUniqueId().map(x -> ((Player) source).getWorld().getUniqueId().equals(x)).orElse(false)) {
+                if (!this.permissionService.hasPermission(source, "nucleus.teleport.exempt.samedimension")) {
+                    this.messageProviderService.sendMessageTo(source, "teleport.fail.samedimension", to.getName());
                     return false;
                 }
             }
@@ -88,7 +90,7 @@ public class PlayerTeleporterService implements ServiceBase, MessageProviderTrai
     }
 
     private boolean canBypassTpToggle(Subject from) {
-        return Nucleus.getNucleus().getPermissionResolver().hasPermission(from, TP_TOGGLE_BYPASS_PERMISSION);
+        return this.permissionService.hasPermission(from, TeleportPermissions.TPTOGGLE_EXEMPT);
     }
 
     private final Map<UUID, TeleportRequest> activeTeleportRequestsCommand = new HashMap<>();
@@ -112,17 +114,17 @@ public class PlayerTeleporterService implements ServiceBase, MessageProviderTrai
                         );
         if (result.isSuccessful()) {
             if (!source.equals(target) && !quietSource) {
-                sendMessageTo(source, "teleport.success.source",
+                this.messageProviderService.sendMessageTo(source, "teleport.success.source",
                         playerToTeleport.getName(),
                         target.getName());
             }
 
-            sendMessageTo(playerToTeleport, "teleport.to.success", target.getName());
+            this.messageProviderService.sendMessageTo(playerToTeleport, "teleport.to.success", target.getName());
             if (!quietTarget) {
-                sendMessageTo(target, "teleport.from.success", playerToTeleport.getName());
+                this.messageProviderService.sendMessageTo(target, "teleport.from.success", playerToTeleport.getName());
             }
         } else if (!quietSource) {
-            sendMessageTo(source, result == TeleportResults.FAIL_NO_LOCATION ? "teleport.nosafe" : "teleport.cancelled");
+            this.messageProviderService.sendMessageTo(source, result == TeleportResults.FAIL_NO_LOCATION ? "teleport.nosafe" : "teleport.cancelled");
         }
 
         return result;
@@ -146,6 +148,7 @@ public class PlayerTeleporterService implements ServiceBase, MessageProviderTrai
             CommandSource src = requester == null ? Sponge.getServer().getConsole() : requester;
 
             TeleportRequest request = new TeleportRequest(
+                    this.serviceCollection,
                     playerToTeleport.getUniqueId(),
                     target.getUniqueId(),
                     Instant.now().plus(30, ChronoUnit.SECONDS),
@@ -156,15 +159,29 @@ public class PlayerTeleporterService implements ServiceBase, MessageProviderTrai
                     silentTarget,
                     silentSource,
                     this.useRequestLocation ? target.getTransform() : null,
-                    successCallback);
+                    successCallback
+            );
+            /*TeleportRequest request = new TeleportRequest(
+                    playerToTeleport.getUniqueId(),
+                    target.getUniqueId(),
+                    cost,
+                    Instant.now().plus(30, ChronoUnit.SECONDS),
+                    this.refundOnDeny ? cost : 0,
+                    warmup,
+                    requester == null ? null : requester.getUniqueId(),
+                    safe,
+                    silentTarget,
+                    silentSource,
+                    this.useRequestLocation ? target.getTransform() : null,
+                    successCallback);*/
             this.activeTeleportRequestsCommand.put(toRequest.getUniqueId(), request);
             this.activeTeleportRequests.put(toRequest.getUniqueId(), request);
 
-            sendMessageTo(toRequest, messageKey, src.getName());
+            this.messageProviderService.sendMessageTo(toRequest, messageKey, src.getName());
             getAcceptDenyMessage(toRequest, request).ifPresent(src::sendMessage);
 
             if (!silentSource) {
-                sendMessageTo(src, "command.tpask.sent", toRequest.getName());
+                this.messageProviderService.sendMessageTo(src, "command.tpask.sent", toRequest.getName());
             }
             return true;
         }
@@ -198,14 +215,14 @@ public class PlayerTeleporterService implements ServiceBase, MessageProviderTrai
 
     private Optional<Text> getAcceptDenyMessage(Player forPlayer, TeleportRequest target) {
         if (this.showAcceptDeny) {
-            Text acceptText = Text.builder().append(
-                    getMessageFor(forPlayer.getLocale(), "standard.accept"))
+            Text acceptText = this.messageProviderService.getMessageFor(forPlayer.getLocale(), "standard.accept")
+                    .toBuilder()
                     .style(TextStyles.UNDERLINE)
                     .onHover(TextActions.showText(
-                            getMessageFor(forPlayer.getLocale(), "teleport.accept.hover")))
+                            this.messageProviderService.getMessageFor(forPlayer.getLocale(), "teleport.accept.hover")))
                     .onClick(TextActions.executeCallback(src -> {
-                        if (!target.isActive() || !hasPermission(src, TPA_ACCEPT_PERM) || !(src instanceof Player)) {
-                            sendMessageTo(src, "command.tpaccept.nothing");
+                        if (!target.isActive() || !this.permissionService.hasPermission(src, TeleportPermissions.BASE_TPACCEPT) || !(src instanceof Player)) {
+                            this.messageProviderService.sendMessageTo(src, "command.tpaccept.nothing");
                             return;
                         }
                         if (this.useCommandsOnClickAcceptDeny) {
@@ -214,13 +231,13 @@ public class PlayerTeleporterService implements ServiceBase, MessageProviderTrai
                             accept((Player) src, target);
                         }
                     })).build();
-            Text denyText = Text.builder().append(
-                    getMessageFor(forPlayer.getLocale(), "standard.deny"))
+            Text denyText = this.messageProviderService.getMessageFor(forPlayer.getLocale(), "standard.deny")
+                    .toBuilder()
                     .style(TextStyles.UNDERLINE)
-                    .onHover(TextActions.showText(getMessageFor(forPlayer.getLocale(), "teleport.deny.hover")))
+                    .onHover(TextActions.showText(this.messageProviderService.getMessageFor(forPlayer.getLocale(), "teleport.deny.hover")))
                     .onClick(TextActions.executeCallback(src -> {
-                        if (!target.isActive() || !hasPermission(src, TPA_DENY_PERM) || !(src instanceof Player)) {
-                            sendMessageTo(src, "command.tpdeny.fail");
+                        if (!target.isActive() || !this.permissionService.hasPermission(src, TeleportPermissions.BASE_TPDENY) || !(src instanceof Player)) {
+                            this.messageProviderService.sendMessageTo(src, "command.tpdeny.fail");
                             return;
                         }
                         if (this.useCommandsOnClickAcceptDeny) {
@@ -239,18 +256,18 @@ public class PlayerTeleporterService implements ServiceBase, MessageProviderTrai
         return Optional.empty();
     }
 
-    public CommandResult accept(Player player) {
-        return accept(player, getCurrentRequest(player).orElse(null)) ? CommandResult.success() : CommandResult.empty();
+    public boolean accept(Player player) {
+        return accept(player, getCurrentRequest(player).orElse(null));
     }
 
     private boolean accept(Player player, @Nullable TeleportRequest target) {
         if (target == null) {
-            sendMessageTo(player, "command.tpaccept.nothing");
+            this.messageProviderService.sendMessageTo(player, "command.tpaccept.nothing");
             return false;
         }
 
         if (!target.isActive()) {
-            sendMessageTo(player, "command.tpaccept.expired");
+            this.messageProviderService.sendMessageTo(player, "command.tpaccept.expired");
             return false;
         }
 
@@ -258,65 +275,72 @@ public class PlayerTeleporterService implements ServiceBase, MessageProviderTrai
         this.activeTeleportRequestsCommand.values().remove(target);
         target.forceExpire(false);
 
-        Task task = Task.builder()
-                .delay(target.warmup, TimeUnit.SECONDS)
-                .execute(target)
-                .submit(Nucleus.getNucleus());
-        Nucleus.getNucleus().getWarmupManager().addWarmup(target.toTeleport, task);
-        sendMessageTo(player, "command.tpaccept.success");
+        Optional<Player> playerToTeleport = target.getToBeTeleported();
+        if (!playerToTeleport.isPresent()) {
+            // error
+            this.messageProviderService.sendMessageTo(player, "command.tpaccept.noplayer");
+            return false;
+        }
+        if (target.warmup == 0) {
+            target.run();
+        } else {
+            this.warmupService.executeAfter(
+                    playerToTeleport.get(),
+                    Duration.of(target.warmup, ChronoUnit.SECONDS),
+                    target::run);
+        }
+        this.messageProviderService.sendMessageTo(player, "command.tpaccept.success");
         return true;
     }
 
-    public CommandResult deny(Player player) {
-        return deny(player, getCurrentRequest(player).orElse(null)) ? CommandResult.success() : CommandResult.empty();
+    public boolean deny(Player player) {
+        return deny(player, getCurrentRequest(player).orElse(null));
     }
 
     private boolean deny(Player player, @Nullable TeleportRequest target) {
         if (target == null) {
-            sendMessageTo(player, "command.tpaccept.nothing");
+            this.messageProviderService.sendMessageTo(player, "command.tpaccept.nothing");
             return false;
         } else if (!target.isActive()) {
-            sendMessageTo(player, "command.tpaccept.expired");
+            this.messageProviderService.sendMessageTo(player, "command.tpaccept.expired");
             return false;
         }
 
         target.forceExpire(true);
         this.activeTeleportRequests.values().remove(target);
         this.activeTeleportRequestsCommand.values().remove(target);
-        sendMessageTo(player, "command.tpdeny.deny");
+        this.messageProviderService.sendMessageTo(player, "command.tpdeny.deny");
         return true;
     }
 
-    static void onCancel(UUID requester, UUID toTeleport, double cost) {
-        MessageProvider provider = Nucleus.getNucleus().getMessageProvider();
-        final Text name = Nucleus.getNucleus().getNameUtil().getNameOrConsole(toTeleport);
+    static void onCancel(INucleusServiceCollection serviceCollection, UUID requester, UUID toTeleport, double cost) {
+        final Text name = serviceCollection.playerDisplayNameService().getDisplayName(toTeleport);
         if (requester == null) {
-            Sponge.getServer().getConsole().sendMessage(
-                    provider.getTextMessageWithFormat("command.tpdeny.denyrequester", name)
-            );
+            serviceCollection.messageProvider().sendMessageTo(Sponge.getServer().getConsole(), "command.tpdeny.denyrequester", name);
         } else {
             Optional<Player> op = Sponge.getServer().getPlayer(requester);
-            op.ifPresent(x -> x.sendMessage(provider.getTextMessageWithFormat("command.tpdeny.denyrequester", name)));
+            op.ifPresent(x -> serviceCollection.messageProvider().sendMessageTo(x, "command.tpdeny.denyrequester", name));
 
-            if (cost > 0) {
+            if (serviceCollection.economyServiceProvider().serviceExists() && cost > 0) {
                 // refund the cost.
-                op.ifPresent(x -> x.sendMessage(
-                        provider.getTextMessageWithFormat(
-                                "teleport.prep.cancel", Nucleus.getNucleus().getEconHelper().getCurrencySymbol(cost))));
+                op.ifPresent(x ->
+                        serviceCollection.messageProvider().sendMessageTo(x,
+                                "teleport.prep.cancel",
+                                serviceCollection.economyServiceProvider().getCurrencySymbol(cost)));
 
                 User user = op.map(x -> (User) x).orElseGet(() -> Sponge.getServiceManager()
                         .provideUnchecked(UserStorageService.class)
                         .get(requester).orElse(null));
                 if (user != null) {
-                    Nucleus.getNucleus().getEconHelper().depositInPlayer(user, cost);
+                    serviceCollection.economyServiceProvider().depositInPlayer(user, cost);
                 }
             }
         }
     }
 
     @Override
-    public void onReload() throws Exception {
-        TeleportConfig config = getServiceUnchecked(TeleportConfigAdapter.class).getNodeOrDefault();
+    public void onReload(INucleusServiceCollection serviceCollection) {
+        TeleportConfig config = serviceCollection.moduleDataProvider().getModuleConfig(TeleportConfig.class);
         this.useCommandsOnClickAcceptDeny = config.isUseCommandsOnClickAcceptOrDeny();
         this.showAcceptDeny = config.isShowClickableAcceptDeny();
         this.refundOnDeny = config.isRefundOnDeny();

@@ -6,21 +6,18 @@ package io.github.nucleuspowered.nucleus.modules.world.commands.border;
 
 import com.flowpowered.math.vector.Vector3d;
 import com.google.common.collect.Lists;
-import io.github.nucleuspowered.nucleus.Nucleus;
-import io.github.nucleuspowered.nucleus.internal.annotations.command.Permissions;
-import io.github.nucleuspowered.nucleus.internal.annotations.command.RegisterCommand;
-import io.github.nucleuspowered.nucleus.internal.command.AbstractCommand;
+import io.github.nucleuspowered.nucleus.Util;
+import io.github.nucleuspowered.nucleus.internal.command.ICommandContext;
+import io.github.nucleuspowered.nucleus.internal.command.ICommandExecutor;
+import io.github.nucleuspowered.nucleus.internal.command.ICommandResult;
 import io.github.nucleuspowered.nucleus.internal.command.NucleusParameters;
+import io.github.nucleuspowered.nucleus.internal.command.annotation.Command;
+import io.github.nucleuspowered.nucleus.modules.world.WorldPermissions;
 import io.github.nucleuspowered.nucleus.modules.world.commands.WorldCommand;
-import org.spongepowered.api.Sponge;
-import org.spongepowered.api.command.CommandResult;
+import io.github.nucleuspowered.nucleus.services.INucleusServiceCollection;
+import org.spongepowered.api.command.CommandException;
 import org.spongepowered.api.command.CommandSource;
-import org.spongepowered.api.command.args.CommandContext;
 import org.spongepowered.api.command.args.CommandElement;
-import org.spongepowered.api.command.source.ConsoleSource;
-import org.spongepowered.api.event.cause.Cause;
-import org.spongepowered.api.service.pagination.PaginationList;
-import org.spongepowered.api.service.pagination.PaginationService;
 import org.spongepowered.api.text.Text;
 import org.spongepowered.api.text.format.TextColors;
 import org.spongepowered.api.util.annotation.NonnullByDefault;
@@ -28,22 +25,25 @@ import org.spongepowered.api.world.storage.WorldProperties;
 
 import java.util.List;
 
-@Permissions(prefix = "world")
-@RegisterCommand(value = {"border"}, subcommandOf = WorldCommand.class)
 @NonnullByDefault
-public class BorderCommand extends AbstractCommand<CommandSource> {
-
+@Command(
+        aliases = { "border" },
+        basePermission = WorldPermissions.BASE_WORLD_BORDER,
+        commandDescriptionKey = "world.border",
+        parentCommand = WorldCommand.class
+)
+public class BorderCommand implements ICommandExecutor<CommandSource> {
 
     @Override
-    public CommandElement[] getArguments() {
+    public CommandElement[] parameters(INucleusServiceCollection serviceCollection) {
         return new CommandElement[] {
                 NucleusParameters.OPTIONAL_WORLD_PROPERTIES_ENABLED_ONLY
         };
     }
 
-    @Override
-    public CommandResult executeCommand(CommandSource src, CommandContext args, Cause cause) throws Exception {
-        WorldProperties wp = getWorldFromUserOrArgs(src, NucleusParameters.Keys.WORLD, args);
+    @Override public ICommandResult execute(ICommandContext<? extends CommandSource> context) throws CommandException {
+        WorldProperties wp = context.getWorldPropertiesOrFromSelf(NucleusParameters.Keys.WORLD)
+                .orElseThrow(() -> context.createException("command.world.player"));
         List<Text> worldBorderInfo = Lists.newArrayList();
 
         Vector3d centre = wp.getWorldBorderCenter();
@@ -51,22 +51,18 @@ public class BorderCommand extends AbstractCommand<CommandSource> {
         int targetDiameter = (int)wp.getWorldBorderTargetDiameter();
 
         // Border centre
-        worldBorderInfo.add(
-                Nucleus.getNucleus().getMessageProvider().getTextMessageWithFormat("command.world.border.centre", String.valueOf(centre.getFloorX()), String.valueOf(centre.getFloorZ())));
-        worldBorderInfo.add(Nucleus.getNucleus().getMessageProvider().getTextMessageWithFormat("command.world.border.currentdiameter", String.valueOf(wp.getWorldBorderDiameter())));
+        worldBorderInfo.add(context.getMessage("command.world.border.centre", String.valueOf(centre.getFloorX()), String.valueOf(centre.getFloorZ())));
+        worldBorderInfo.add(context.getMessage("command.world.border.currentdiameter", String.valueOf(wp.getWorldBorderDiameter())));
 
         if (currentDiameter != targetDiameter) {
-            worldBorderInfo.add(Nucleus.getNucleus()
-                    .getMessageProvider().getTextMessageWithFormat("command.world.border.targetdiameter", String.valueOf(targetDiameter), String.valueOf(wp.getWorldBorderTimeRemaining() / 1000)));
+            worldBorderInfo.add(context.getMessage("command.world.border.targetdiameter", String.valueOf(targetDiameter), String.valueOf(wp.getWorldBorderTimeRemaining() / 1000)));
         }
 
-        PaginationList.Builder pb = Sponge.getServiceManager().provideUnchecked(PaginationService.class).builder().contents(worldBorderInfo)
-                .title(Nucleus.getNucleus().getMessageProvider().getTextMessageWithFormat("command.world.border.title", wp.getWorldName())).padding(Text.of(TextColors.GREEN, "="));
-        if (src instanceof ConsoleSource) {
-            pb.linesPerPage(-1);
-        }
-
-        pb.sendTo(src);
-        return CommandResult.success();
+        Util.getPaginationBuilder(context.getCommandSourceUnchecked())
+                .contents(worldBorderInfo)
+                .title(context.getMessage("command.world.border.title", wp.getWorldName()))
+                .padding(Text.of(TextColors.GREEN, "="))
+                .sendTo(context.getCommandSourceUnchecked());
+        return context.successResult();
     }
 }

@@ -5,8 +5,8 @@
 package io.github.nucleuspowered.nucleus.modules.nameban;
 
 import io.github.nucleuspowered.nucleus.annotationprocessor.RegisterPermissions;
-import io.github.nucleuspowered.nucleus.internal.permissions.PermissionMetadata;
-import io.github.nucleuspowered.nucleus.internal.permissions.SuggestedLevel;
+import io.github.nucleuspowered.nucleus.services.impl.permission.PermissionMetadata;
+import io.github.nucleuspowered.nucleus.services.impl.permission.SuggestedLevel;
 
 @RegisterPermissions
 public class NameBanPermissions {
@@ -15,9 +15,9 @@ public class NameBanPermissions {
     }
 
     @PermissionMetadata(descriptionKey = "permission.base", replacements = { "nameban" }, level = SuggestedLevel.ADMIN)
-    public static final String BASE_NAMEBAN = "nameban.base";
+    public static final String BASE_NAMEBAN = "nucleus.nameban.base";
 
     @PermissionMetadata(descriptionKey = "permission.base", replacements = { "nameunban" }, level = SuggestedLevel.ADMIN)
-    public static final String BASE_NAMEUNBAN = "nameban.unban.base";
+    public static final String BASE_NAMEUNBAN = "nucleus.nameban.unban.base";
 
 }

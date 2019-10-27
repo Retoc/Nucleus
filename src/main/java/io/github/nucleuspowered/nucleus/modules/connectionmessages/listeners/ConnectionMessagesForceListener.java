@@ -4,11 +4,9 @@
  */
 package io.github.nucleuspowered.nucleus.modules.connectionmessages.listeners;
 
-import io.github.nucleuspowered.nucleus.Nucleus;
 import io.github.nucleuspowered.nucleus.internal.interfaces.ListenerBase;
-import io.github.nucleuspowered.nucleus.modules.connectionmessages.ConnectionMessagesModule;
 import io.github.nucleuspowered.nucleus.modules.connectionmessages.config.ConnectionMessagesConfig;
-import io.github.nucleuspowered.nucleus.modules.connectionmessages.config.ConnectionMessagesConfigAdapter;
+import io.github.nucleuspowered.nucleus.services.INucleusServiceCollection;
 import org.spongepowered.api.event.Listener;
 import org.spongepowered.api.event.Order;
 import org.spongepowered.api.event.filter.type.Include;
@@ -25,8 +23,7 @@ public class ConnectionMessagesForceListener implements ListenerBase.Conditional
     }
 
     @Override
-    public boolean shouldEnable() {
-        return Nucleus.getNucleus().
-                getConfigValue(ConnectionMessagesModule.ID, ConnectionMessagesConfigAdapter.class, ConnectionMessagesConfig::isForceForAll).orElse(false);
+    public boolean shouldEnable(INucleusServiceCollection serviceCollection) {
+        return serviceCollection.moduleDataProvider().getModuleConfig(ConnectionMessagesConfig.class).isForceForAll();
     }
 }

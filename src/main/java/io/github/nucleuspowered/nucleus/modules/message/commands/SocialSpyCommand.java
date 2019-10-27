@@ -4,66 +4,49 @@
  */
 package io.github.nucleuspowered.nucleus.modules.message.commands;
 
-import io.github.nucleuspowered.nucleus.Nucleus;
-import io.github.nucleuspowered.nucleus.internal.annotations.RunAsync;
-import io.github.nucleuspowered.nucleus.internal.annotations.command.NoModifiers;
-import io.github.nucleuspowered.nucleus.internal.annotations.command.Permissions;
-import io.github.nucleuspowered.nucleus.internal.annotations.command.RegisterCommand;
-import io.github.nucleuspowered.nucleus.internal.command.AbstractCommand;
+import io.github.nucleuspowered.nucleus.internal.command.ICommandContext;
+import io.github.nucleuspowered.nucleus.internal.command.ICommandExecutor;
+import io.github.nucleuspowered.nucleus.internal.command.ICommandResult;
 import io.github.nucleuspowered.nucleus.internal.command.NucleusParameters;
-import io.github.nucleuspowered.nucleus.internal.command.ReturnMessageException;
-import io.github.nucleuspowered.nucleus.internal.docgen.annotations.EssentialsEquivalent;
-import io.github.nucleuspowered.nucleus.internal.permissions.PermissionInformation;
-import io.github.nucleuspowered.nucleus.internal.permissions.SuggestedLevel;
+import io.github.nucleuspowered.nucleus.internal.command.annotation.Command;
+import io.github.nucleuspowered.nucleus.internal.command.annotation.EssentialsEquivalent;
+import io.github.nucleuspowered.nucleus.modules.message.MessagePermissions;
 import io.github.nucleuspowered.nucleus.modules.message.services.MessageHandler;
-import org.spongepowered.api.command.CommandResult;
-import org.spongepowered.api.command.args.CommandContext;
+import io.github.nucleuspowered.nucleus.services.INucleusServiceCollection;
+import org.spongepowered.api.command.CommandException;
 import org.spongepowered.api.command.args.CommandElement;
 import org.spongepowered.api.entity.living.player.Player;
-import org.spongepowered.api.event.cause.Cause;
-import org.spongepowered.api.text.Text;
 import org.spongepowered.api.util.annotation.NonnullByDefault;
 
-import java.util.HashMap;
-import java.util.Map;
-
-@Permissions(suggestedLevel = SuggestedLevel.MOD)
-@RunAsync
-@NoModifiers
-@RegisterCommand("socialspy")
 @EssentialsEquivalent("socialspy")
 @NonnullByDefault
-public class SocialSpyCommand extends AbstractCommand<Player> {
-
-    private final MessageHandler handler = getServiceUnchecked(MessageHandler.class);
-
-    @Override protected Map<String, PermissionInformation> permissionSuffixesToRegister() {
-        return new HashMap<String, PermissionInformation>() {{
-            put("force", PermissionInformation.getWithTranslation("permission.socialspy.force", SuggestedLevel.NONE));
-        }};
-    }
+@Command(
+        aliases = {"socialspy"},
+        basePermission = MessagePermissions.BASE_SOCIALSPY,
+        commandDescriptionKey = "socialspy"
+)
+public class SocialSpyCommand implements ICommandExecutor<Player> {
 
     @Override
-    public CommandElement[] getArguments() {
+    public CommandElement[] parameters(INucleusServiceCollection serviceCollection) {
         return new CommandElement[] {
                 NucleusParameters.OPTIONAL_ONE_TRUE_FALSE
         };
     }
 
-    @Override
-    public CommandResult executeCommand(Player src, CommandContext args, Cause cause) throws Exception {
-        if (this.handler.forcedSocialSpyState(src).asBoolean()) {
-            throw new ReturnMessageException(Nucleus.getNucleus().getMessageProvider().getTextMessageWithFormat("command.socialspy.forced"));
+    @Override public ICommandResult execute(ICommandContext<? extends Player> context) throws CommandException {
+        Player src = context.getCommandSource();
+        MessageHandler handler = context.getServiceCollection().getServiceUnchecked(MessageHandler.class);
+        if (handler.forcedSocialSpyState(src).asBoolean()) {
+            return context.errorResult("command.socialspy.forced");
         }
 
-        boolean spy = args.<Boolean>getOne(NucleusParameters.Keys.BOOL).orElse(!this.handler.isSocialSpy(src));
-        if (this.handler.setSocialSpy(src, spy)) {
-            Text message = Nucleus.getNucleus().getMessageProvider().getTextMessageWithFormat(spy ? "command.socialspy.on" : "command.socialspy.off");
-            src.sendMessage(message);
-            return CommandResult.success();
+        boolean spy = context.getOne(NucleusParameters.Keys.BOOL, Boolean.class).orElseGet(() -> !handler.isSocialSpy(src));
+        if (handler.setSocialSpy(src, spy)) {
+            context.sendMessage(spy ? "command.socialspy.on" : "command.socialspy.off");
+            return context.successResult();
         }
 
-        src.sendMessage(Nucleus.getNucleus().getMessageProvider().getTextMessageWithFormat("command.socialspy.unable"));
-        return CommandResult.empty();
+        return context.errorResult("command.socialspy.unable");
     }
 }

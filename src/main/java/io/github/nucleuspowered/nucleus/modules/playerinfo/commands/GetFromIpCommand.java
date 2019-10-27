@@ -4,21 +4,19 @@
  */
 package io.github.nucleuspowered.nucleus.modules.playerinfo.commands;
 
-import io.github.nucleuspowered.nucleus.NameUtil;
-import io.github.nucleuspowered.nucleus.Nucleus;
 import io.github.nucleuspowered.nucleus.Util;
 import io.github.nucleuspowered.nucleus.argumentparsers.RegexArgument;
-import io.github.nucleuspowered.nucleus.internal.annotations.command.Permissions;
-import io.github.nucleuspowered.nucleus.internal.annotations.command.RegisterCommand;
-import io.github.nucleuspowered.nucleus.internal.command.AbstractCommand;
-import io.github.nucleuspowered.nucleus.internal.command.ReturnMessageException;
+import io.github.nucleuspowered.nucleus.internal.command.ICommandContext;
+import io.github.nucleuspowered.nucleus.internal.command.ICommandExecutor;
+import io.github.nucleuspowered.nucleus.internal.command.ICommandResult;
+import io.github.nucleuspowered.nucleus.internal.command.annotation.Command;
+import io.github.nucleuspowered.nucleus.modules.playerinfo.PlayerInfoPermissions;
+import io.github.nucleuspowered.nucleus.services.INucleusServiceCollection;
 import org.spongepowered.api.Sponge;
-import org.spongepowered.api.command.CommandResult;
+import org.spongepowered.api.command.CommandException;
 import org.spongepowered.api.command.CommandSource;
-import org.spongepowered.api.command.args.CommandContext;
 import org.spongepowered.api.command.args.CommandElement;
 import org.spongepowered.api.entity.living.player.User;
-import org.spongepowered.api.event.cause.Cause;
 import org.spongepowered.api.service.user.UserStorageService;
 import org.spongepowered.api.text.Text;
 import org.spongepowered.api.text.action.TextActions;
@@ -29,45 +27,53 @@ import java.util.List;
 import java.util.Optional;
 import java.util.stream.Collectors;
 
-@Permissions
-@RegisterCommand("getfromip")
 @NonnullByDefault
-public class GetFromIpCommand extends AbstractCommand<CommandSource> {
+@Command(
+        aliases = "getfromip",
+        basePermission = PlayerInfoPermissions.BASE_GETFROMIP,
+        commandDescriptionKey = "getfromip",
+        async = true
+)
+public class GetFromIpCommand implements ICommandExecutor<CommandSource> {
 
     private final String ipKey = "IP Address";
 
-    @Override public CommandElement[] getArguments() {
+    @Override
+    public CommandElement[] parameters(INucleusServiceCollection serviceCollection) {
         return new CommandElement[] {
             new RegexArgument(Text.of(this.ipKey), "^(\\d{1,3}\\.){3}\\d{1,3}$", "command.getfromip.notvalid")
         };
     }
 
-    @Override protected CommandResult executeCommand(CommandSource src, CommandContext args, Cause cause) throws Exception {
-        String ip = args.requireOne(this.ipKey);
+    @Override public ICommandResult execute(ICommandContext<? extends CommandSource> context) throws CommandException {
+        String ip = context.requireOne(this.ipKey, String.class);
         if (Arrays.stream(ip.split("\\.")).anyMatch(x -> Integer.parseInt(x) > 255)) {
-            throw ReturnMessageException.fromKey("command.getfromip.notvalid");
+            return context.errorResult("command.getfromip.notvalid");
         }
 
         UserStorageService uss = Sponge.getServiceManager().provideUnchecked(UserStorageService.class);
-        List<User> users = Nucleus.getNucleus().getUserCacheService().getForIp(ip).stream().map(uss::get).filter(Optional::isPresent)
+        List<User> users = context
+                .getServiceCollection()
+                .userCacheService()
+                .getForIp(ip).stream().map(uss::get).filter(Optional::isPresent)
                 .map(Optional::get).collect(Collectors.toList());
 
         if (users.isEmpty()) {
-            sendMessageTo(src, "command.getfromip.nousers");
-            return CommandResult.success();
+            context.sendMessage("command.getfromip.nousers");
+            return context.successResult();
         }
 
-        NameUtil name = Nucleus.getNucleus().getNameUtil();
-        Util.getPaginationBuilder(src).title(getMessageFor(src, "command.getfromip.title", ip))
+        Util.getPaginationBuilder(context.getCommandSource())
+                .title(context.getMessage("command.getfromip.title", ip))
                 .contents(
                     users.stream().map(y -> {
-                        Text n = name.getName(y);
+                        Text n = context.getDisplayName(y.getUniqueId());
                         return n.toBuilder().onClick(TextActions.runCommand("/nucleus:seen " + y.getName()))
-                            .onHover(TextActions.showText(getMessageFor(src, "command.getfromip.hover", n)))
+                            .onHover(TextActions.showText(context.getMessage("command.getfromip.hover", n)))
                             .build();
                     }).collect(Collectors.toList())
                 )
-                .sendTo(src);
-        return CommandResult.success();
+                .sendTo(context.getCommandSource());
+        return context.successResult();
     }
 }

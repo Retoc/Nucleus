@@ -4,49 +4,55 @@
  */
 package io.github.nucleuspowered.nucleus.modules.jail.commands;
 
-import io.github.nucleuspowered.nucleus.Nucleus;
 import io.github.nucleuspowered.nucleus.internal.LocationData;
-import io.github.nucleuspowered.nucleus.internal.annotations.RunAsync;
-import io.github.nucleuspowered.nucleus.internal.annotations.command.NoModifiers;
-import io.github.nucleuspowered.nucleus.internal.annotations.command.Permissions;
-import io.github.nucleuspowered.nucleus.internal.annotations.command.RegisterCommand;
-import io.github.nucleuspowered.nucleus.internal.command.AbstractCommand;
-import io.github.nucleuspowered.nucleus.internal.docgen.annotations.EssentialsEquivalent;
+import io.github.nucleuspowered.nucleus.internal.command.ICommandContext;
+import io.github.nucleuspowered.nucleus.internal.command.ICommandExecutor;
+import io.github.nucleuspowered.nucleus.internal.command.ICommandResult;
+import io.github.nucleuspowered.nucleus.internal.command.annotation.Command;
+import io.github.nucleuspowered.nucleus.internal.command.annotation.EssentialsEquivalent;
 import io.github.nucleuspowered.nucleus.modules.jail.JailParameters;
+import io.github.nucleuspowered.nucleus.modules.jail.JailPermissions;
 import io.github.nucleuspowered.nucleus.modules.jail.services.JailHandler;
-import org.spongepowered.api.command.CommandResult;
+import io.github.nucleuspowered.nucleus.services.INucleusServiceCollection;
+import org.spongepowered.api.command.CommandException;
 import org.spongepowered.api.command.CommandSource;
-import org.spongepowered.api.command.args.CommandContext;
 import org.spongepowered.api.command.args.CommandElement;
-import org.spongepowered.api.event.cause.Cause;
 import org.spongepowered.api.util.annotation.NonnullByDefault;
 
-@Permissions(prefix = "jail")
-@RunAsync
-@NoModifiers
-@RegisterCommand(value = {"delete", "del", "remove"}, subcommandOf = JailsCommand.class, rootAliasRegister = { "deljail", "rmjail", "deletejail" })
+import javax.inject.Inject;
+
 @EssentialsEquivalent({"deljail", "remjail", "rmjail"})
 @NonnullByDefault
-public class DeleteJailCommand extends AbstractCommand<CommandSource> {
+@Command(
+        aliases = {"delete", "del", "remove", "#deljail", "#rmjail", "#deletejail" },
+        basePermission = JailPermissions.BASE_JAILS_DELETE,
+        async = true,
+        commandDescriptionKey = "jails.delete",
+        parentCommand = JailsCommand.class
+)
+public class DeleteJailCommand implements ICommandExecutor<CommandSource> {
 
-    private final JailHandler handler = Nucleus.getNucleus().getInternalServiceManager().getServiceUnchecked(JailHandler.class);
+    private final JailHandler handler;
+
+    @Inject
+    public DeleteJailCommand(INucleusServiceCollection serviceCollection) {
+        this.handler = serviceCollection.getServiceUnchecked(JailHandler.class);
+    }
 
     @Override
-    public CommandElement[] getArguments() {
+    public CommandElement[] parameters(INucleusServiceCollection serviceCollection) {
         return new CommandElement[] {
                 JailParameters.JAIL
         };
     }
 
-    @Override
-    public CommandResult executeCommand(CommandSource src, CommandContext args, Cause cause) {
-        LocationData wl = args.<LocationData>getOne(JailParameters.JAIL_KEY).get();
+    @Override public ICommandResult execute(ICommandContext<? extends CommandSource> context) throws CommandException {
+        LocationData wl = context.requireOne(JailParameters.JAIL_KEY, LocationData.class);
         if (this.handler.removeJail(wl.getName())) {
-            src.sendMessage(Nucleus.getNucleus().getMessageProvider().getTextMessageWithFormat("command.jails.del.success", wl.getName()));
-            return CommandResult.success();
+            context.sendMessage("command.jails.del.success", wl.getName());
+            return context.successResult();
         }
 
-        src.sendMessage(Nucleus.getNucleus().getMessageProvider().getTextMessageWithFormat("command.jails.del.error", wl.getName()));
-        return CommandResult.empty();
+        return context.errorResult("command.jails.del.error", wl.getName());
     }
 }

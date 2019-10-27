@@ -4,27 +4,21 @@
  */
 package io.github.nucleuspowered.nucleus.modules.note.commands;
 
-import io.github.nucleuspowered.nucleus.Nucleus;
 import io.github.nucleuspowered.nucleus.Util;
-import io.github.nucleuspowered.nucleus.api.text.NucleusTextTemplate;
-import io.github.nucleuspowered.nucleus.internal.annotations.RunAsync;
-import io.github.nucleuspowered.nucleus.internal.annotations.command.NoModifiers;
-import io.github.nucleuspowered.nucleus.internal.annotations.command.Permissions;
-import io.github.nucleuspowered.nucleus.internal.annotations.command.RegisterCommand;
-import io.github.nucleuspowered.nucleus.internal.command.AbstractCommand;
-import io.github.nucleuspowered.nucleus.internal.permissions.SuggestedLevel;
-import io.github.nucleuspowered.nucleus.internal.text.NucleusTextTemplateImpl;
-import io.github.nucleuspowered.nucleus.internal.text.TextParsingUtils;
+import io.github.nucleuspowered.nucleus.internal.command.ICommandContext;
+import io.github.nucleuspowered.nucleus.internal.command.ICommandExecutor;
+import io.github.nucleuspowered.nucleus.internal.command.ICommandResult;
+import io.github.nucleuspowered.nucleus.internal.command.NucleusParameters;
+import io.github.nucleuspowered.nucleus.internal.command.annotation.Command;
+import io.github.nucleuspowered.nucleus.modules.note.NotePermissions;
 import io.github.nucleuspowered.nucleus.modules.note.data.NoteData;
 import io.github.nucleuspowered.nucleus.modules.note.services.NoteHandler;
+import io.github.nucleuspowered.nucleus.services.INucleusServiceCollection;
 import org.spongepowered.api.Sponge;
-import org.spongepowered.api.command.CommandResult;
+import org.spongepowered.api.command.CommandException;
 import org.spongepowered.api.command.CommandSource;
-import org.spongepowered.api.command.args.CommandContext;
 import org.spongepowered.api.command.args.CommandElement;
-import org.spongepowered.api.command.args.GenericArguments;
 import org.spongepowered.api.entity.living.player.User;
-import org.spongepowered.api.event.cause.Cause;
 import org.spongepowered.api.service.pagination.PaginationService;
 import org.spongepowered.api.service.user.UserStorageService;
 import org.spongepowered.api.text.Text;
@@ -39,47 +33,44 @@ import java.util.List;
 import java.util.Optional;
 import java.util.stream.Collectors;
 
-/**
- * Checks the notes of a subject.
- *
- * Command Usage: /checknotes user Permission: plugin.checknotes.base
- */
-@Permissions(suggestedLevel = SuggestedLevel.MOD)
-@RunAsync
-@NoModifiers
 @NonnullByDefault
-@RegisterCommand({"checknotes", "notes"})
-public class CheckNotesCommand extends AbstractCommand<CommandSource> {
-
-    private final NoteHandler handler = getServiceUnchecked(NoteHandler.class);
-    private final String playerKey = "subject";
+@Command(
+        aliases = {"checknotes", "notes"},
+        basePermission = NotePermissions.BASE_NOTE,
+        commandDescriptionKey = "checknotes",
+        async = true
+)
+public class CheckNotesCommand implements ICommandExecutor<CommandSource> {
 
     @Override
-    public CommandElement[] getArguments() {
-        return new CommandElement[] {GenericArguments.onlyOne(GenericArguments.user(Text.of(this.playerKey)))};
+    public CommandElement[] parameters(INucleusServiceCollection serviceCollection) {
+        return new CommandElement[] {
+                NucleusParameters.ONE_USER
+        };
     }
 
     @Override
-    public CommandResult executeCommand(CommandSource src, CommandContext args, Cause cause) {
-        User user = args.<User>getOne(this.playerKey).get();
+    public ICommandResult execute(ICommandContext<? extends CommandSource> context) throws CommandException {
+        NoteHandler handler = context.getServiceCollection().getServiceUnchecked(NoteHandler.class);
+        User user = context.requireOne(NucleusParameters.Keys.USER, User.class);
 
-        List<NoteData> notes = this.handler.getNotesInternal(user);
+        List<NoteData> notes = handler.getNotesInternal(user);
         if (notes.isEmpty()) {
-            src.sendMessage(Nucleus.getNucleus().getMessageProvider().getTextMessageWithFormat("command.checknotes.none", user.getName()));
-            return CommandResult.success();
+            context.sendMessage("command.checknotes.none", user.getName());
+            return context.successResult();
         }
 
         List<Text> messages =
-                notes.stream().sorted(Comparator.comparing(NoteData::getDate)).map(x -> createMessage(x, user, src))
+                notes.stream().sorted(Comparator.comparing(NoteData::getDate)).map(x -> createMessage(x, user, context, handler))
                         .collect(Collectors.toList());
-        messages.add(0, Nucleus.getNucleus().getMessageProvider().getTextMessageWithFormat("command.checknotes.info"));
+        messages.add(0, context.getMessage("command.checknotes.info"));
 
         PaginationService paginationService = Sponge.getGame().getServiceManager().provideUnchecked(PaginationService.class);
         paginationService.builder()
                 .title(
                         Text.builder()
                         .color(TextColors.GOLD)
-                        .append(Text.of(Nucleus.getNucleus().getMessageProvider().getMessageWithFormat("command.checknotes.header", user.getName())))
+                        .append(Text.of(context.getMessage("command.checknotes.header", user.getName())))
                         .build())
                 .padding(
                         Text.builder()
@@ -87,32 +78,35 @@ public class CheckNotesCommand extends AbstractCommand<CommandSource> {
                         .append(Text.of("="))
                         .build())
                 .contents(messages)
-                .sendTo(src);
+                .sendTo(context.getCommandSource());
 
-        return CommandResult.success();
+        return context.successResult();
     }
 
-    private Text createMessage(NoteData note, User user, CommandSource source) {
+    private Text createMessage(NoteData note,
+            User user,
+            ICommandContext<? extends CommandSource> context,
+            NoteHandler handler) {
         String name;
-        if (note.getNoterInternal().equals(Util.consoleFakeUUID)) {
+        if (note.getNoterInternal().equals(Util.CONSOLE_FAKE_UUID)) {
             name = Sponge.getServer().getConsole().getName();
         } else {
             Optional<User> ou = Sponge.getServiceManager().provideUnchecked(UserStorageService.class).get(note.getNoterInternal());
-            name = ou.map(User::getName).orElseGet(() -> Nucleus.getNucleus().getMessageProvider().getMessageWithFormat("standard.unknown"));
+            name = ou.map(User::getName).orElseGet(() -> context.getMessageString("standard.unknown"));
         }
 
         //Get the ID of the note, its index in the users List<NoteData>. Add one to start with an ID of 1.
-        int id = this.handler.getNotesInternal(user).indexOf(note) + 1;
+        int id = handler.getNotesInternal(user).indexOf(note) + 1;
 
         //Action buttons, this should look like 'Action > [Delete] - [Return] <'
-        Text.Builder actions = Nucleus.getNucleus().getMessageProvider().getTextMessageWithFormat("command.checknotes.action").toBuilder();
+        Text.Builder actions = context.getMessage("command.checknotes.action").toBuilder();
 
         //Add separation between the word 'Action' and action buttons
         actions.append(Text.of(TextColors.GOLD, " > "));
 
         //Add the delete button [Delete]
-        actions.append(Text.builder().append(Text.of(TextColors.RED, Nucleus.getNucleus().getMessageProvider().getMessageWithFormat("standard.action.delete")))
-                .onHover(TextActions.showText(Nucleus.getNucleus().getMessageProvider().getTextMessageWithFormat("command.checknotes.hover.delete")))
+        actions.append(Text.builder().append(Text.of(TextColors.RED, context.getMessage("standard.action.delete")))
+                .onHover(TextActions.showText(context.getMessage("command.checknotes.hover.delete")))
                 .onClick(TextActions.runCommand("/removenote " + user.getName() + " " + id))
                 .build());
 
@@ -120,8 +114,8 @@ public class CheckNotesCommand extends AbstractCommand<CommandSource> {
         actions.append(Text.of(TextColors.GOLD, " - "));
 
         //Add the return button [Return]
-        actions.append(Text.builder().append(Text.of(TextColors.GREEN, Nucleus.getNucleus().getMessageProvider().getMessageWithFormat("standard.action.return")))
-                .onHover(TextActions.showText(Nucleus.getNucleus().getMessageProvider().getTextMessageWithFormat("command.checknotes.hover.return")))
+        actions.append(Text.builder().append(Text.of(TextColors.GREEN, context.getMessage("standard.action.return")))
+                .onHover(TextActions.showText(context.getMessage("command.checknotes.hover.return")))
                 .onClick(TextActions.runCommand("/checknotes " + user.getName()))
                 .build());
 
@@ -132,16 +126,16 @@ public class CheckNotesCommand extends AbstractCommand<CommandSource> {
         DateTimeFormatter dtf = DateTimeFormatter.ofPattern("MMM dd, yyyy").withZone(ZoneId.systemDefault());
         String date = dtf.format(note.getDate());
 
-        Text nodeMessage = TextParsingUtils.addUrls(note.getNote());
+        Text nodeMessage = context.getServiceCollection().textStyleService().addUrls(note.getNote());
 
         //Create a clickable name providing more information about the warning
         Text.Builder information = Text.builder(name)
-                .onHover(TextActions.showText(getMessageFor(source, "command.checknotes.hover.check")))
+                .onHover(TextActions.showText(context.getMessage("command.checknotes.hover.check")))
                 .onClick(TextActions.executeCallback(commandSource -> {
-                    sendMessageTo(commandSource, "command.checknotes.id", String.valueOf(id));
-                    sendMessageTo(commandSource, "command.checknotes.date", date);
-                    sendMessageTo(commandSource, "command.checknotes.noter", name);
-                    sendMessageTo(commandSource, "command.checknotes.note", nodeMessage);
+                    context.getMessage("command.checknotes.id", String.valueOf(id));
+                    context.getMessage( "command.checknotes.date", date);
+                    context.getMessage( "command.checknotes.noter", name);
+                    context.getMessage( "command.checknotes.note", nodeMessage);
                     commandSource.sendMessage(actions.build());
                 }));
 

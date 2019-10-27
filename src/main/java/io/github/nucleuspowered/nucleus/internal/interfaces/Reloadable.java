@@ -4,8 +4,10 @@
  */
 package io.github.nucleuspowered.nucleus.internal.interfaces;
 
-@FunctionalInterface
+import io.github.nucleuspowered.nucleus.services.INucleusServiceCollection;
+
 public interface Reloadable {
 
-    void onReload() throws Exception;
+    void onReload(INucleusServiceCollection serviceCollection);
+
 }

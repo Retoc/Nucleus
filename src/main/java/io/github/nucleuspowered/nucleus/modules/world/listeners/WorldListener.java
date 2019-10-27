@@ -6,12 +6,13 @@ package io.github.nucleuspowered.nucleus.modules.world.listeners;
 
 import com.google.common.collect.Sets;
 import io.github.nucleuspowered.nucleus.Nucleus;
-import io.github.nucleuspowered.nucleus.internal.PermissionRegistry;
 import io.github.nucleuspowered.nucleus.internal.interfaces.ListenerBase;
-import io.github.nucleuspowered.nucleus.modules.world.WorldModule;
+import io.github.nucleuspowered.nucleus.modules.world.WorldPermissions;
 import io.github.nucleuspowered.nucleus.modules.world.config.WorldConfig;
-import io.github.nucleuspowered.nucleus.modules.world.config.WorldConfigAdapter;
+import io.github.nucleuspowered.nucleus.services.INucleusServiceCollection;
+import io.github.nucleuspowered.nucleus.services.IPermissionService;
 import org.spongepowered.api.Sponge;
+import org.spongepowered.api.command.CommandSource;
 import org.spongepowered.api.entity.living.player.Player;
 import org.spongepowered.api.event.Listener;
 import org.spongepowered.api.event.entity.MoveEntityEvent;
@@ -26,19 +27,29 @@ import java.util.Set;
 import java.util.UUID;
 import java.util.function.Consumer;
 
+import javax.inject.Inject;
+
 public class WorldListener implements ListenerBase.Conditional {
 
     private final Set<UUID> messageSent = Sets.newHashSet();
+    private final INucleusServiceCollection serviceCollection;
+
+    @Inject
+    public WorldListener(INucleusServiceCollection serviceCollection) {
+        this.serviceCollection = serviceCollection;
+    }
 
     @Listener
     public void onPlayerTeleport(MoveEntityEvent.Teleport event, @Getter("getTargetEntity") Player player) {
         World target = event.getToTransform().getExtent();
         if (player.getWorld().equals(target)) return;
 
-        if (!hasPermission(player, PermissionRegistry.PERMISSIONS_PREFIX + "worlds." + target.getName().toLowerCase())) {
+        IPermissionService permissionService = this.serviceCollection.permissionService();
+        if (!permissionService.isConsoleOverride(event.getCause().first(CommandSource.class).orElse(player)) &&
+                !this.serviceCollection.permissionService().hasPermission(player, WorldPermissions.getWorldAccessPermission(target.getName()))) {
             event.setCancelled(true);
             if (!this.messageSent.contains(player.getUniqueId())) {
-                player.sendMessage(Nucleus.getNucleus().getMessageProvider().getTextMessageWithFormat("world.access.denied", target.getName()));
+                this.serviceCollection.messageProvider().sendMessageTo(player, "world.access.denied", target.getName());
             }
 
             if (event instanceof MoveEntityEvent.Teleport.Portal) {
@@ -52,8 +63,8 @@ public class WorldListener implements ListenerBase.Conditional {
     }
 
     @Override
-    public boolean shouldEnable() {
-        return Nucleus.getNucleus().getConfigValue(WorldModule.ID, WorldConfigAdapter.class, WorldConfig::isSeparatePermissions).orElse(false);
+    public boolean shouldEnable(INucleusServiceCollection serviceCollection) {
+        return this.serviceCollection.moduleDataProvider().getModuleConfig(WorldConfig.class).isSeparatePermissions();
     }
 
     private Consumer<Task> relocate(Player player) {

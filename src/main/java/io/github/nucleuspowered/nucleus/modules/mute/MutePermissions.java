@@ -5,8 +5,8 @@
 package io.github.nucleuspowered.nucleus.modules.mute;
 
 import io.github.nucleuspowered.nucleus.annotationprocessor.RegisterPermissions;
-import io.github.nucleuspowered.nucleus.internal.permissions.PermissionMetadata;
-import io.github.nucleuspowered.nucleus.internal.permissions.SuggestedLevel;
+import io.github.nucleuspowered.nucleus.services.impl.permission.PermissionMetadata;
+import io.github.nucleuspowered.nucleus.services.impl.permission.SuggestedLevel;
 
 @RegisterPermissions
 public class MutePermissions {
@@ -15,39 +15,39 @@ public class MutePermissions {
     }
 
     @PermissionMetadata(descriptionKey = "permission.base", replacements = { "checkmute" }, level = SuggestedLevel.MOD)
-    public static final String BASE_CHECKMUTE = "checkmute.base";
+    public static final String BASE_CHECKMUTE = "nucleus.checkmute.base";
 
     @PermissionMetadata(descriptionKey = "permission.base", replacements = { "checkmuted" }, level = SuggestedLevel.ADMIN)
-    public static final String BASE_CHECKMUTED = "checkmuted.base";
+    public static final String BASE_CHECKMUTED = "nucleus.checkmuted.base";
 
     @PermissionMetadata(descriptionKey = "permission.base", replacements = { "globalmute" }, level = SuggestedLevel.ADMIN)
-    public static final String BASE_GLOBALMUTE = "globalmute.base";
+    public static final String BASE_GLOBALMUTE = "nucleus.globalmute.base";
 
     @PermissionMetadata(descriptionKey = "permission.voice.auto", level = SuggestedLevel.ADMIN)
-    public static final String VOICE_AUTO = "globalmute.voice.auto";
+    public static final String VOICE_AUTO = "nucleus.globalmute.voice.auto";
 
     @PermissionMetadata(descriptionKey = "permission.base", replacements = { "voice" }, level = SuggestedLevel.ADMIN)
-    public static final String BASE_VOICE = "globalmute.voice.base";
+    public static final String BASE_VOICE = "nucleus.globalmute.voice.base";
 
     @PermissionMetadata(descriptionKey = "permission.voice.notify", level = SuggestedLevel.ADMIN)
-    public static final String VOICE_NOTIFY = "globalmute.voice.notify";
+    public static final String VOICE_NOTIFY = "nucleus.globalmute.voice.notify";
 
     @PermissionMetadata(descriptionKey = "permission.base", replacements = { "mute" }, level = SuggestedLevel.MOD)
-    public static final String BASE_MUTE = "mute.base";
+    public static final String BASE_MUTE = "nucleus.mute.base";
 
     @PermissionMetadata(descriptionKey = "permission.mute.exempt.length", level = SuggestedLevel.ADMIN)
-    public static final String MUTE_EXEMPT_LENGTH = "mute.exempt.length";
+    public static final String MUTE_EXEMPT_LENGTH = "nucleus.mute.exempt.length";
 
     @PermissionMetadata(descriptionKey = "permission.mute.exempt.target", level = SuggestedLevel.MOD)
-    public static final String MUTE_EXEMPT_TARGET = "mute.exempt.target";
+    public static final String MUTE_EXEMPT_TARGET = "nucleus.mute.exempt.target";
 
     @PermissionMetadata(descriptionKey = "permission.mute.notify", level = SuggestedLevel.MOD)
-    public static final String MUTE_NOTIFY = "mute.notify";
+    public static final String MUTE_NOTIFY = "nucleus.mute.notify";
 
     @PermissionMetadata(descriptionKey = "permission.mute.seemutedchat", level = SuggestedLevel.ADMIN)
-    public static final String MUTE_SEEMUTEDCHAT = "mute.seemutedchat";
+    public static final String MUTE_SEEMUTEDCHAT = "nucleus.mute.seemutedchat";
 
     @PermissionMetadata(descriptionKey = "permission.mute.unmute", level = SuggestedLevel.MOD)
-    public static final String MUTE_UNMUTE = "mute.unmute";
+    public static final String MUTE_UNMUTE = "nucleus.mute.unmute";
 
 }

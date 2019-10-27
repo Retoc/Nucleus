@@ -4,37 +4,36 @@
  */
 package io.github.nucleuspowered.nucleus.modules.inventory.listeners;
 
-import com.google.common.collect.Maps;
 import io.github.nucleuspowered.nucleus.internal.interfaces.ListenerBase;
-import io.github.nucleuspowered.nucleus.internal.permissions.PermissionInformation;
-import io.github.nucleuspowered.nucleus.internal.permissions.ServiceChangeListener;
-import io.github.nucleuspowered.nucleus.internal.permissions.SuggestedLevel;
+import io.github.nucleuspowered.nucleus.modules.inventory.InventoryPermissions;
+import io.github.nucleuspowered.nucleus.services.INucleusServiceCollection;
+import io.github.nucleuspowered.nucleus.services.IPermissionService;
 import org.spongepowered.api.entity.living.player.Player;
 import org.spongepowered.api.event.Listener;
 import org.spongepowered.api.event.entity.DestructEntityEvent;
 import org.spongepowered.api.event.filter.Getter;
 
-import java.util.Map;
+import javax.inject.Inject;
 
 public class KeepInventoryListener implements ListenerBase.Conditional {
 
-    @Override
-    public Map<String, PermissionInformation> getPermissions() {
-        Map<String, PermissionInformation> perms = Maps.newHashMap();
-        perms.put("nucleus.inventory.keepondeath", PermissionInformation.getWithTranslation("permission.inventory.keep", SuggestedLevel.ADMIN));
-        return perms;
+    private final IPermissionService permissionService;
+
+    @Inject
+    public KeepInventoryListener(INucleusServiceCollection serviceCollection) {
+        this.permissionService = serviceCollection.permissionService();
     }
 
     @Listener
     public void onEntityDeath(DestructEntityEvent.Death event, @Getter("getTargetEntity") Player living) {
-        if (hasPermission(living, "nucleus.inventory.keepondeath")) {
+        if (this.permissionService.hasPermission(living, InventoryPermissions.INVENTORY_KEEP)) {
             event.setKeepInventory(true);
         }
     }
 
     @Override
-    public boolean shouldEnable() {
-        return !ServiceChangeListener.isOpOnly();
+    public boolean shouldEnable(INucleusServiceCollection serviceCollection) {
+        return !serviceCollection.permissionService().isOpOnly();
     }
 
 }

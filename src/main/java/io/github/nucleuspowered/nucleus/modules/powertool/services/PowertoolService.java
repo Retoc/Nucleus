@@ -9,19 +9,31 @@ import com.google.common.collect.ImmutableMap;
 import io.github.nucleuspowered.nucleus.Nucleus;
 import io.github.nucleuspowered.nucleus.internal.interfaces.ServiceBase;
 import io.github.nucleuspowered.nucleus.modules.powertool.PowertoolKeys;
+import io.github.nucleuspowered.nucleus.services.INucleusServiceCollection;
+import io.github.nucleuspowered.nucleus.services.IStorageManager;
 import org.spongepowered.api.item.ItemType;
 
 import java.util.*;
+
+import javax.inject.Inject;
 
 public class PowertoolService implements ServiceBase {
 
     private final Map<UUID, Map<String, List<String>>> powertools = new HashMap<>();
 
+    private final IStorageManager storageManager;
+
+    @Inject
+    public PowertoolService(INucleusServiceCollection serviceCollection) {
+        this.storageManager = serviceCollection.storageManager();
+    }
+
+
     public Map<String, List<String>> getPowertools(UUID uuid) {
         Map<String, List<String>> m = this.powertools.get(uuid);
         if (m == null) {
             // grab the user data
-            m = Nucleus.getNucleus().getStorageManager().getUserService()
+            m = this.storageManager.getUserService()
                     .getOrNewOnThread(uuid)
                     .get(PowertoolKeys.POWERTOOLS)
                     .orElseGet(HashMap::new);
@@ -60,7 +72,7 @@ public class PowertoolService implements ServiceBase {
     }
 
     private void setBack(UUID uuid) {
-        Nucleus.getNucleus().getStorageManager()
+        this.storageManager
                 .getUserService()
                 .getOrNew(uuid)
                 .thenAccept(x -> x.set(PowertoolKeys.POWERTOOLS, this.powertools.getOrDefault(uuid, new HashMap<>())));

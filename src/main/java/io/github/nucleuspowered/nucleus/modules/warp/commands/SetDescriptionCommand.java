@@ -4,69 +4,64 @@
  */
 package io.github.nucleuspowered.nucleus.modules.warp.commands;
 
-import io.github.nucleuspowered.nucleus.Nucleus;
 import io.github.nucleuspowered.nucleus.api.nucleusdata.Warp;
-import io.github.nucleuspowered.nucleus.internal.annotations.RunAsync;
-import io.github.nucleuspowered.nucleus.internal.annotations.command.NoModifiers;
-import io.github.nucleuspowered.nucleus.internal.annotations.command.Permissions;
-import io.github.nucleuspowered.nucleus.internal.annotations.command.RegisterCommand;
-import io.github.nucleuspowered.nucleus.internal.command.AbstractCommand;
+import io.github.nucleuspowered.nucleus.internal.command.ICommandContext;
+import io.github.nucleuspowered.nucleus.internal.command.ICommandExecutor;
+import io.github.nucleuspowered.nucleus.internal.command.ICommandResult;
 import io.github.nucleuspowered.nucleus.internal.command.NucleusParameters;
-import io.github.nucleuspowered.nucleus.internal.command.ReturnMessageException;
-import io.github.nucleuspowered.nucleus.modules.warp.WarpParameters;
+import io.github.nucleuspowered.nucleus.internal.command.annotation.Command;
+import io.github.nucleuspowered.nucleus.modules.warp.WarpPermissions;
 import io.github.nucleuspowered.nucleus.modules.warp.services.WarpService;
-import org.spongepowered.api.command.CommandResult;
+import io.github.nucleuspowered.nucleus.services.INucleusServiceCollection;
+import org.spongepowered.api.command.CommandException;
 import org.spongepowered.api.command.CommandSource;
-import org.spongepowered.api.command.args.CommandContext;
 import org.spongepowered.api.command.args.CommandElement;
 import org.spongepowered.api.command.args.GenericArguments;
-import org.spongepowered.api.event.cause.Cause;
 import org.spongepowered.api.text.Text;
 import org.spongepowered.api.text.serializer.TextSerializers;
 import org.spongepowered.api.util.annotation.NonnullByDefault;
 
-@RunAsync
-@NoModifiers
 @NonnullByDefault
-@Permissions(prefix = "warp")
-@RegisterCommand(value = {"setdescription"}, subcommandOf = WarpCommand.class)
-public class SetDescriptionCommand extends AbstractCommand<CommandSource> {
+@Command(
+        aliases = {"setdescription"},
+        basePermission = WarpPermissions.BASE_WARP_SETDESCRIPTION,
+        commandDescriptionKey = "warp.setdescription",
+        async = true,
+        parentCommand = WarpCommand.class
+)
+public class SetDescriptionCommand implements ICommandExecutor<CommandSource> {
 
-    private final WarpService handler = getServiceUnchecked(WarpService.class);
-
-    @Override public CommandElement[] getArguments() {
+    @Override public CommandElement[] parameters(INucleusServiceCollection serviceCollection) {
         return new CommandElement[] {
             GenericArguments.flags().flag("r", "-remove", "-delete").buildWith(
                 GenericArguments.seq(
-                        WarpParameters.WARP_NO_PERM,
+                        serviceCollection.getServiceUnchecked(WarpService.class).warpElement(false),
                         NucleusParameters.OPTIONAL_DESCRIPTION
                 )
             )
         };
     }
 
-    @Override public CommandResult executeCommand(CommandSource src, CommandContext args, Cause cause) throws Exception {
-        String warpName = args.<Warp>getOne(WarpParameters.WARP_KEY).get().getName();
-        if (args.hasAny("r")) {
+    @Override public ICommandResult execute(ICommandContext<? extends CommandSource> context) throws CommandException {
+        WarpService handler = context.getServiceCollection().getServiceUnchecked(WarpService.class);
+        String warpName = context.requireOne(WarpService.WARP_KEY, Warp.class).getName();
+        if (context.hasAny("r")) {
             // Remove the desc.
-            if (this.handler.setWarpDescription(warpName, null)) {
-                src.sendMessage(Nucleus.getNucleus().getMessageProvider().getTextMessageWithFormat("command.warp.description.removed", warpName));
-                return CommandResult.success();
+            if (handler.setWarpDescription(warpName, null)) {
+                context.sendMessage("command.warp.description.removed", warpName);
+                return context.successResult();
             }
 
-            throw new ReturnMessageException(Nucleus
-                    .getNucleus().getMessageProvider().getTextMessageWithFormat("command.warp.description.noremove", warpName));
+            return context.errorResult("command.warp.description.noremove", warpName);
         }
 
         // Add the category.
-        Text message = TextSerializers.FORMATTING_CODE.deserialize(args.<String>getOne(NucleusParameters.Keys.DESCRIPTION).get());
-        if (this.handler.setWarpDescription(warpName, message)) {
-            src.sendMessage(
-                    Nucleus.getNucleus().getMessageProvider().getTextMessageWithTextFormat("command.warp.description.added", message, Text.of(warpName)));
-            return CommandResult.success();
+        Text message = TextSerializers.FORMATTING_CODE.deserialize(context.requireOne(NucleusParameters.Keys.DESCRIPTION, String.class));
+        if (handler.setWarpDescription(warpName, message)) {
+            context.sendMessage("command.warp.description.added", message, Text.of(warpName));
+            return context.successResult();
         }
 
-        throw new ReturnMessageException(Nucleus.getNucleus().getMessageProvider().getTextMessageWithTextFormat("command.warp.description.couldnotadd",
-                Text.of(warpName)));
+        return context.errorResult("command.warp.description.couldnotadd", Text.of(warpName));
     }
 }

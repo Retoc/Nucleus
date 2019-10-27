@@ -4,13 +4,11 @@
  */
 package io.github.nucleuspowered.nucleus.modules.mob.listeners;
 
-import io.github.nucleuspowered.nucleus.Nucleus;
 import io.github.nucleuspowered.nucleus.internal.interfaces.ListenerBase;
 import io.github.nucleuspowered.nucleus.internal.interfaces.Reloadable;
-import io.github.nucleuspowered.nucleus.modules.mob.MobModule;
 import io.github.nucleuspowered.nucleus.modules.mob.config.BlockSpawnsConfig;
 import io.github.nucleuspowered.nucleus.modules.mob.config.MobConfig;
-import io.github.nucleuspowered.nucleus.modules.mob.config.MobConfigAdapter;
+import io.github.nucleuspowered.nucleus.services.INucleusServiceCollection;
 import org.spongepowered.api.GameState;
 import org.spongepowered.api.Sponge;
 import org.spongepowered.api.entity.Entity;
@@ -26,6 +24,7 @@ import org.spongepowered.api.event.filter.Getter;
 import org.spongepowered.api.world.World;
 
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 
 public class BlockLivingSpawnListener implements Reloadable, ListenerBase.Conditional {
@@ -66,28 +65,26 @@ public class BlockLivingSpawnListener implements Reloadable, ListenerBase.Condit
         return !(bsco.get().isBlockVanillaMobs() && id.startsWith("minecraft:") || bsco.get().getIdsToBlock().contains(id));
     }
 
-    @Override public void onReload() {
-        this.config = getServiceUnchecked(MobConfigAdapter.class).getNodeOrDefault();
+    @Override public void onReload(INucleusServiceCollection serviceCollection) {
+        this.config = serviceCollection.moduleDataProvider().getModuleConfig(MobConfig.class);
     }
 
-    @Override public boolean shouldEnable() {
+    @Override public boolean shouldEnable(INucleusServiceCollection serviceCollection) {
             if (Sponge.getGame().getState().ordinal() < GameState.SERVER_STARTING.ordinal()) {
                 return true;
             }
 
-            return Nucleus.getNucleus()
-                .getConfigValue(MobModule.ID, MobConfigAdapter.class, MobConfig::getBlockSpawnsConfig).map(conf -> {
-                    if (conf.entrySet().stream().anyMatch(x -> Sponge.getServer().getWorldProperties(x.getKey()).isPresent())) {
-                        for (BlockSpawnsConfig s : conf.values()) {
-                            List<String> idsToBlock = s.getIdsToBlock();
-                            if (s.isBlockVanillaMobs() || Sponge.getRegistry().getAllOf(EntityType.class).stream()
-                                    .anyMatch(x -> idsToBlock.contains(x.getId()))) {
-                                return true;
-                            }
-                        }
+            Map<String, BlockSpawnsConfig> conf = serviceCollection.moduleDataProvider().getModuleConfig(MobConfig.class).getBlockSpawnsConfig();
+            if (conf.entrySet().stream().anyMatch(x -> Sponge.getServer().getWorldProperties(x.getKey()).isPresent())) {
+                for (BlockSpawnsConfig s : conf.values()) {
+                    List<String> idsToBlock = s.getIdsToBlock();
+                    if (s.isBlockVanillaMobs() || Sponge.getRegistry().getAllOf(EntityType.class).stream()
+                        .anyMatch(x -> idsToBlock.contains(x.getId()))) {
+                        return true;
                     }
+                }
+            }
 
-                    return false;
-                }).orElse(false);
+            return false;
     }
 }

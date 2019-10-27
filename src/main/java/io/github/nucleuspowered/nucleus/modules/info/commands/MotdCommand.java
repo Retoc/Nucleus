@@ -4,59 +4,56 @@
  */
 package io.github.nucleuspowered.nucleus.modules.info.commands;
 
-import io.github.nucleuspowered.nucleus.Nucleus;
-import io.github.nucleuspowered.nucleus.internal.TextFileController;
-import io.github.nucleuspowered.nucleus.internal.annotations.RunAsync;
-import io.github.nucleuspowered.nucleus.internal.annotations.command.NoModifiers;
-import io.github.nucleuspowered.nucleus.internal.annotations.command.Permissions;
-import io.github.nucleuspowered.nucleus.internal.annotations.command.RegisterCommand;
-import io.github.nucleuspowered.nucleus.internal.command.AbstractCommand;
-import io.github.nucleuspowered.nucleus.internal.docgen.annotations.EssentialsEquivalent;
+import io.github.nucleuspowered.nucleus.internal.command.ICommandContext;
+import io.github.nucleuspowered.nucleus.internal.command.ICommandExecutor;
+import io.github.nucleuspowered.nucleus.internal.command.ICommandResult;
+import io.github.nucleuspowered.nucleus.internal.command.annotation.Command;
+import io.github.nucleuspowered.nucleus.internal.command.annotation.EssentialsEquivalent;
 import io.github.nucleuspowered.nucleus.internal.interfaces.Reloadable;
-import io.github.nucleuspowered.nucleus.internal.permissions.SuggestedLevel;
+import io.github.nucleuspowered.nucleus.io.TextFileController;
 import io.github.nucleuspowered.nucleus.modules.info.InfoModule;
+import io.github.nucleuspowered.nucleus.modules.info.InfoPermissions;
 import io.github.nucleuspowered.nucleus.modules.info.config.InfoConfig;
-import io.github.nucleuspowered.nucleus.modules.info.config.InfoConfigAdapter;
-import org.spongepowered.api.command.CommandResult;
+import io.github.nucleuspowered.nucleus.services.INucleusServiceCollection;
+import org.spongepowered.api.command.CommandException;
 import org.spongepowered.api.command.CommandSource;
-import org.spongepowered.api.command.args.CommandContext;
-import org.spongepowered.api.event.cause.Cause;
 import org.spongepowered.api.text.Text;
 import org.spongepowered.api.text.serializer.TextSerializers;
 import org.spongepowered.api.util.annotation.NonnullByDefault;
 
 import java.util.Optional;
 
-@Permissions(suggestedLevel = SuggestedLevel.USER)
-@RunAsync
-@NoModifiers
 @NonnullByDefault
-@RegisterCommand("motd")
+@Command(
+        aliases = {"motd"},
+        async = true,
+        basePermission = InfoPermissions.BASE_MOTD,
+        commandDescriptionKey = "motd"
+)
 @EssentialsEquivalent("motd")
-public class MotdCommand extends AbstractCommand<CommandSource> implements Reloadable {
+public class MotdCommand implements ICommandExecutor<CommandSource>, Reloadable {
 
     private Text title = Text.EMPTY;
     private boolean usePagination = true;
 
-    @Override
-    public CommandResult executeCommand(CommandSource src, CommandContext args, Cause cause) {
-        Optional<TextFileController> otfc = Nucleus.getNucleus().getTextFileController(InfoModule.MOTD_KEY);
+    @Override public ICommandResult execute(ICommandContext<? extends CommandSource> context) throws CommandException {
+        Optional<TextFileController> otfc = context.getServiceCollection().textFileControllerCollection().get(InfoModule.MOTD_KEY);
         if (!otfc.isPresent()) {
-            src.sendMessage(Nucleus.getNucleus().getMessageProvider().getTextMessageWithFormat("command.motd.nocontroller"));
-            return CommandResult.empty();
+            return context.errorResult("command.motd.nocontroller");
         }
 
+        CommandSource src = context.getCommandSource();
         if (this.usePagination) {
             otfc.get().sendToPlayer(src, this.title);
         } else {
             otfc.get().getTextFromNucleusTextTemplates(src).forEach(src::sendMessage);
         }
 
-        return CommandResult.success();
+        return context.successResult();
     }
 
-    @Override public void onReload() {
-        InfoConfig config = Nucleus.getNucleus().getInternalServiceManager().getServiceUnchecked(InfoConfigAdapter.class).getNodeOrDefault();
+    @Override public void onReload(INucleusServiceCollection serviceCollection) {
+        InfoConfig config = serviceCollection.moduleDataProvider().getModuleConfig(InfoConfig.class);
         String title = config.getMotdTitle();
         if (title.isEmpty()) {
             this.title = Text.EMPTY;

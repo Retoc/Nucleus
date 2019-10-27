@@ -6,9 +6,10 @@ package io.github.nucleuspowered.nucleus.modules.mute.listeners;
 
 import com.google.common.collect.Sets;
 import io.github.nucleuspowered.nucleus.internal.interfaces.ListenerBase;
-import io.github.nucleuspowered.nucleus.modules.mute.config.MuteConfigAdapter;
+import io.github.nucleuspowered.nucleus.modules.mute.config.MuteConfig;
 import io.github.nucleuspowered.nucleus.modules.mute.data.MuteData;
 import io.github.nucleuspowered.nucleus.modules.mute.services.MuteHandler;
+import io.github.nucleuspowered.nucleus.services.INucleusServiceCollection;
 import org.spongepowered.api.Sponge;
 import org.spongepowered.api.command.CommandMapping;
 import org.spongepowered.api.entity.living.player.Player;
@@ -25,10 +26,20 @@ import java.util.Optional;
 import java.util.Set;
 import java.util.stream.Collectors;
 
+import javax.inject.Inject;
+
 public class MuteCommandListener implements ListenerBase.Conditional {
 
     private final List<String> blockedCommands = new ArrayList<>();
-    private final MuteHandler handler = getServiceUnchecked(MuteHandler.class);
+
+    private final INucleusServiceCollection serviceCollection;
+    private final MuteHandler handler;
+
+    @Inject
+    public MuteCommandListener(INucleusServiceCollection serviceCollection) {
+        this.serviceCollection = serviceCollection;
+        this.handler = serviceCollection.getServiceUnchecked(MuteHandler.class);
+    }
 
     /**
      * Checks for blocked commands when muted.
@@ -58,7 +69,7 @@ public class MuteCommandListener implements ListenerBase.Conditional {
             } else {
                 this.handler.onMute(muteData, player);
                 MessageChannel.TO_CONSOLE.send(Text.builder().append(Text.of(player.getName() + " ("))
-                        .append(getMessage("standard.muted"))
+                        .append(this.serviceCollection.messageProvider().getMessageFor(player, "standard.muted"))
                         .append(Text.of("): ")).append(Text.of("/" + event.getCommand() + " " + event.getArguments())).build());
                 event.setCancelled(true);
             }
@@ -66,9 +77,9 @@ public class MuteCommandListener implements ListenerBase.Conditional {
     }
 
     // will also act as the reloadable.
-    @Override public boolean shouldEnable() {
+    @Override public boolean shouldEnable(INucleusServiceCollection serviceCollection) {
         this.blockedCommands.clear();
-        this.blockedCommands.addAll(getServiceUnchecked(MuteConfigAdapter.class).getNodeOrDefault().getBlockedCommands());
+        this.blockedCommands.addAll(serviceCollection.moduleDataProvider().getModuleConfig(MuteConfig.class).getBlockedCommands());
         return !this.blockedCommands.isEmpty();
     }
 }

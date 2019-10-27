@@ -4,22 +4,27 @@
  */
 package io.github.nucleuspowered.nucleus.modules.afk.listeners;
 
-import io.github.nucleuspowered.nucleus.internal.annotations.command.RegisterCommand;
+import com.google.common.collect.Lists;
 import io.github.nucleuspowered.nucleus.internal.interfaces.ListenerBase;
-import io.github.nucleuspowered.nucleus.modules.afk.commands.AFKCommand;
 import io.github.nucleuspowered.nucleus.modules.afk.config.AFKConfig;
+import io.github.nucleuspowered.nucleus.modules.afk.services.AFKHandler;
+import io.github.nucleuspowered.nucleus.services.INucleusServiceCollection;
 import org.spongepowered.api.entity.living.player.Player;
 import org.spongepowered.api.event.Listener;
 import org.spongepowered.api.event.command.SendCommandEvent;
 import org.spongepowered.api.event.filter.cause.Root;
 
-import java.util.Arrays;
 import java.util.List;
-import java.util.stream.Collectors;
+
+import javax.inject.Inject;
 
 public class AFKCommandListener extends AbstractAFKListener implements ListenerBase.Conditional {
-    private final List<String> commands =
-            Arrays.stream(AFKCommand.class.getAnnotation(RegisterCommand.class).value()).map(String::toLowerCase).collect(Collectors.toList());
+    private final List<String> commands = Lists.newArrayList("afk", "away");
+
+    @Inject
+    public AFKCommandListener(INucleusServiceCollection serviceCollection) {
+        super(serviceCollection.getServiceUnchecked(AFKHandler.class));
+    }
 
     @Listener
     public void onPlayerCommand(final SendCommandEvent event, @Root Player player) {
@@ -31,7 +36,9 @@ public class AFKCommandListener extends AbstractAFKListener implements ListenerB
     }
 
     @Override
-    public boolean shouldEnable() {
-        return getTriggerConfigEntry(AFKConfig.Triggers::isOnCommand);
+    public boolean shouldEnable(INucleusServiceCollection serviceCollection) {
+        return serviceCollection.moduleDataProvider().getModuleConfig(AFKConfig.class)
+                .getTriggers()
+                .isOnCommand();
     }
 }

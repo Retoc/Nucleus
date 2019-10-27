@@ -4,37 +4,43 @@
  */
 package io.github.nucleuspowered.nucleus.modules.jump.commands;
 
-import io.github.nucleuspowered.nucleus.Nucleus;
 import io.github.nucleuspowered.nucleus.Util;
 import io.github.nucleuspowered.nucleus.api.teleport.TeleportScanners;
-import io.github.nucleuspowered.nucleus.internal.annotations.command.Permissions;
-import io.github.nucleuspowered.nucleus.internal.annotations.command.RegisterCommand;
-import io.github.nucleuspowered.nucleus.internal.command.AbstractCommand;
-import io.github.nucleuspowered.nucleus.internal.command.ReturnMessageException;
+import io.github.nucleuspowered.nucleus.internal.command.ICommandContext;
+import io.github.nucleuspowered.nucleus.internal.command.ICommandExecutor;
+import io.github.nucleuspowered.nucleus.internal.command.ICommandResult;
+import io.github.nucleuspowered.nucleus.internal.command.annotation.Command;
+import io.github.nucleuspowered.nucleus.internal.command.annotation.CommandModifier;
+import io.github.nucleuspowered.nucleus.internal.command.requirements.CommandModifiers;
 import io.github.nucleuspowered.nucleus.internal.interfaces.Reloadable;
-import io.github.nucleuspowered.nucleus.modules.core.services.SafeTeleportService;
-import io.github.nucleuspowered.nucleus.modules.jump.config.JumpConfigAdapter;
+import io.github.nucleuspowered.nucleus.modules.jump.JumpPermissions;
+import io.github.nucleuspowered.nucleus.modules.jump.config.JumpConfig;
+import io.github.nucleuspowered.nucleus.services.INucleusServiceCollection;
 import org.spongepowered.api.block.BlockTypes;
-import org.spongepowered.api.command.CommandResult;
-import org.spongepowered.api.command.args.CommandContext;
+import org.spongepowered.api.command.CommandException;
 import org.spongepowered.api.entity.living.player.Player;
-import org.spongepowered.api.event.cause.Cause;
 import org.spongepowered.api.util.annotation.NonnullByDefault;
 import org.spongepowered.api.util.blockray.BlockRay;
 import org.spongepowered.api.util.blockray.BlockRayHit;
 import org.spongepowered.api.world.World;
 
-@Permissions
-@RegisterCommand({"thru", "through"})
 @NonnullByDefault
-public class ThruCommand extends AbstractCommand<Player> implements Reloadable {
+@Command(
+        aliases = {"thru", "through"},
+        basePermission = JumpPermissions.BASE_THRU,
+        commandDescriptionKey = "thru",
+        modifiers = {
+                @CommandModifier(value = CommandModifiers.HAS_COOLDOWN, exemptPermission = JumpPermissions.EXEMPT_COOLDOWN_THRU),
+                @CommandModifier(value = CommandModifiers.HAS_WARMUP, exemptPermission = JumpPermissions.EXEMPT_WARMUP_THRU),
+                @CommandModifier(value = CommandModifiers.HAS_COST, exemptPermission = JumpPermissions.EXEMPT_COST_THRU)
+        }
+)
+public class ThruCommand implements ICommandExecutor<Player>, Reloadable {
 
     private int maxThru = 20;
 
-    // Original code taken from EssentialCmds. With thanks to 12AwsomeMan34 for
-    // the initial contribution.
-    @Override
-    public CommandResult executeCommand(Player player, CommandContext args, Cause cause) throws ReturnMessageException{
+    @Override public ICommandResult execute(ICommandContext<? extends Player> context) throws CommandException {
+        Player player = context.getIfPlayer();
         BlockRay<World> playerBlockRay = BlockRay.from(player).distanceLimit(this.maxThru).build();
         World world = player.getWorld();
 
@@ -48,21 +54,19 @@ public class ThruCommand extends AbstractCommand<Player> implements Reloadable {
 
         // Even if we did find a wall, no good if we are at the end of the ray.
         if (!playerBlockRay.hasNext()) {
-            player.sendMessage(Nucleus.getNucleus().getMessageProvider().getTextMessageWithFormat("command.thru.nowall"));
-            return CommandResult.empty();
+            return context.errorResult("command.thru.nowall");
         }
 
         do {
             BlockRayHit<World> b = playerBlockRay.next();
             if (player.getWorld().getBlockType(b.getBlockPosition()).equals(BlockTypes.AIR)) {
                 if (!Util.isLocationInWorldBorder(b.getLocation())) {
-                    player.sendMessage(Nucleus.getNucleus().getMessageProvider().getTextMessageWithFormat("command.jump.outsideborder"));
-                    return CommandResult.empty();
+                    return context.errorResult("command.jump.outsideborder");
                 }
 
                 // If we can go, do so.
-                boolean result = getServiceUnchecked(SafeTeleportService.class)
-                        .teleportPlayerSmart(
+                boolean result =
+                        context.getServiceCollection().teleportService().teleportPlayerSmart(
                                 player,
                                 b.getLocation(),
                                 false,
@@ -70,21 +74,20 @@ public class ThruCommand extends AbstractCommand<Player> implements Reloadable {
                                 TeleportScanners.NO_SCAN
                         ).isSuccessful();
                 if (result) {
-                    sendMessageTo(player, "command.thru.success");
-                    return CommandResult.success();
+                    context.sendMessage("command.thru.success");
+                    return context.successResult();
                 } else {
-                    throw ReturnMessageException.fromKey(player, "command.thru.notsafe");
+                    return context.errorResult("command.thru.notsafe");
                 }
             }
         } while (playerBlockRay.hasNext());
 
-        sendMessageTo(player, "command.thru.nospot");
-        return CommandResult.empty();
+        return context.errorResult("command.thru.nospot");
     }
 
     @Override
-    public void onReload() {
-        this.maxThru = Nucleus.getNucleus().getInternalServiceManager().getServiceUnchecked(JumpConfigAdapter.class).getNodeOrDefault().getMaxThru();
+    public void onReload(INucleusServiceCollection serviceCollection) {
+        this.maxThru = serviceCollection.moduleDataProvider().getModuleConfig(JumpConfig.class).getMaxThru();
     }
 
 }

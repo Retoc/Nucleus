@@ -4,10 +4,9 @@
  */
 package io.github.nucleuspowered.nucleus.modules.deathmessage.listeners;
 
-import io.github.nucleuspowered.nucleus.Nucleus;
 import io.github.nucleuspowered.nucleus.internal.interfaces.ListenerBase;
-import io.github.nucleuspowered.nucleus.modules.deathmessage.DeathMessageModule;
-import io.github.nucleuspowered.nucleus.modules.deathmessage.config.DeathMessageConfigAdapter;
+import io.github.nucleuspowered.nucleus.modules.deathmessage.config.DeathMessageConfig;
+import io.github.nucleuspowered.nucleus.services.INucleusServiceCollection;
 import org.spongepowered.api.entity.living.Living;
 import org.spongepowered.api.entity.living.player.Player;
 import org.spongepowered.api.event.Listener;
@@ -24,8 +23,9 @@ public class DisableDeathMessagesListener implements ListenerBase.Conditional {
         }
     }
 
-    @Override public boolean shouldEnable() {
-        return Nucleus.getNucleus().getConfigValue(DeathMessageModule.ID, DeathMessageConfigAdapter.class, x -> !x.isEnableDeathMessages()).orElse(false);
+    @Override
+    public boolean shouldEnable(INucleusServiceCollection serviceCollection) {
+        return serviceCollection.moduleDataProvider().getModuleConfig(DeathMessageConfig.class).isEnableDeathMessages();
     }
 
 }

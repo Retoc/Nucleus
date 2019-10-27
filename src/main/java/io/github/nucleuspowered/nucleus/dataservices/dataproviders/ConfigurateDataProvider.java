@@ -6,7 +6,7 @@ package io.github.nucleuspowered.nucleus.dataservices.dataproviders;
 
 import com.google.common.collect.ImmutableSet;
 import com.google.common.reflect.TypeToken;
-import io.github.nucleuspowered.nucleus.configurate.ConfigurateHelper;
+import io.github.nucleuspowered.nucleus.services.impl.configurate.ConfigurateHelper;
 import ninja.leaping.configurate.ConfigurationNode;
 import ninja.leaping.configurate.ConfigurationOptions;
 import ninja.leaping.configurate.commented.SimpleCommentedConfigurationNode;

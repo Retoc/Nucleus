@@ -4,9 +4,7 @@
  */
 package io.github.nucleuspowered.nucleus.api.events;
 
-import io.github.nucleuspowered.nucleus.api.NucleusAPI;
 import io.github.nucleuspowered.nucleus.api.annotations.MightOccurAsync;
-import io.github.nucleuspowered.nucleus.api.exceptions.NucleusException;
 import io.github.nucleuspowered.nucleus.api.service.NucleusMessageTokenService;
 import io.github.nucleuspowered.nucleus.api.text.NucleusTextTemplate;
 import org.spongepowered.api.command.CommandSource;
@@ -47,18 +45,12 @@ public interface NucleusTextTemplateEvent extends Event, Cancellable {
     /**
      * Attempts to set the NucleusTextTemplate message using a string.
      *
-     * <p>See {@link NucleusMessageTokenService#createFromString(String)} for
+     * <p>See {@link NucleusMessageTokenService#(String)} for
      * creating the tokens. Also see {@link #setMessage(NucleusTextTemplate)}.</p>
      *
      * @param message The message to send.
      */
-    default void setMessage(String message) {
-        try {
-            setMessage(NucleusAPI.getMessageTokenService().createFromString(message));
-        } catch (NucleusException e) {
-            throw new IllegalArgumentException("Could not create the NucleusTextTemplate", e);
-        }
-    }
+    void setMessage(String message);
 
     /**
      * Get the original recipients to send the message to.

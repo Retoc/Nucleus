@@ -4,12 +4,27 @@
  */
 package io.github.nucleuspowered.nucleus.modules.chatlogger.listeners;
 
-import io.github.nucleuspowered.nucleus.Nucleus;
 import io.github.nucleuspowered.nucleus.internal.interfaces.ListenerBase;
+import io.github.nucleuspowered.nucleus.modules.chatlogger.config.ChatLoggingConfig;
 import io.github.nucleuspowered.nucleus.modules.chatlogger.services.ChatLoggerHandler;
+import io.github.nucleuspowered.nucleus.services.IMessageProviderService;
+import io.github.nucleuspowered.nucleus.services.INucleusServiceCollection;
 
-public abstract class AbstractLoggerListener implements ListenerBase.Conditional {
+import javax.inject.Inject;
 
-    final ChatLoggerHandler handler = Nucleus.getNucleus().getInternalServiceManager().getServiceUnchecked(ChatLoggerHandler.class);
+abstract class AbstractLoggerListener implements ListenerBase.Conditional {
+
+    final ChatLoggerHandler handler;
+    final IMessageProviderService messageProviderService;
+
+    @Inject
+    AbstractLoggerListener(INucleusServiceCollection serviceCollection) {
+        this.handler = serviceCollection.getServiceUnchecked(ChatLoggerHandler.class);
+        this.messageProviderService = serviceCollection.messageProvider();
+    }
+
+    ChatLoggingConfig getConfig(INucleusServiceCollection serviceCollection) {
+        return serviceCollection.moduleDataProvider().getModuleConfig(ChatLoggingConfig.class);
+    }
 
 }

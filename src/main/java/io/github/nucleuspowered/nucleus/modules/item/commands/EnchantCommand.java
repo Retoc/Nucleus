@@ -4,25 +4,25 @@
  */
 package io.github.nucleuspowered.nucleus.modules.item.commands;
 
-import com.google.common.collect.Maps;
 import io.github.nucleuspowered.nucleus.Util;
 import io.github.nucleuspowered.nucleus.argumentparsers.BoundedIntegerArgument;
 import io.github.nucleuspowered.nucleus.argumentparsers.ImprovedCatalogTypeArgument;
-import io.github.nucleuspowered.nucleus.internal.annotations.command.Permissions;
-import io.github.nucleuspowered.nucleus.internal.annotations.command.RegisterCommand;
-import io.github.nucleuspowered.nucleus.internal.command.AbstractCommand;
-import io.github.nucleuspowered.nucleus.internal.docgen.annotations.EssentialsEquivalent;
-import io.github.nucleuspowered.nucleus.internal.permissions.PermissionInformation;
-import io.github.nucleuspowered.nucleus.internal.permissions.SuggestedLevel;
-import org.spongepowered.api.command.CommandResult;
-import org.spongepowered.api.command.args.CommandContext;
+import io.github.nucleuspowered.nucleus.internal.command.ICommandContext;
+import io.github.nucleuspowered.nucleus.internal.command.ICommandExecutor;
+import io.github.nucleuspowered.nucleus.internal.command.ICommandResult;
+import io.github.nucleuspowered.nucleus.internal.command.annotation.Command;
+import io.github.nucleuspowered.nucleus.internal.command.annotation.CommandModifier;
+import io.github.nucleuspowered.nucleus.internal.command.annotation.EssentialsEquivalent;
+import io.github.nucleuspowered.nucleus.internal.command.requirements.CommandModifiers;
+import io.github.nucleuspowered.nucleus.modules.item.ItemPermissions;
+import io.github.nucleuspowered.nucleus.services.INucleusServiceCollection;
+import org.spongepowered.api.command.CommandException;
 import org.spongepowered.api.command.args.CommandElement;
 import org.spongepowered.api.command.args.GenericArguments;
 import org.spongepowered.api.data.DataTransactionResult;
 import org.spongepowered.api.data.manipulator.mutable.item.EnchantmentData;
 import org.spongepowered.api.data.type.HandTypes;
 import org.spongepowered.api.entity.living.player.Player;
-import org.spongepowered.api.event.cause.Cause;
 import org.spongepowered.api.item.enchantment.Enchantment;
 import org.spongepowered.api.item.enchantment.EnchantmentType;
 import org.spongepowered.api.item.inventory.ItemStack;
@@ -30,62 +30,59 @@ import org.spongepowered.api.text.Text;
 import org.spongepowered.api.util.annotation.NonnullByDefault;
 
 import java.util.List;
-import java.util.Map;
 import java.util.stream.Collectors;
 
 @NonnullByDefault
-@Permissions
-@RegisterCommand("enchant")
 @EssentialsEquivalent({"enchant", "enchantment"})
-public class EnchantCommand extends AbstractCommand<Player> {
+@Command(
+        aliases = { "enchant", "enchantment" },
+        basePermission = ItemPermissions.BASE_ENCHANT,
+        commandDescriptionKey = "enchant",
+        modifiers = {
+                @CommandModifier(value = CommandModifiers.HAS_COOLDOWN, exemptPermission = ItemPermissions.EXEMPT_COOLDOWN_ENCHANT),
+                @CommandModifier(value = CommandModifiers.HAS_WARMUP, exemptPermission = ItemPermissions.EXEMPT_WARMUP_ENCHANT),
+                @CommandModifier(value = CommandModifiers.HAS_COST, exemptPermission = ItemPermissions.EXEMPT_COST_ENCHANT)
+        }
+)
+public class EnchantCommand implements ICommandExecutor<Player> {
 
     private final String enchantmentKey = "enchantment";
     private final String levelKey = "level";
 
     @Override
-    protected Map<String, PermissionInformation> permissionSuffixesToRegister() {
-        Map<String, PermissionInformation> msp = Maps.newHashMap();
-        msp.put("unsafe", PermissionInformation.getWithTranslation("permission.enchant.unsafe", SuggestedLevel.ADMIN));
-        return msp;
-    }
-
-    @Override
-    public CommandElement[] getArguments() {
+    public CommandElement[] parameters(INucleusServiceCollection serviceCollection) {
         return new CommandElement[] {
             new ImprovedCatalogTypeArgument(Text.of(this.enchantmentKey), EnchantmentType.class),
             new BoundedIntegerArgument(Text.of(this.levelKey), 0, Short.MAX_VALUE),
             GenericArguments.flags()
-                    .permissionFlag(this.permissions.getPermissionWithSuffix("unsafe"), "u", "-unsafe")
+                    .permissionFlag(ItemPermissions.ENCHANT_UNSAFE, "u", "-unsafe")
                     .flag("o", "-overwrite")
                     .buildWith(GenericArguments.none())
         };
     }
 
-    @Override
-    public CommandResult executeCommand(Player src, CommandContext args, Cause cause) {
+    @Override public ICommandResult execute(ICommandContext<? extends Player> context) throws CommandException {
+        Player src = context.getIfPlayer();
         // Check for item in hand
         if (!src.getItemInHand(HandTypes.MAIN_HAND).isPresent()) {
-            sendMessageTo(src, "command.enchant.noitem");
-            return CommandResult.empty();
+            return context.errorResult("command.enchant.noitem");
         }
 
         // Get the arguments
         ItemStack itemInHand = src.getItemInHand(HandTypes.MAIN_HAND).get();
-        EnchantmentType enchantment = args.<EnchantmentType>getOne(this.enchantmentKey).get();
-        int level = args.<Integer>getOne(this.levelKey).get();
-        boolean allowUnsafe = args.hasAny("u");
-        boolean allowOverwrite = args.hasAny("o");
+        EnchantmentType enchantment = context.requireOne(this.enchantmentKey, EnchantmentType.class);
+        int level = context.requireOne(this.levelKey, Integer.class);
+        boolean allowUnsafe = context.hasAny("u");
+        boolean allowOverwrite = context.hasAny("o");
 
         // Can we apply the enchantment?
         if (!allowUnsafe) {
             if (!enchantment.canBeAppliedToStack(itemInHand)) {
-                sendMessageTo(src, "command.enchant.nounsafe.enchant", itemInHand);
-                return CommandResult.empty();
+                return context.errorResult("command.enchant.nounsafe.enchant", itemInHand);
             }
 
             if (level > enchantment.getMaximumLevel()) {
-                sendMessageTo(src, "command.enchant.nounsafe.level", itemInHand);
-                return CommandResult.empty();
+                return context.errorResult("command.enchant.nounsafe.level", itemInHand);
             }
         }
 
@@ -98,8 +95,7 @@ public class EnchantCommand extends AbstractCommand<Player> {
         if (level == 0) {
             // we want to remove only.
             if (!currentEnchants.removeIf(x -> x.getType().getId().equals(enchantment.getId()))) {
-                sendMessageTo(src, "command.enchant.noenchantment", enchantment);
-                return CommandResult.empty();
+                return context.errorResult("command.enchant.noenchantment", enchantment);
             }
         } else {
 
@@ -118,8 +114,7 @@ public class EnchantCommand extends AbstractCommand<Player> {
                     sb.append(Util.getTranslatableIfPresent(x.getType()));
                 });
 
-                sendMessageTo(src, "command.enchant.overwrite", sb.toString());
-                return CommandResult.empty();
+                return context.errorResult("command.enchant.overwrite", sb.toString());
             }
 
             // Remove all enchants that cannot co-exist.
@@ -137,14 +132,13 @@ public class EnchantCommand extends AbstractCommand<Player> {
             // If successful, we need to put the item in the player's hand for it to actually take effect.
             src.setItemInHand(HandTypes.MAIN_HAND, itemInHand);
             if (level == 0) {
-                sendMessageTo(src, "command.enchant.removesuccess", enchantment);
+                context.sendMessage("command.enchant.removesuccess", enchantment);
             } else {
-                sendMessageTo(src, "command.enchant.success", enchantment, level);
+                context.sendMessage("command.enchant.success", enchantment, level);
             }
-            return CommandResult.success();
+            return context.successResult();
         }
 
-        sendMessageTo(src, "command.enchant.error", enchantment, level);
-        return CommandResult.empty();
+        return context.errorResult("command.enchant.error", enchantment, level);
     }
 }

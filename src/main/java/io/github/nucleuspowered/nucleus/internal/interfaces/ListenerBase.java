@@ -4,30 +4,20 @@
  */
 package io.github.nucleuspowered.nucleus.internal.interfaces;
 
-import com.google.common.collect.Maps;
 import io.github.nucleuspowered.nucleus.annotationprocessor.Store;
 import io.github.nucleuspowered.nucleus.internal.Constants;
 import io.github.nucleuspowered.nucleus.internal.annotations.EntryPoint;
-import io.github.nucleuspowered.nucleus.internal.permissions.PermissionInformation;
-import io.github.nucleuspowered.nucleus.internal.traits.InternalServiceManagerTrait;
-import io.github.nucleuspowered.nucleus.internal.traits.MessageProviderTrait;
-import io.github.nucleuspowered.nucleus.internal.traits.PermissionTrait;
-
-import java.util.Map;
+import io.github.nucleuspowered.nucleus.services.INucleusServiceCollection;
 
 @EntryPoint
 @Store(Constants.LISTENER)
-public interface ListenerBase extends InternalServiceManagerTrait, PermissionTrait, MessageProviderTrait {
-
-    default Map<String, PermissionInformation> getPermissions() {
-        return Maps.newHashMap();
-    }
+public interface ListenerBase {
 
     @EntryPoint
     @Store(Constants.LISTENER)
     interface Conditional extends ListenerBase {
 
-        boolean shouldEnable();
+        boolean shouldEnable(INucleusServiceCollection serviceCollection);
     }
 
 }

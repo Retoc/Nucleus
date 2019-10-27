@@ -4,33 +4,29 @@
  */
 package io.github.nucleuspowered.nucleus.modules.teleport.commands;
 
-import io.github.nucleuspowered.nucleus.internal.annotations.command.NoModifiers;
-import io.github.nucleuspowered.nucleus.internal.annotations.command.Permissions;
-import io.github.nucleuspowered.nucleus.internal.annotations.command.RegisterCommand;
-import io.github.nucleuspowered.nucleus.internal.command.AbstractCommand;
-import io.github.nucleuspowered.nucleus.internal.docgen.annotations.EssentialsEquivalent;
-import io.github.nucleuspowered.nucleus.internal.permissions.SuggestedLevel;
+import io.github.nucleuspowered.nucleus.internal.command.ICommandContext;
+import io.github.nucleuspowered.nucleus.internal.command.ICommandExecutor;
+import io.github.nucleuspowered.nucleus.internal.command.ICommandResult;
+import io.github.nucleuspowered.nucleus.internal.command.annotation.Command;
+import io.github.nucleuspowered.nucleus.internal.command.annotation.EssentialsEquivalent;
+import io.github.nucleuspowered.nucleus.modules.teleport.TeleportPermissions;
 import io.github.nucleuspowered.nucleus.modules.teleport.services.PlayerTeleporterService;
-import org.spongepowered.api.command.CommandResult;
-import org.spongepowered.api.command.args.CommandContext;
+import org.spongepowered.api.command.CommandException;
 import org.spongepowered.api.entity.living.player.Player;
-import org.spongepowered.api.event.cause.Cause;
 import org.spongepowered.api.util.annotation.NonnullByDefault;
 
-/**
- * /tpdeny.
- */
-@Permissions(prefix = "teleport", suggestedLevel = SuggestedLevel.USER)
-@NoModifiers
 @NonnullByDefault
-@RegisterCommand({"tpdeny", "teleportdeny", "tpno"})
 @EssentialsEquivalent({"tpdeny", "tpno"})
-public class TeleportDenyCommand extends AbstractCommand<Player> {
-
-    private final PlayerTeleporterService teleportHandler = getServiceUnchecked(PlayerTeleporterService.class);
+@Command(
+        aliases = {"tpdeny", "teleportdeny", "tpno"},
+        basePermission = TeleportPermissions.BASE_TPDENY,
+        commandDescriptionKey = "tpdeny"
+)
+public class TeleportDenyCommand implements ICommandExecutor<Player> {
 
     @Override
-    public CommandResult executeCommand(Player src, CommandContext args, Cause cause) {
-        return this.teleportHandler.deny(src);
+    public ICommandResult execute(ICommandContext<? extends Player> context) throws CommandException {
+        return context.getResultFromBoolean(
+                context.getServiceCollection().getServiceUnchecked(PlayerTeleporterService.class).deny(context.getIfPlayer()));
     }
 }

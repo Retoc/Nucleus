@@ -4,7 +4,7 @@
  */
 package io.github.nucleuspowered.storage.services;
 
-import io.github.nucleuspowered.nucleus.storage.dataobjects.configurate.AbstractConfigurateBackedDataObject;
+import io.github.nucleuspowered.nucleus.services.impl.storage.dataobjects.configurate.AbstractConfigurateBackedDataObject;
 import io.github.nucleuspowered.storage.dataobjects.IDataObject;
 import io.github.nucleuspowered.storage.queryobjects.IQueryObject;
 import io.github.nucleuspowered.storage.util.KeyedObject;

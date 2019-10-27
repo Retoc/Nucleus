@@ -4,19 +4,17 @@
  */
 package io.github.nucleuspowered.nucleus.modules.world.commands;
 
-import io.github.nucleuspowered.nucleus.Nucleus;
 import io.github.nucleuspowered.nucleus.Util;
-import io.github.nucleuspowered.nucleus.internal.annotations.command.NoModifiers;
-import io.github.nucleuspowered.nucleus.internal.annotations.command.Permissions;
-import io.github.nucleuspowered.nucleus.internal.annotations.command.RegisterCommand;
-import io.github.nucleuspowered.nucleus.internal.command.AbstractCommand;
-import io.github.nucleuspowered.nucleus.internal.permissions.SuggestedLevel;
-import org.spongepowered.api.command.CommandResult;
+import io.github.nucleuspowered.nucleus.internal.command.ICommandContext;
+import io.github.nucleuspowered.nucleus.internal.command.ICommandExecutor;
+import io.github.nucleuspowered.nucleus.internal.command.ICommandResult;
+import io.github.nucleuspowered.nucleus.internal.command.NucleusParameters;
+import io.github.nucleuspowered.nucleus.internal.command.annotation.Command;
+import io.github.nucleuspowered.nucleus.modules.world.WorldPermissions;
+import io.github.nucleuspowered.nucleus.services.INucleusServiceCollection;
+import org.spongepowered.api.command.CommandException;
 import org.spongepowered.api.command.CommandSource;
-import org.spongepowered.api.command.args.CommandContext;
 import org.spongepowered.api.command.args.CommandElement;
-import org.spongepowered.api.command.args.GenericArguments;
-import org.spongepowered.api.event.cause.Cause;
 import org.spongepowered.api.text.Text;
 import org.spongepowered.api.text.action.TextActions;
 import org.spongepowered.api.text.serializer.TextSerializers;
@@ -29,25 +27,29 @@ import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
 
-@NoModifiers
 @NonnullByDefault
-@Permissions(prefix = "world", suggestedLevel = SuggestedLevel.ADMIN)
-@RegisterCommand(value = { "gamerule" }, subcommandOf = WorldCommand.class, rootAliasRegister = "gamerules")
-public class GameruleCommand extends AbstractCommand<CommandSource> {
+@Command(
+        aliases = {"gamerule"},
+        basePermission = WorldPermissions.BASE_WORLD_GAMERULE,
+        commandDescriptionKey = "world.gamerule",
+        parentCommand = WorldCommand.class
+)
+public class GameruleCommand implements ICommandExecutor<CommandSource> {
 
     private static final String worldKey = "world";
 
-    @Override public CommandElement[] getArguments() {
+    @Override public CommandElement[] parameters(INucleusServiceCollection serviceCollection) {
         return new CommandElement[] {
-            GenericArguments.optionalWeak(GenericArguments.onlyOne(GenericArguments.world(Text.of(worldKey))))
+                NucleusParameters.OPTIONAL_WORLD_PROPERTIES_ENABLED_ONLY
         };
     }
 
-    @Override public CommandResult executeCommand(CommandSource src, CommandContext args, Cause cause) throws Exception {
-        WorldProperties worldProperties = getWorldFromUserOrArgs(src, worldKey, args);
+    @Override public ICommandResult execute(ICommandContext<? extends CommandSource> context) throws CommandException {
+        WorldProperties worldProperties = context.getWorldPropertiesOrFromSelf(NucleusParameters.Keys.WORLD)
+                .orElseThrow(() -> context.createException("command.world.player"));
         Map<String, String> gameRules = worldProperties.getGameRules();
 
-        String message = Nucleus.getNucleus().getMessageProvider().getMessageWithFormat("command.world.gamerule.key");
+        String message = context.getMessageString("command.world.gamerule.key");
         List<Text> text = gameRules.entrySet().stream().sorted(Comparator.comparing(Map.Entry::getKey))
             .map(x -> Text.of(
                 TextActions.suggestCommand(String.format("/world gamerule set %s %s ", worldProperties.getWorldName(), x.getKey())),
@@ -55,11 +57,11 @@ public class GameruleCommand extends AbstractCommand<CommandSource> {
             ))
             .collect(Collectors.toList());
 
-        Util.getPaginationBuilder(src)
-            .title(Nucleus.getNucleus().getMessageProvider().getTextMessageWithFormat("command.world.gamerule.header", worldProperties.getWorldName()))
+        Util.getPaginationBuilder(context.getCommandSourceUnchecked())
+            .title(context.getMessage("command.world.gamerule.header", worldProperties.getWorldName()))
             .contents(text)
-            .sendTo(src);
+            .sendTo(context.getCommandSourceUnchecked());
 
-        return CommandResult.success();
+        return context.successResult();
     }
 }

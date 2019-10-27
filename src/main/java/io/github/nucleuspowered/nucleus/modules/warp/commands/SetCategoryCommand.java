@@ -4,104 +4,120 @@
  */
 package io.github.nucleuspowered.nucleus.modules.warp.commands;
 
-import io.github.nucleuspowered.nucleus.Nucleus;
+import com.google.common.reflect.TypeToken;
 import io.github.nucleuspowered.nucleus.api.nucleusdata.Warp;
 import io.github.nucleuspowered.nucleus.api.nucleusdata.WarpCategory;
-import io.github.nucleuspowered.nucleus.internal.annotations.RunAsync;
-import io.github.nucleuspowered.nucleus.internal.annotations.command.NoModifiers;
-import io.github.nucleuspowered.nucleus.internal.annotations.command.Permissions;
-import io.github.nucleuspowered.nucleus.internal.annotations.command.RegisterCommand;
-import io.github.nucleuspowered.nucleus.internal.command.AbstractCommand;
-import io.github.nucleuspowered.nucleus.internal.command.ReturnMessageException;
-import io.github.nucleuspowered.nucleus.modules.warp.WarpParameters;
+import io.github.nucleuspowered.nucleus.internal.command.ICommandContext;
+import io.github.nucleuspowered.nucleus.internal.command.ICommandExecutor;
+import io.github.nucleuspowered.nucleus.internal.command.ICommandResult;
+import io.github.nucleuspowered.nucleus.internal.command.annotation.Command;
+import io.github.nucleuspowered.nucleus.modules.warp.WarpPermissions;
 import io.github.nucleuspowered.nucleus.modules.warp.services.WarpService;
-import org.spongepowered.api.command.CommandResult;
+import io.github.nucleuspowered.nucleus.services.INucleusServiceCollection;
+import org.spongepowered.api.command.CommandException;
 import org.spongepowered.api.command.CommandSource;
-import org.spongepowered.api.command.args.*;
-import org.spongepowered.api.event.cause.Cause;
+import org.spongepowered.api.command.args.ArgumentParseException;
+import org.spongepowered.api.command.args.CommandArgs;
+import org.spongepowered.api.command.args.CommandContext;
+import org.spongepowered.api.command.args.CommandElement;
+import org.spongepowered.api.command.args.GenericArguments;
 import org.spongepowered.api.text.Text;
 import org.spongepowered.api.text.action.TextActions;
 import org.spongepowered.api.util.Tuple;
 import org.spongepowered.api.util.annotation.NonnullByDefault;
 
-import javax.annotation.Nonnull;
-import javax.annotation.Nullable;
 import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.stream.Collectors;
 
-@RunAsync
-@NoModifiers
+import javax.annotation.Nonnull;
+import javax.annotation.Nullable;
+
 @NonnullByDefault
-@Permissions(prefix = "warp")
-@RegisterCommand(value = {"setcategory"}, subcommandOf = WarpCommand.class)
-public class SetCategoryCommand extends AbstractCommand<CommandSource> {
+@Command(
+        aliases = {"setcategory"},
+        basePermission = WarpPermissions.BASE_WARP_SETCATEGORY,
+        commandDescriptionKey = "warp.setcategory",
+        async = true,
+        parentCommand = WarpCommand.class
+)
+public class SetCategoryCommand implements ICommandExecutor<CommandSource> {
 
-    private final String categoryKey = "category";
-    private final WarpService handler = getServiceUnchecked(WarpService.class);
+    private static final TypeToken<Tuple<String, Boolean>> TUPLE_TYPE_TOKEN = new TypeToken<Tuple<String, Boolean>>() {};
 
-    @Override public CommandElement[] getArguments() {
+    @Override public CommandElement[] parameters(INucleusServiceCollection serviceCollection) {
         return new CommandElement[] {
             GenericArguments.flags().flag("r", "-remove", "-delete").flag("n", "-new").buildWith(
                 GenericArguments.seq(
-                        WarpParameters.WARP_NO_PERM,
-                        GenericArguments.optional(new SetCategoryWarpCategoryArgument (Text.of(this.categoryKey)))
+                        serviceCollection.getServiceUnchecked(WarpService.class).warpElement(false),
+                        GenericArguments.optional(
+                                new SetCategoryWarpCategoryArgument(
+                                        serviceCollection.getServiceUnchecked(WarpService.class)
+                                ))
                 )
             )
         };
     }
 
-    @Override public CommandResult executeCommand(CommandSource src, CommandContext args, Cause cause) throws Exception {
-        String warpName = args.<Warp>getOne(WarpParameters.WARP_KEY).get().getName();
-        if (args.hasAny("r")) {
+    @Override public ICommandResult execute(ICommandContext<? extends CommandSource> context) throws CommandException {
+        String warpName = context.requireOne(WarpService.WARP_KEY, Warp.class).getName();
+        WarpService handler = context.getServiceCollection().getServiceUnchecked(WarpService.class);
+        if (context.hasAny("r")) {
             // Remove the category.
-            if (this.handler.setWarpCategory(warpName, null)) {
-                src.sendMessage(Nucleus.getNucleus().getMessageProvider().getTextMessageWithFormat("command.warp.category.removed", warpName));
-                return CommandResult.success();
+            if (handler.setWarpCategory(warpName, null)) {
+                context.sendMessage("command.warp.category.removed", warpName);
+                return context.successResult();
             }
 
-            throw new ReturnMessageException(Nucleus.getNucleus().getMessageProvider().getTextMessageWithFormat("command.warp.category.noremove", warpName));
+            return context.errorResult("command.warp.category.noremove", warpName);
         }
 
-        Optional<Tuple<String, Boolean>> categoryOp = args.getOne(this.categoryKey);
+        Optional<Tuple<String, Boolean>> categoryOp = context.getOne(WarpService.WARP_CATEGORY_KEY, TUPLE_TYPE_TOKEN);
         if (!categoryOp.isPresent()) {
-            throw new ReturnMessageException(Nucleus.getNucleus().getMessageProvider().getTextMessageWithFormat("command.warp.category.required"));
+            return context.errorResult("command.warp.category.required");
         }
 
         Tuple<String, Boolean> category = categoryOp.get();
-        if (!args.hasAny("n") && !category.getSecond()) {
-            src.sendMessage(
-                    Nucleus.getNucleus().getMessageProvider().getTextMessageWithFormat("command.warp.category.requirenew", category.getFirst())
+        if (!context.hasAny("n") && !category.getSecond()) {
+            context.sendMessageText(context.getMessage("command.warp.category.requirenew", category.getFirst())
                     .toBuilder().onClick(TextActions.runCommand("/warp setcategory -n " + warpName + " " + category.getFirst())).build()
             );
 
-            return CommandResult.empty();
+            return context.failResult();
         }
 
         // Add the category.
-        if (this.handler.setWarpCategory(warpName, category.getFirst())) {
-            src.sendMessage(Nucleus.getNucleus().getMessageProvider().getTextMessageWithFormat("command.warp.category.added", category.getFirst(), warpName));
-            return CommandResult.success();
+        if (handler.setWarpCategory(warpName, category.getFirst())) {
+            context.sendMessage("command.warp.category.added", category.getFirst(), warpName);
+            return context.successResult();
         }
 
-        throw ReturnMessageException.fromKey(src, "command.warp.category.couldnotadd", Text.of(category.getFirst()), Text.of(warpName));
+        return context.errorResult("command.warp.category.couldnotadd", Text.of(category.getFirst()), Text.of(warpName));
     }
 
-    private class SetCategoryWarpCategoryArgument extends CommandElement {
+    private static class SetCategoryWarpCategoryArgument extends CommandElement {
 
-        public SetCategoryWarpCategoryArgument (@Nullable Text key) {
-            super(key);
+        private final WarpService service;
+
+        SetCategoryWarpCategoryArgument(WarpService service) {
+            super(Text.of(WarpService.WARP_CATEGORY_KEY));
+            this.service = service;
         }
 
         @Nullable @Override protected Object parseValue(@Nonnull CommandSource source, @Nonnull CommandArgs args) throws ArgumentParseException {
             String arg = args.next();
-            return Tuple.of(arg, SetCategoryCommand.this.handler
+            return Tuple.of(arg, this.service
                     .getWarpsWithCategories().keySet().stream().filter(Objects::nonNull).anyMatch(x -> x.getId().equals(arg)));
         }
 
         @Nonnull @Override public List<String> complete(@Nonnull CommandSource src, @Nonnull CommandArgs args, @Nonnull CommandContext context) {
-            return SetCategoryCommand.this.handler.getWarpsWithCategories().keySet().stream().filter(Objects::isNull).map(WarpCategory::getId).collect(Collectors.toList());
+            return this.service.getWarpsWithCategories()
+                    .keySet()
+                    .stream()
+                    .filter(Objects::nonNull)
+                    .map(WarpCategory::getId)
+                    .collect(Collectors.toList());
         }
     }
 }

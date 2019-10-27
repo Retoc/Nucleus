@@ -5,30 +5,28 @@
 package io.github.nucleuspowered.nucleus.modules.message;
 
 import com.google.common.collect.Lists;
-import io.github.nucleuspowered.nucleus.Nucleus;
 import io.github.nucleuspowered.nucleus.api.chat.NucleusChatChannel;
-import io.github.nucleuspowered.nucleus.internal.traits.PermissionTrait;
-import io.github.nucleuspowered.nucleus.modules.message.commands.HelpOpCommand;
+import io.github.nucleuspowered.nucleus.services.INucleusServiceCollection;
+import io.github.nucleuspowered.nucleus.services.IPermissionService;
 import org.spongepowered.api.Sponge;
 import org.spongepowered.api.text.channel.MessageReceiver;
 
 import java.util.Collection;
 import java.util.List;
 
-public class HelpOpMessageChannel implements NucleusChatChannel.HelpOp, PermissionTrait {
+public class HelpOpMessageChannel implements NucleusChatChannel.HelpOp {
 
-    private static String PERMISSION = Nucleus.getNucleus().getPermissionRegistry()
-            .getPermissionsForNucleusCommand(HelpOpCommand.class)
-            .getPermissionWithSuffix("receive");
+    private final IPermissionService permissionService;
 
-    public static HelpOpMessageChannel INSTANCE = new HelpOpMessageChannel();
-
-    private HelpOpMessageChannel() { }
+    public HelpOpMessageChannel(INucleusServiceCollection serviceCollection) {
+        this.permissionService = serviceCollection.permissionService();
+    }
 
     @Override
     public Collection<MessageReceiver> getMembers() {
         List<MessageReceiver> members = Lists.newArrayList(Sponge.getServer().getConsole());
-        Sponge.getServer().getOnlinePlayers().stream().filter(x -> hasPermission(x, PERMISSION)).forEach(members::add);
+        Sponge.getServer().getOnlinePlayers().stream()
+                .filter(x -> this.permissionService.hasPermission(x, MessagePermissions.HELPOP_RECEIVE)).forEach(members::add);
         return members;
     }
 }

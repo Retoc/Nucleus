@@ -4,34 +4,33 @@
  */
 package io.github.nucleuspowered.nucleus.modules.mail.commands;
 
-import io.github.nucleuspowered.nucleus.Nucleus;
-import io.github.nucleuspowered.nucleus.internal.annotations.RunAsync;
-import io.github.nucleuspowered.nucleus.internal.annotations.command.Permissions;
-import io.github.nucleuspowered.nucleus.internal.annotations.command.RegisterCommand;
-import io.github.nucleuspowered.nucleus.internal.command.AbstractCommand;
+import io.github.nucleuspowered.nucleus.internal.command.ICommandContext;
+import io.github.nucleuspowered.nucleus.internal.command.ICommandExecutor;
+import io.github.nucleuspowered.nucleus.internal.command.ICommandResult;
 import io.github.nucleuspowered.nucleus.internal.command.NucleusParameters;
-import io.github.nucleuspowered.nucleus.internal.permissions.SuggestedLevel;
+import io.github.nucleuspowered.nucleus.internal.command.annotation.Command;
+import io.github.nucleuspowered.nucleus.modules.mail.MailPermissions;
 import io.github.nucleuspowered.nucleus.modules.mail.services.MailHandler;
+import io.github.nucleuspowered.nucleus.services.INucleusServiceCollection;
 import org.spongepowered.api.command.CommandException;
-import org.spongepowered.api.command.CommandResult;
 import org.spongepowered.api.command.CommandSource;
-import org.spongepowered.api.command.args.CommandContext;
 import org.spongepowered.api.command.args.CommandElement;
+import org.spongepowered.api.entity.living.player.Player;
 import org.spongepowered.api.entity.living.player.User;
-import org.spongepowered.api.event.cause.Cause;
 import org.spongepowered.api.util.annotation.NonnullByDefault;
 
-@Permissions(prefix = "mail", suggestedLevel = SuggestedLevel.USER)
-@RunAsync
-@RegisterCommand(value = {"send", "s"}, subcommandOf = MailCommand.class, rootAliasRegister = "sendmail")
 @NonnullByDefault
-public class SendMailCommand extends AbstractCommand<CommandSource> {
-
-    private final MailHandler handler = getServiceUnchecked(MailHandler.class);
-    private final String perm = getPermissionHandlerFor(MailCommand.class).getBase();
+@Command(
+        aliases = { "send", "s", "#sendmail" },
+        basePermission = MailPermissions.BASE_MAIL_SEND,
+        commandDescriptionKey = "mail.send",
+        async = true,
+        parentCommand = MailCommand.class
+)
+public class SendMailCommand implements ICommandExecutor<CommandSource> {
 
     @Override
-    public CommandElement[] getArguments() {
+    public CommandElement[] parameters(INucleusServiceCollection serviceCollection) {
         return new CommandElement[] {
                 NucleusParameters.ONE_USER,
                 NucleusParameters.MESSAGE
@@ -39,26 +38,25 @@ public class SendMailCommand extends AbstractCommand<CommandSource> {
     }
 
     @Override
-    public CommandResult executeCommand(CommandSource src, CommandContext args, Cause cause) throws Exception {
-        User pl = args.<User>getOne(NucleusParameters.Keys.USER).orElseThrow(() -> new CommandException(
-                Nucleus.getNucleus().getMessageProvider().getTextMessageWithFormat("args.user.none")));
+    public ICommandResult execute(ICommandContext<? extends CommandSource> context) throws CommandException {
+        User pl = context.getOne(NucleusParameters.Keys.USER, User.class)
+                .orElseThrow(() -> context.createException("args.user.none"));
 
         // Only send mails to players that can read them.
-        if (!hasPermission(pl, this.perm)) {
-            src.sendMessage(Nucleus.getNucleus().getMessageProvider().getTextMessageWithFormat("command.mail.send.error", pl.getName()));
-            return CommandResult.empty();
+        if (!context.testPermissionFor(pl, MailPermissions.BASE_MAIL)) {
+            return context.errorResult("command.mail.send.error", pl.getName());
         }
 
         // Send the message.
-        String m = args.<String>getOne(NucleusParameters.Keys.MESSAGE).orElseThrow(() -> new CommandException(
-                Nucleus.getNucleus().getMessageProvider().getTextMessageWithFormat("args.message.none")));
-        if (src instanceof User) {
-            this.handler.sendMail((User) src, pl, m);
+        String m = context.getOne(NucleusParameters.Keys.MESSAGE, String.class)
+                .orElseThrow(() -> context.createException("args.message.none"));
+        MailHandler handler = context.getServiceCollection().getServiceUnchecked(MailHandler.class);
+        if (context.is(Player.class)) {
+            handler.sendMail(context.getIfPlayer(), pl, m);
         } else {
-            this.handler.sendMailFromConsole(pl, m);
+            handler.sendMailFromConsole(pl, m);
         }
 
-        src.sendMessage(Nucleus.getNucleus().getMessageProvider().getTextMessageWithFormat("command.mail.send.successful", pl.getName()));
-        return CommandResult.success();
+        return context.errorResult("command.mail.send.successful", pl.getName());
     }
 }

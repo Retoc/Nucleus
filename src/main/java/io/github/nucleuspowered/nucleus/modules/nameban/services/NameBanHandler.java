@@ -6,6 +6,7 @@ package io.github.nucleuspowered.nucleus.modules.nameban.services;
 
 import io.github.nucleuspowered.nucleus.Nucleus;
 import io.github.nucleuspowered.nucleus.Util;
+import io.github.nucleuspowered.nucleus.api.exceptions.NameBanException;
 import io.github.nucleuspowered.nucleus.api.exceptions.NucleusException;
 import io.github.nucleuspowered.nucleus.api.service.NucleusNameBanService;
 import io.github.nucleuspowered.nucleus.internal.annotations.APIService;
@@ -23,7 +24,7 @@ public class NameBanHandler implements NucleusNameBanService, ServiceBase {
 
     private final Nucleus plugin = Nucleus.getNucleus();
 
-    @Override public boolean addName(String name, String reason, Cause cause) throws NucleusException {
+    @Override public boolean addName(String name, String reason, Cause cause) throws NameBanException {
         if (Util.usernameRegex.matcher(name).matches()) {
             if (Nucleus.getNucleus().getNameBanService().setBan(name, reason)) {
                 Sponge.getEventManager().post(new NameBanEvent.Banned(name, reason, cause));
@@ -35,14 +36,15 @@ public class NameBanHandler implements NucleusNameBanService, ServiceBase {
             return false;
         }
 
-        throw new NucleusException(Text.of("That is not a valid username."), NucleusException.ExceptionType.DISALLOWED_NAME);
+        throw new NameBanException(
+                Text.of("That is not a valid username."), NameBanException.Reasons.DISALLOWED_NAME);
     }
 
     @Override public Optional<String> getReasonForBan(String name) {
         return Nucleus.getNucleus().getNameBanService().getBanReason(name.toLowerCase());
     }
 
-    @Override public boolean removeName(String name, Cause cause) throws NucleusException {
+    @Override public boolean removeName(String name, Cause cause) throws NameBanException {
         if (Util.usernameRegex.matcher(name).matches()) {
             Optional<String> reason = getReasonForBan(name);
             if (reason.isPresent() && Nucleus.getNucleus().getNameBanService().removeBan(name)) {
@@ -53,6 +55,6 @@ public class NameBanHandler implements NucleusNameBanService, ServiceBase {
             return false;
         }
 
-        throw new NucleusException(Text.of("That is not a valid username."), NucleusException.ExceptionType.DISALLOWED_NAME);
+        throw new NameBanException(Text.of("That is not a valid username."), NameBanException.Reasons.DISALLOWED_NAME);
     }
 }

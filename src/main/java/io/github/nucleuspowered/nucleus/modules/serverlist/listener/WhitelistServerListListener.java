@@ -4,15 +4,13 @@
  */
 package io.github.nucleuspowered.nucleus.modules.serverlist.listener;
 
-import io.github.nucleuspowered.nucleus.Nucleus;
 import io.github.nucleuspowered.nucleus.api.text.NucleusTextTemplate;
 import io.github.nucleuspowered.nucleus.internal.interfaces.ListenerBase;
 import io.github.nucleuspowered.nucleus.internal.interfaces.Reloadable;
-import io.github.nucleuspowered.nucleus.internal.text.NucleusTextTemplateImpl;
-import io.github.nucleuspowered.nucleus.modules.serverlist.ServerListModule;
 import io.github.nucleuspowered.nucleus.modules.serverlist.config.ServerListConfig;
-import io.github.nucleuspowered.nucleus.modules.serverlist.config.ServerListConfigAdapter;
 import io.github.nucleuspowered.nucleus.modules.serverlist.services.ServerListService;
+import io.github.nucleuspowered.nucleus.services.INucleusServiceCollection;
+import io.github.nucleuspowered.nucleus.services.impl.texttemplatefactory.NucleusTextTemplateImpl;
 import org.spongepowered.api.Sponge;
 import org.spongepowered.api.event.Listener;
 import org.spongepowered.api.event.Order;
@@ -23,16 +21,18 @@ import org.spongepowered.api.text.Text;
 import java.util.List;
 import java.util.Optional;
 import java.util.Random;
-import java.util.function.Function;
+
+import javax.inject.Inject;
 
 public class WhitelistServerListListener implements Reloadable, ListenerBase.Conditional {
 
     private final ServerListService service;
     private final Random random = new Random();
-    private ServerListConfig config;
+    private ServerListConfig config = new ServerListConfig();
 
-    public WhitelistServerListListener() {
-        this.service = getServiceUnchecked(ServerListService.class);
+    @Inject
+    public WhitelistServerListListener(INucleusServiceCollection serviceCollection) {
+        this.service = serviceCollection.getServiceUnchecked(ServerListService.class);
     }
 
     @Listener(order = Order.LATE)
@@ -53,13 +53,12 @@ public class WhitelistServerListListener implements Reloadable, ListenerBase.Con
     }
 
     @Override
-    public void onReload() {
-        this.config = Nucleus.getNucleus().getConfigValue(ServerListModule.ID, ServerListConfigAdapter.class, Function.identity())
-                .orElseGet(ServerListConfig::new);
+    public void onReload(INucleusServiceCollection serviceCollection) {
+        this.config = serviceCollection.moduleDataProvider().getModuleConfig(ServerListConfig.class);
     }
 
     @Override
-    public boolean shouldEnable() {
-        return Nucleus.getNucleus().getConfigValue(ServerListModule.ID, ServerListConfigAdapter.class, ServerListConfig::enableWhitelistListener).orElse(false);
+    public boolean shouldEnable(INucleusServiceCollection serviceCollection) {
+        return serviceCollection.moduleDataProvider().getModuleConfig(ServerListConfig.class).enableWhitelistListener();
     }
 }

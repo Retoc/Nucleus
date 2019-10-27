@@ -8,7 +8,7 @@ import com.google.common.base.Preconditions;
 import com.google.common.collect.Lists;
 import com.google.common.collect.Maps;
 import io.github.nucleuspowered.nucleus.config.bases.AbstractStandardNodeConfig;
-import io.github.nucleuspowered.nucleus.internal.messages.ResourceMessageProvider;
+import io.github.nucleuspowered.nucleus.services.impl.messageprovider.legacy.ResourceMessageProvider;
 import ninja.leaping.configurate.commented.CommentedConfigurationNode;
 import ninja.leaping.configurate.commented.SimpleCommentedConfigurationNode;
 import ninja.leaping.configurate.hocon.HoconConfigurationLoader;

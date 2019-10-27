@@ -4,27 +4,46 @@
  */
 package io.github.nucleuspowered.nucleus.modules.misc.commands;
 
-import io.github.nucleuspowered.nucleus.Nucleus;
-import io.github.nucleuspowered.nucleus.internal.annotations.command.Permissions;
-import io.github.nucleuspowered.nucleus.internal.annotations.command.RegisterCommand;
-import io.github.nucleuspowered.nucleus.internal.command.AbstractCommand;
-import io.github.nucleuspowered.nucleus.internal.docgen.annotations.EssentialsEquivalent;
-import org.spongepowered.api.command.CommandResult;
+import io.github.nucleuspowered.nucleus.internal.command.ICommandContext;
+import io.github.nucleuspowered.nucleus.internal.command.ICommandExecutor;
+import io.github.nucleuspowered.nucleus.internal.command.ICommandResult;
+import io.github.nucleuspowered.nucleus.internal.command.annotation.Command;
+import io.github.nucleuspowered.nucleus.internal.command.annotation.CommandModifier;
+import io.github.nucleuspowered.nucleus.internal.command.annotation.EssentialsEquivalent;
+import io.github.nucleuspowered.nucleus.internal.command.requirements.CommandModifiers;
+import io.github.nucleuspowered.nucleus.modules.misc.MiscPermissions;
+import io.github.nucleuspowered.nucleus.services.INucleusServiceCollection;
+import org.spongepowered.api.command.CommandException;
 import org.spongepowered.api.command.CommandSource;
-import org.spongepowered.api.command.args.CommandContext;
+import org.spongepowered.api.command.args.CommandElement;
 import org.spongepowered.api.data.manipulator.mutable.entity.FoodData;
 import org.spongepowered.api.data.value.mutable.Value;
 import org.spongepowered.api.entity.living.player.Player;
 import org.spongepowered.api.util.annotation.NonnullByDefault;
 
-@Permissions(supportsOthers = true)
-@RegisterCommand({"feed", "eat"})
+@Command(
+        aliases = {"feed", "eat"},
+        basePermission = MiscPermissions.BASE_FEED,
+        commandDescriptionKey = "feed",
+        modifiers = {
+                @CommandModifier(value = CommandModifiers.HAS_COOLDOWN, exemptPermission = MiscPermissions.EXEMPT_COOLDOWN_FEED),
+                @CommandModifier(value = CommandModifiers.HAS_WARMUP, exemptPermission = MiscPermissions.EXEMPT_WARMUP_FEED),
+                @CommandModifier(value = CommandModifiers.HAS_COST, exemptPermission = MiscPermissions.EXEMPT_COST_FEED)
+        }
+)
 @EssentialsEquivalent({"feed", "eat"})
 @NonnullByDefault
-public class FeedCommand extends AbstractCommand.SimpleTargetOtherPlayer {
+public class FeedCommand implements ICommandExecutor<CommandSource> {
 
-    @Override
-    protected CommandResult executeWithPlayer(CommandSource src, Player pl, CommandContext args, boolean isSelf) {
+    @Override public CommandElement[] parameters(INucleusServiceCollection serviceCollection) {
+        return new CommandElement[] {
+                serviceCollection.commandElementSupplier()
+                        .createOnlyOtherUserPermissionElement(true, MiscPermissions.OTHERS_FEED)
+        };
+    }
+
+    @Override public ICommandResult execute(ICommandContext<? extends CommandSource> context) throws CommandException {
+        Player pl = context.getPlayerFromArgs();
         // Get the food data and modify it.
         FoodData foodData = pl.getFoodData();
         Value<Integer> f = foodData.foodLevel().set(foodData.foodLevel().getDefault());
@@ -32,15 +51,14 @@ public class FeedCommand extends AbstractCommand.SimpleTargetOtherPlayer {
         foodData.set(f, d);
 
         if (pl.offer(foodData).isSuccessful()) {
-            pl.sendMessages(Nucleus.getNucleus().getMessageProvider().getTextMessageWithFormat("command.feed.success.self"));
-            if (!pl.equals(src)) {
-                src.sendMessages(Nucleus.getNucleus().getMessageProvider().getTextMessageWithFormat("command.feed.success.other", pl.getName()));
+            context.sendMessageTo(pl, "command.feed.success.self");
+            if (!context.is(pl)) {
+                context.sendMessage("command.feed.success.other", pl.getName());
             }
 
-            return CommandResult.success();
+            return context.successResult();
         } else {
-            src.sendMessages(Nucleus.getNucleus().getMessageProvider().getTextMessageWithFormat("command.feed.error"));
-            return CommandResult.empty();
+            return context.errorResult("command.feed.error");
         }
     }
 }

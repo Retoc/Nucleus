@@ -5,8 +5,8 @@
 package io.github.nucleuspowered.nucleus.modules.craftinggui;
 
 import io.github.nucleuspowered.nucleus.annotationprocessor.RegisterPermissions;
-import io.github.nucleuspowered.nucleus.internal.permissions.PermissionMetadata;
-import io.github.nucleuspowered.nucleus.internal.permissions.SuggestedLevel;
+import io.github.nucleuspowered.nucleus.services.impl.permission.PermissionMetadata;
+import io.github.nucleuspowered.nucleus.services.impl.permission.SuggestedLevel;
 
 @RegisterPermissions
 public class CraftingGuiPermissions {
@@ -16,39 +16,39 @@ public class CraftingGuiPermissions {
     }
 
     @PermissionMetadata(descriptionKey = "permission.base", replacements = {"anvil"}, level = SuggestedLevel.ADMIN)
-    public static final String BASE_ANVIL = "anvil.base";
+    public static final String BASE_ANVIL = "nucleus.anvil.base";
 
     @PermissionMetadata(descriptionKey = "permission.exempt.cooldown", replacements = {"anvil"}, level = SuggestedLevel.ADMIN)
-    public static final String EXEMPT_COOLDOWN_ANVIL = "anvil.exempt.cooldown";
+    public static final String EXEMPT_COOLDOWN_ANVIL = "nucleus.anvil.exempt.cooldown";
 
     @PermissionMetadata(descriptionKey = "permission.exempt.cost", replacements = {"anvil"}, level = SuggestedLevel.ADMIN)
-    public static final String EXEMPT_COST_ANVIL = "anvil.exempt.cost";
+    public static final String EXEMPT_COST_ANVIL = "nucleus.anvil.exempt.cost";
 
     @PermissionMetadata(descriptionKey = "permission.exempt.warmup", replacements = {"anvil"}, level = SuggestedLevel.ADMIN)
-    public static final String EXEMPT_WARMUP_ANVIL = "anvil.exempt.warmup";
+    public static final String EXEMPT_WARMUP_ANVIL = "nucleus.anvil.exempt.warmup";
 
     @PermissionMetadata(descriptionKey = "permission.base", replacements = {"enchantingtable"}, level = SuggestedLevel.ADMIN)
-    public static final String BASE_ENCHANTINGTABLE = "enchantingtable.base";
+    public static final String BASE_ENCHANTINGTABLE = "nucleus.enchantingtable.base";
 
     @PermissionMetadata(descriptionKey = "permission.exempt.cooldown", replacements = {"enchantingtable"}, level = SuggestedLevel.ADMIN)
-    public static final String EXEMPT_COOLDOWN_ENCHANTINGTABLE = "enchantingtable.exempt.cooldown";
+    public static final String EXEMPT_COOLDOWN_ENCHANTINGTABLE = "nucleus.enchantingtable.exempt.cooldown";
 
     @PermissionMetadata(descriptionKey = "permission.exempt.cost", replacements = {"enchantingtable"}, level = SuggestedLevel.ADMIN)
-    public static final String EXEMPT_COST_ENCHANTINGTABLE = "enchantingtable.exempt.cost";
+    public static final String EXEMPT_COST_ENCHANTINGTABLE = "nucleus.enchantingtable.exempt.cost";
 
     @PermissionMetadata(descriptionKey = "permission.exempt.warmup", replacements = {"enchantingtable"}, level = SuggestedLevel.ADMIN)
-    public static final String EXEMPT_WARMUP_ENCHANTINGTABLE = "enchantingtable.exempt.warmup";
+    public static final String EXEMPT_WARMUP_ENCHANTINGTABLE = "nucleus.enchantingtable.exempt.warmup";
 
     @PermissionMetadata(descriptionKey = "permission.base", replacements = {"workbench"}, level = SuggestedLevel.ADMIN)
-    public static final String BASE_WORKBENCH = "workbench.base";
+    public static final String BASE_WORKBENCH = "nucleus.workbench.base";
 
     @PermissionMetadata(descriptionKey = "permission.exempt.cooldown", replacements = {"workbench"}, level = SuggestedLevel.ADMIN)
-    public static final String EXEMPT_COOLDOWN_WORKBENCH = "workbench.exempt.cooldown";
+    public static final String EXEMPT_COOLDOWN_WORKBENCH = "nucleus.workbench.exempt.cooldown";
 
     @PermissionMetadata(descriptionKey = "permission.exempt.cost", replacements = {"workbench"}, level = SuggestedLevel.ADMIN)
-    public static final String EXEMPT_COST_WORKBENCH = "workbench.exempt.cost";
+    public static final String EXEMPT_COST_WORKBENCH = "nucleus.workbench.exempt.cost";
 
     @PermissionMetadata(descriptionKey = "permission.exempt.warmup", replacements = {"workbench"}, level = SuggestedLevel.ADMIN)
-    public static final String EXEMPT_WARMUP_WORKBENCH = "workbench.exempt.warmup";
+    public static final String EXEMPT_WARMUP_WORKBENCH = "nucleus.workbench.exempt.warmup";
 
 }

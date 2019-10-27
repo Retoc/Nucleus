@@ -4,25 +4,23 @@
  */
 package io.github.nucleuspowered.nucleus.modules.mob.commands;
 
-import io.github.nucleuspowered.nucleus.Nucleus;
 import io.github.nucleuspowered.nucleus.argumentparsers.ImprovedCatalogTypeArgument;
 import io.github.nucleuspowered.nucleus.argumentparsers.PositiveIntegerArgument;
-import io.github.nucleuspowered.nucleus.internal.annotations.command.Permissions;
-import io.github.nucleuspowered.nucleus.internal.annotations.command.RegisterCommand;
-import io.github.nucleuspowered.nucleus.internal.command.AbstractCommand;
-import io.github.nucleuspowered.nucleus.internal.command.ReturnMessageException;
-import io.github.nucleuspowered.nucleus.internal.docgen.annotations.EssentialsEquivalent;
+import io.github.nucleuspowered.nucleus.internal.command.ICommandContext;
+import io.github.nucleuspowered.nucleus.internal.command.ICommandExecutor;
+import io.github.nucleuspowered.nucleus.internal.command.ICommandResult;
+import io.github.nucleuspowered.nucleus.internal.command.annotation.Command;
+import io.github.nucleuspowered.nucleus.internal.command.annotation.CommandModifier;
+import io.github.nucleuspowered.nucleus.internal.command.annotation.EssentialsEquivalent;
+import io.github.nucleuspowered.nucleus.internal.command.requirements.CommandModifiers;
 import io.github.nucleuspowered.nucleus.internal.interfaces.Reloadable;
-import io.github.nucleuspowered.nucleus.internal.messages.MessageProvider;
-import io.github.nucleuspowered.nucleus.internal.permissions.PermissionInformation;
-import io.github.nucleuspowered.nucleus.internal.permissions.SuggestedLevel;
+import io.github.nucleuspowered.nucleus.modules.mob.MobPermissions;
 import io.github.nucleuspowered.nucleus.modules.mob.config.BlockSpawnsConfig;
 import io.github.nucleuspowered.nucleus.modules.mob.config.MobConfig;
-import io.github.nucleuspowered.nucleus.modules.mob.config.MobConfigAdapter;
+import io.github.nucleuspowered.nucleus.services.INucleusServiceCollection;
 import org.spongepowered.api.CatalogTypes;
-import org.spongepowered.api.command.CommandResult;
+import org.spongepowered.api.command.CommandException;
 import org.spongepowered.api.command.CommandSource;
-import org.spongepowered.api.command.args.CommandContext;
 import org.spongepowered.api.command.args.CommandElement;
 import org.spongepowered.api.command.args.GenericArguments;
 import org.spongepowered.api.entity.Entity;
@@ -34,65 +32,58 @@ import org.spongepowered.api.util.annotation.NonnullByDefault;
 import org.spongepowered.api.world.Location;
 import org.spongepowered.api.world.World;
 
-import java.util.HashMap;
-import java.util.Map;
 import java.util.Optional;
 
-@Permissions(supportsOthers = true)
-@RegisterCommand({"spawnmob", "spawnentity", "mobspawn"})
 @EssentialsEquivalent({"spawnmob", "mob"})
 @NonnullByDefault
-public class SpawnMobCommand extends AbstractCommand.SimpleTargetOtherPlayer implements Reloadable {
+@Command(
+        aliases = {"spawnmob", "spawnentity", "mobspawn"},
+        basePermission = MobPermissions.BASE_SPAWNMOB,
+        commandDescriptionKey = "spawnmob",
+        modifiers = {
+                @CommandModifier(value = CommandModifiers.HAS_COOLDOWN, exemptPermission = MobPermissions.EXEMPT_COOLDOWN_SPAWNMOB),
+                @CommandModifier(value = CommandModifiers.HAS_WARMUP, exemptPermission = MobPermissions.EXEMPT_WARMUP_SPAWNMOB),
+                @CommandModifier(value = CommandModifiers.HAS_COST, exemptPermission = MobPermissions.EXEMPT_COST_SPAWNMOB)
+        }
+)
+public class SpawnMobCommand implements ICommandExecutor<CommandSource>, Reloadable { //extends AbstractCommand.SimpleTargetOtherPlayer implements
+    // SimpleReloadable {
 
     private final String amountKey = "amount";
     private final String mobTypeKey = "mob";
 
     private MobConfig mobConfig = new MobConfig();
 
-    @Override public CommandElement[] additionalArguments() {
+    @Override public CommandElement[] parameters(INucleusServiceCollection serviceCollection) {
         return new CommandElement[] {
+                serviceCollection.commandElementSupplier().createOtherUserPermissionElement(true, MobPermissions.OTHERS_SPAWNMOB),
                 new ImprovedCatalogTypeArgument(Text.of(this.mobTypeKey), CatalogTypes.ENTITY_TYPE),
                 GenericArguments.optional(new PositiveIntegerArgument(Text.of(this.amountKey)), 1)
         };
     }
 
-    @Override public void onReload() {
-        this.mobConfig = getServiceUnchecked(MobConfigAdapter.class).getNodeOrDefault();
-    }
-
-    @Override
-    protected Map<String, PermissionInformation> permissionSuffixesToRegister() {
-        Map<String, PermissionInformation> m = new HashMap<>();
-        m.put("mob", PermissionInformation.getWithTranslation("permission.spawnmob.mob", SuggestedLevel.ADMIN));
-        return m;
-    }
-
-    @Override
-    public CommandResult executeWithPlayer(CommandSource src, Player pl, CommandContext args, boolean isSelf) throws Exception {
+    @Override public ICommandResult execute(ICommandContext<? extends CommandSource> context) throws CommandException {
+        Player pl = context.getPlayerFromArgs();
         // Get the amount
-        int amount = args.<Integer>getOne(this.amountKey).get();
-        EntityType et = args.<EntityType>getOne(this.mobTypeKey).get();
+        int amount = context.requireOne(this.amountKey, Integer.class);
+        EntityType et = context.requireOne(this.mobTypeKey, EntityType.class);
 
         if (!Living.class.isAssignableFrom(et.getEntityClass())) {
-            throw new ReturnMessageException(
-                    Nucleus.getNucleus().getMessageProvider().getTextMessageWithFormat("command.spawnmob.livingonly", et.getTranslation().get()));
+            return context.errorResult("command.spawnmob.livingonly", et.getTranslation().get());
         }
 
         String id = et.getId().toLowerCase();
-        if (this.mobConfig.isPerMobPermission() && !this.permissions.testSuffix(src, "mob." + id.replace(":", "."))) {
-            throw new ReturnMessageException(
-                    Nucleus.getNucleus().getMessageProvider().getTextMessageWithFormat("command.spawnmob.mobnoperm", et.getTranslation().get()));
+        if (this.mobConfig.isPerMobPermission() && !context.isConsoleAndBypass() && !context.testPermission(MobPermissions.getSpawnMobPermissionFor(et))) {
+            return context.errorResult("command.spawnmob.mobnoperm", et.getTranslation().get());
         }
 
         Optional<BlockSpawnsConfig> config = this.mobConfig.getBlockSpawnsConfigForWorld(pl.getWorld());
         if (config.isPresent() && (config.get().isBlockVanillaMobs() && id.startsWith("minecraft:") || config.get().getIdsToBlock().contains(id))) {
-            throw new ReturnMessageException(
-                    Nucleus.getNucleus().getMessageProvider().getTextMessageWithFormat("command.spawnmob.blockedinconfig", et.getTranslation().get()));
+            return context.errorResult("command.spawnmob.blockedinconfig", et.getTranslation().get());
         }
 
         Location<World> loc = pl.getLocation();
         World w = loc.getExtent();
-        MessageProvider mp = Nucleus.getNucleus().getMessageProvider();
 
         // Count the number of entities spawned.
         int i = 0;
@@ -101,7 +92,7 @@ public class SpawnMobCommand extends AbstractCommand.SimpleTargetOtherPlayer imp
         do {
             Entity e = w.createEntity(et, loc.getPosition());
             if (!w.spawnEntity(e)) {
-                throw ReturnMessageException.fromKey("command.spawnmob.fail", Text.of(e));
+                return context.errorResult("command.spawnmob.fail", Text.of(e));
             }
 
             if (entityone == null) {
@@ -112,21 +103,24 @@ public class SpawnMobCommand extends AbstractCommand.SimpleTargetOtherPlayer imp
         } while (i < Math.min(amount, this.mobConfig.getMaxMobsToSpawn()));
 
         if (amount > this.mobConfig.getMaxMobsToSpawn()) {
-            src.sendMessage(
-                    mp.getTextMessageWithFormat("command.spawnmob.limit", String.valueOf(this.mobConfig.getMaxMobsToSpawn())));
+            context.sendMessage("command.spawnmob.limit", String.valueOf(this.mobConfig.getMaxMobsToSpawn()));
         }
 
         if (i == 0) {
-            throw ReturnMessageException.fromKey("command.spawnmob.fail", et.getTranslation().get());
+            return context.errorResult("command.spawnmob.fail", et.getTranslation().get());
         }
 
         if (i == 1) {
-            src.sendMessage(mp.getTextMessageWithTextFormat("command.spawnmob.success.singular", Text.of(i), Text.of(entityone)));
+            context.sendMessage("command.spawnmob.success.singular", Text.of(i), Text.of(entityone));
         } else {
-            src.sendMessage(mp.getTextMessageWithTextFormat("command.spawnmob.success.plural", Text.of(i), Text.of(entityone)));
+            context.sendMessage("command.spawnmob.success.plural", Text.of(i), Text.of(entityone));
         }
 
-        return CommandResult.success();
+        return context.successResult();
+    }
+
+    @Override public void onReload(INucleusServiceCollection serviceCollection) {
+        this.mobConfig = serviceCollection.moduleDataProvider().getModuleConfig(MobConfig.class);
     }
 
 

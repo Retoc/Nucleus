@@ -4,25 +4,25 @@
  */
 package io.github.nucleuspowered.nucleus.modules.nickname.services;
 
-import com.google.common.collect.*;
-import io.github.nucleuspowered.nucleus.NameUtil;
-import io.github.nucleuspowered.nucleus.Nucleus;
+import com.google.common.collect.BiMap;
+import com.google.common.collect.HashBiMap;
+import com.google.common.collect.ImmutableMap;
+import com.google.common.collect.Maps;
 import io.github.nucleuspowered.nucleus.api.exceptions.NicknameException;
 import io.github.nucleuspowered.nucleus.api.service.NucleusNicknameService;
-import io.github.nucleuspowered.nucleus.internal.CommandPermissionHandler;
 import io.github.nucleuspowered.nucleus.internal.annotations.APIService;
 import io.github.nucleuspowered.nucleus.internal.interfaces.Reloadable;
 import io.github.nucleuspowered.nucleus.internal.interfaces.ServiceBase;
-import io.github.nucleuspowered.nucleus.internal.messages.MessageProvider;
-import io.github.nucleuspowered.nucleus.internal.traits.PermissionTrait;
 import io.github.nucleuspowered.nucleus.modules.nickname.NicknameKeys;
-import io.github.nucleuspowered.nucleus.modules.nickname.NicknameModule;
-import io.github.nucleuspowered.nucleus.modules.nickname.commands.NicknameCommand;
+import io.github.nucleuspowered.nucleus.modules.nickname.NicknamePermissions;
 import io.github.nucleuspowered.nucleus.modules.nickname.config.NicknameConfig;
-import io.github.nucleuspowered.nucleus.modules.nickname.config.NicknameConfigAdapter;
 import io.github.nucleuspowered.nucleus.modules.nickname.events.ChangeNicknameEventPost;
 import io.github.nucleuspowered.nucleus.modules.nickname.events.ChangeNicknameEventPre;
-import io.github.nucleuspowered.nucleus.storage.dataobjects.modular.IUserDataObject;
+import io.github.nucleuspowered.nucleus.services.IMessageProviderService;
+import io.github.nucleuspowered.nucleus.services.INucleusServiceCollection;
+import io.github.nucleuspowered.nucleus.services.IStorageManager;
+import io.github.nucleuspowered.nucleus.services.ITextStyleService;
+import io.github.nucleuspowered.nucleus.services.impl.storage.dataobjects.modular.IUserDataObject;
 import io.github.nucleuspowered.nucleus.util.CauseStackHelper;
 import org.spongepowered.api.Sponge;
 import org.spongepowered.api.command.CommandSource;
@@ -35,26 +35,47 @@ import org.spongepowered.api.service.user.UserStorageService;
 import org.spongepowered.api.text.Text;
 import org.spongepowered.api.text.format.TextColors;
 import org.spongepowered.api.text.serializer.TextSerializers;
-import org.spongepowered.api.util.Tuple;
 
-import javax.annotation.Nullable;
-import java.util.*;
-import java.util.regex.Matcher;
+import java.util.Collection;
+import java.util.List;
+import java.util.Map;
+import java.util.Optional;
+import java.util.TreeMap;
+import java.util.UUID;
 import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 
+import javax.annotation.Nullable;
+import javax.inject.Inject;
+
 @APIService(NucleusNicknameService.class)
-public class NicknameService implements NucleusNicknameService, Reloadable, PermissionTrait, ServiceBase {
+public class NicknameService implements NucleusNicknameService, Reloadable, ServiceBase {
+
+    private final IMessageProviderService messageProviderService;
+    private final IStorageManager storageManager;
+    private final ITextStyleService textStyleService;
+
+    @Inject
+    public NicknameService(INucleusServiceCollection serviceCollection) {
+        this.messageProviderService = serviceCollection.messageProvider();
+        this.storageManager = serviceCollection.storageManager();
+        this.textStyleService = serviceCollection.textStyleService();
+    }
 
     private Text prefix = Text.EMPTY;
     private Pattern pattern;
     private int min = 3;
     private int max = 16;
-    private final Map<String[], Tuple<Matcher, Text>> replacements = Maps.newHashMap();
-    private boolean registered = false;
     private final BiMap<UUID, String> cache = HashBiMap.create();
     private final BiMap<UUID, Text> textCache = HashBiMap.create();
     private final TreeMap<String, UUID> reverseLowerCaseCache = new TreeMap<>();
+
+    public void injectResolver(INucleusServiceCollection serviceCollection) {
+        serviceCollection.playerDisplayNameService().provideDisplayNameResolver(this::getNicknameWithPrefix);
+        serviceCollection.playerDisplayNameService().provideDisplayNameQuery(
+                name -> getFromCache(name.toPlain()).map(x -> x)
+        );
+    }
 
     public void updateCache(UUID player, Text text) {
         this.cache.put(player, text.toPlain());
@@ -121,31 +142,9 @@ public class NicknameService implements NucleusNicknameService, Reloadable, Perm
         this.textCache.remove(player);
     }
 
-    public void register() {
-        if (this.registered) {
-            return;
-        }
-
-        MessageProvider mp = Nucleus.getNucleus().getMessageProvider();
-        CommandPermissionHandler permissions = Nucleus.getNucleus().getPermissionRegistry().getPermissionsForNucleusCommand(NicknameCommand.class);
-
-        String colPerm = permissions.getPermissionWithSuffix("colour.");
-        String colPerm2 = permissions.getPermissionWithSuffix("color.");
-
-        NameUtil.getColours().forEach((key, value) -> this.replacements.put(new String[]{colPerm + value.getName(), colPerm2 + value.getName()},
-                Tuple.of(Pattern.compile("[&]+" + key.toString().toLowerCase(), Pattern.CASE_INSENSITIVE).matcher(""),
-                        mp.getTextMessageWithFormat("command.nick.colour.nopermswith", value.getName()))));
-
-        String stylePerm = permissions.getPermissionWithSuffix("style.");
-        NameUtil.getStyleKeys().entrySet().stream().filter(x -> x.getKey() != 'k').forEach((k) -> this.replacements
-                .put(new String[] { stylePerm + k.getValue().toLowerCase() },
-                Tuple.of(Pattern.compile("[&]+" + k.getKey().toString().toLowerCase(), Pattern.CASE_INSENSITIVE).matcher(""),
-                        mp.getTextMessageWithFormat("command.nick.style.nopermswith", k.getValue().toLowerCase()))));
-
-        this.replacements.put(new String[] { permissions.getPermissionWithSuffix("magic") },
-                Tuple.of(Pattern.compile("[&]+k", Pattern.CASE_INSENSITIVE).matcher(""),
-                        mp.getTextMessageWithFormat("command.nick.style.nopermswith", "magic")));
-        this.registered = true;
+    @Override
+    public Optional<Text> getNicknameWithPrefix(UUID user) {
+        return getNickname(user).map(x -> Text.join(this.prefix, x));
     }
 
     @Override
@@ -155,11 +154,16 @@ public class NicknameService implements NucleusNicknameService, Reloadable, Perm
 
     @Override
     public Optional<Text> getNickname(User user) {
-        if (user.isOnline()) {
-            return Optional.ofNullable(this.textCache.get(user.getUniqueId()));
+        return getNickname(user.getUniqueId());
+    }
+
+    @Override
+    public Optional<Text> getNickname(UUID user) {
+        if (Sponge.getServer().getPlayer(user).isPresent()) {
+            return Optional.ofNullable(this.textCache.get(user));
         }
-        return Nucleus.getNucleus().getStorageManager().getUserService()
-                .getOnThread(user.getUniqueId())
+        return this.storageManager.getUserService()
+                .getOnThread(user)
                 .flatMap(x -> x.get(NicknameKeys.USER_NICKNAME_JSON))
                 .map(TextSerializers.JSON::deserialize);
     }
@@ -188,16 +192,15 @@ public class NicknameService implements NucleusNicknameService, Reloadable, Perm
         ChangeNicknameEventPre cne = new ChangeNicknameEventPre(cause, currentNickname, null, user);
         if (Sponge.getEventManager().post(cne)) {
             throw new NicknameException(
-                    Nucleus.getNucleus().getMessageProvider().getTextMessageWithFormat("command.nick.eventcancel", user.getName()),
+                    this.messageProviderService.getMessage("command.nick.eventcancel", user.getName()),
                     NicknameException.Type.EVENT_CANCELLED
             );
         }
 
-        IUserDataObject mus = Nucleus.getNucleus().getStorageManager().getUserService()
+        IUserDataObject mus = this.storageManager.getUserService()
                 .getOnThread(user.getUniqueId())
                 .orElseThrow(() -> new NicknameException(
-                        Nucleus.getNucleus().getMessageProvider()
-                                .getTextMessageWithFormat("standard.error.nouser"),
+                        this.messageProviderService.getMessage("standard.error.nouser"),
                         NicknameException.Type.NO_USER
                 ));
 
@@ -207,7 +210,7 @@ public class NicknameService implements NucleusNicknameService, Reloadable, Perm
 
         if (user.isOnline()) {
             user.getPlayer().ifPresent(x ->
-                    x.sendMessage(Nucleus.getNucleus().getMessageProvider().getTextMessageWithFormat("command.delnick.success.base")));
+                    this.messageProviderService.sendMessageTo(x, "command.delnick.success.base"));
         }
     }
 
@@ -219,7 +222,7 @@ public class NicknameService implements NucleusNicknameService, Reloadable, Perm
         String plain = nickname.toPlain().trim();
         if (plain.isEmpty()) {
             throw new NicknameException(
-                    Nucleus.getNucleus().getMessageProvider().getTextMessageWithFormat("command.nick.tooshort"),
+                    this.messageProviderService.getMessage("command.nick.tooshort"),
                     NicknameException.Type.TOO_SHORT
             );
         }
@@ -233,7 +236,7 @@ public class NicknameService implements NucleusNicknameService, Reloadable, Perm
             if (match.isPresent() && !match.get().getUniqueId().equals(pl.getUniqueId())) {
                 // Fail - cannot use another's name.
                 throw new NicknameException(
-                        Nucleus.getNucleus().getMessageProvider().getTextMessageWithFormat("command.nick.nameinuse", plain),
+                        this.messageProviderService.getMessage("command.nick.nameinuse", plain),
                         NicknameException.Type.NOT_OWN_IGN);
             }
         } catch (IllegalArgumentException ignored) {
@@ -254,7 +257,7 @@ public class NicknameService implements NucleusNicknameService, Reloadable, Perm
 
             if (!this.pattern.matcher(plain).matches()) {
                 throw new NicknameException(
-                        Nucleus.getNucleus().getMessageProvider().getTextMessageWithFormat("command.nick.nopattern", this.pattern.pattern()),
+                        this.messageProviderService.getMessage("command.nick.nopattern", this.pattern.pattern()),
                         NicknameException.Type.INVALID_PATTERN);
             }
 
@@ -263,7 +266,7 @@ public class NicknameService implements NucleusNicknameService, Reloadable, Perm
             // Do a regex remove to check minimum length requirements.
             if (strippedNameLength < Math.max(this.min, 1)) {
                 throw new NicknameException(
-                        Nucleus.getNucleus().getMessageProvider().getTextMessageWithFormat("command.nick.tooshort"),
+                        this.messageProviderService.getMessage("command.nick.tooshort"),
                         NicknameException.Type.TOO_SHORT
                 );
             }
@@ -271,7 +274,7 @@ public class NicknameService implements NucleusNicknameService, Reloadable, Perm
             // Do a regex remove to check maximum length requirements. Will be at least the minimum length
             if (strippedNameLength > Math.max(this.max, this.min)) {
                 throw new NicknameException(
-                        Nucleus.getNucleus().getMessageProvider().getTextMessageWithFormat("command.nick.toolong"),
+                        this.messageProviderService.getMessage("command.nick.toolong"),
                         NicknameException.Type.TOO_SHORT
                 );
             }
@@ -282,25 +285,25 @@ public class NicknameService implements NucleusNicknameService, Reloadable, Perm
         ChangeNicknameEventPre cne = new ChangeNicknameEventPre(cause, currentNickname, nickname, pl);
         if (Sponge.getEventManager().post(cne)) {
             throw new NicknameException(
-                    Nucleus.getNucleus().getMessageProvider().getTextMessageWithFormat("command.nick.eventcancel", pl.getName()),
+                    this.messageProviderService.getMessage("command.nick.eventcancel", pl.getName()),
                     NicknameException.Type.EVENT_CANCELLED
             );
         }
 
-        IUserDataObject userDataObject = Nucleus.getNucleus().getStorageManager().getUserService().getOrNewOnThread(pl.getUniqueId());
+        IUserDataObject userDataObject = this.storageManager.getUserService().getOrNewOnThread(pl.getUniqueId());
         userDataObject.set(NicknameKeys.USER_NICKNAME_JSON, TextSerializers.JSON.serialize(nickname));
         this.updateCache(pl.getUniqueId(), nickname);
 
         Sponge.getEventManager().post(new ChangeNicknameEventPost(cause, currentNickname, nickname, pl));
         pl.getPlayer().ifPresent(player -> player.sendMessage(Text.builder().append(
-                Nucleus.getNucleus().getMessageProvider().getTextMessageWithFormat("command.nick.success.base")).append(Text.of(" - ",
-                TextColors.RESET, nickname)).build()));
+                this.messageProviderService.getMessage("command.nick.success.base"))
+                    .append(Text.of(" - ", TextColors.RESET, nickname)).build()));
 
     }
 
     @Override
-    public void onReload() {
-        NicknameConfig nc = Nucleus.getNucleus().getConfigAdapter(NicknameModule.ID, NicknameConfigAdapter.class).get().getNodeOrDefault();
+    public void onReload(INucleusServiceCollection serviceCollection) {
+        NicknameConfig nc = serviceCollection.moduleDataProvider().getModuleConfig(NicknameConfig.class);
         this.pattern = nc.getPattern();
         this.min = nc.getMinNicknameLength();
         this.max = nc.getMaxNicknameLength();
@@ -308,15 +311,15 @@ public class NicknameService implements NucleusNicknameService, Reloadable, Perm
     }
 
     private void stripPermissionless(Subject source, Text message) throws NicknameException {
-        String m = TextSerializers.FORMATTING_CODE.serialize(message);
-        if (m.contains("&")) {
-            for (Map.Entry<String[], Tuple<Matcher, Text>> r : this.replacements.entrySet()) {
-                // If we don't have the required permission...
-                if (r.getValue().getFirst().reset(m).find() && Arrays.stream(r.getKey()).noneMatch(x -> hasPermission(source, x))) {
-                    // throw
-                    throw new NicknameException(r.getValue().getSecond(), NicknameException.Type.INVALID_STYLE_OR_COLOUR);
-                }
-            }
+        Collection<String> strings = this.textStyleService.wouldStrip(
+                NicknamePermissions.NICKNAME_COLOUR,
+                NicknamePermissions.NICKNAME_COLOR, // inferior
+                NicknamePermissions.NICKNAME_STYLE,
+                source,
+                TextSerializers.FORMATTING_CODE.serialize(message));
+        if (!strings.isEmpty()) {
+            throw new NicknameException(this.messageProviderService.getMessage("command.nick.nopermscolourstyle", String.join(", ", strings)),
+                    NicknameException.Type.INVALID_STYLE_OR_COLOUR);
         }
     }
 

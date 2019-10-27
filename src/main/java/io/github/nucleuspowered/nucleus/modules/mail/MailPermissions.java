@@ -5,8 +5,8 @@
 package io.github.nucleuspowered.nucleus.modules.mail;
 
 import io.github.nucleuspowered.nucleus.annotationprocessor.RegisterPermissions;
-import io.github.nucleuspowered.nucleus.internal.permissions.PermissionMetadata;
-import io.github.nucleuspowered.nucleus.internal.permissions.SuggestedLevel;
+import io.github.nucleuspowered.nucleus.services.impl.permission.PermissionMetadata;
+import io.github.nucleuspowered.nucleus.services.impl.permission.SuggestedLevel;
 
 @RegisterPermissions
 public class MailPermissions {
@@ -15,21 +15,21 @@ public class MailPermissions {
     }
 
     @PermissionMetadata(descriptionKey = "permission.base", replacements = { "mail clear" }, level = SuggestedLevel.USER)
-    public static final String BASE_MAIL_CLEAR = "mail.base";
+    public static final String BASE_MAIL = "nucleus.mail.base";
 
     @PermissionMetadata(descriptionKey = "permission.base", replacements = { "mail other" }, level = SuggestedLevel.ADMIN)
-    public static final String BASE_MAIL_OTHER = "mail.other.base";
+    public static final String BASE_MAIL_OTHER = "nucleus.mail.other.base";
 
     @PermissionMetadata(descriptionKey = "permission.base", replacements = { "mail send" }, level = SuggestedLevel.USER)
-    public static final String BASE_MAIL_SEND = "mail.send.base";
+    public static final String BASE_MAIL_SEND = "nucleus.mail.send.base";
 
     @PermissionMetadata(descriptionKey = "permission.exempt.cooldown", replacements = { "mail send" }, level = SuggestedLevel.ADMIN)
-    public static final String EXEMPT_COOLDOWN_MAIL_SEND = "mail.send.exempt.cooldown";
+    public static final String EXEMPT_COOLDOWN_MAIL_SEND = "nucleus.mail.send.exempt.cooldown";
 
     @PermissionMetadata(descriptionKey = "permission.exempt.cost", replacements = { "mail send" }, level = SuggestedLevel.ADMIN)
-    public static final String EXEMPT_COST_MAIL_SEND = "mail.send.exempt.cost";
+    public static final String EXEMPT_COST_MAIL_SEND = "nucleus.mail.send.exempt.cost";
 
     @PermissionMetadata(descriptionKey = "permission.exempt.warmup", replacements = { "mail send" }, level = SuggestedLevel.ADMIN)
-    public static final String EXEMPT_WARMUP_MAIL_SEND = "mail.send.exempt.warmup";
+    public static final String EXEMPT_WARMUP_MAIL_SEND = "nucleus.mail.send.exempt.warmup";
 
 }

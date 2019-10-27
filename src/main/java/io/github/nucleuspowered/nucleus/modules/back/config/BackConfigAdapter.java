@@ -4,7 +4,7 @@
  */
 package io.github.nucleuspowered.nucleus.modules.back.config;
 
-import io.github.nucleuspowered.nucleus.internal.qsml.NucleusConfigAdapter;
+import io.github.nucleuspowered.nucleus.quickstart.NucleusConfigAdapter;
 
 import java.util.List;
 

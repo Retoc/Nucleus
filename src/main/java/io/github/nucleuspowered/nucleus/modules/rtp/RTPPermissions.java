@@ -5,8 +5,8 @@
 package io.github.nucleuspowered.nucleus.modules.rtp;
 
 import io.github.nucleuspowered.nucleus.annotationprocessor.RegisterPermissions;
-import io.github.nucleuspowered.nucleus.internal.permissions.PermissionMetadata;
-import io.github.nucleuspowered.nucleus.internal.permissions.SuggestedLevel;
+import io.github.nucleuspowered.nucleus.services.impl.permission.PermissionMetadata;
+import io.github.nucleuspowered.nucleus.services.impl.permission.SuggestedLevel;
 
 @RegisterPermissions
 public class RTPPermissions {
@@ -15,21 +15,21 @@ public class RTPPermissions {
     }
 
     @PermissionMetadata(descriptionKey = "permission.base", replacements = { "rtp" }, level = SuggestedLevel.ADMIN)
-    public static final String BASE_RTP = "rtp.base";
+    public static final String BASE_RTP = "nucleus.rtp.base";
 
     @PermissionMetadata(descriptionKey = "permission.exempt.cooldown", replacements = { "rtp" }, level = SuggestedLevel.ADMIN)
-    public static final String EXEMPT_COOLDOWN_RTP = "rtp.exempt.cooldown";
+    public static final String EXEMPT_COOLDOWN_RTP = "nucleus.rtp.exempt.cooldown";
 
     @PermissionMetadata(descriptionKey = "permission.exempt.cost", replacements = { "rtp" }, level = SuggestedLevel.ADMIN)
-    public static final String EXEMPT_COST_RTP = "rtp.exempt.cost";
+    public static final String EXEMPT_COST_RTP = "nucleus.rtp.exempt.cost";
 
     @PermissionMetadata(descriptionKey = "permission.exempt.warmup", replacements = { "rtp" }, level = SuggestedLevel.ADMIN)
-    public static final String EXEMPT_WARMUP_RTP = "rtp.exempt.warmup";
+    public static final String EXEMPT_WARMUP_RTP = "nucleus.rtp.exempt.warmup";
 
     @PermissionMetadata(descriptionKey = "permission.others", replacements = { "rtp" }, level = SuggestedLevel.ADMIN)
-    public static final String OTHERS_RTP = "rtp.others";
+    public static final String OTHERS_RTP = "nucleus.rtp.others";
 
     @PermissionMetadata(descriptionKey = "permission.rtp.worlds", level = SuggestedLevel.ADMIN)
-    public static final String RTP_WORLDS = "rtp.worlds";
+    public static final String RTP_WORLDS = "nucleus.rtp.worlds";
 
 }

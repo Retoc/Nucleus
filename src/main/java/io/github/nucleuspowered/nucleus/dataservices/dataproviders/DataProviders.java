@@ -7,11 +7,10 @@ package io.github.nucleuspowered.nucleus.dataservices.dataproviders;
 import com.google.common.base.Preconditions;
 import com.google.common.reflect.TypeToken;
 import io.github.nucleuspowered.nucleus.NucleusPlugin;
-import io.github.nucleuspowered.nucleus.configurate.ConfigurateHelper;
-import io.github.nucleuspowered.nucleus.configurate.datatypes.ItemDataNode;
 import io.github.nucleuspowered.nucleus.configurate.datatypes.KitConfigDataNode;
 import io.github.nucleuspowered.nucleus.configurate.datatypes.UserCacheVersionNode;
 import io.github.nucleuspowered.nucleus.configurate.loaders.NucleusGsonConfigurationLoader;
+import io.github.nucleuspowered.nucleus.services.impl.configurate.ConfigurateHelper;
 import ninja.leaping.configurate.ConfigurationNode;
 import ninja.leaping.configurate.ConfigurationOptions;
 import ninja.leaping.configurate.gson.GsonConfigurationLoader;
@@ -30,60 +29,12 @@ import java.util.function.Supplier;
 public class DataProviders {
 
     private final NucleusPlugin plugin;
-    private final TypeToken<Map<String, ItemDataNode>> ttmsi = new TypeToken<Map<String, ItemDataNode>>() {};
     private final TypeToken<Map<String, String>> ttss = new TypeToken<Map<String, String>>() {};
     private final TypeToken<KitConfigDataNode> ttmk = TypeToken.of(KitConfigDataNode.class);
     private final TypeToken<UserCacheVersionNode> ttucv = TypeToken.of(UserCacheVersionNode.class);
 
-    private final String userJson = "userdata%1$s%2$s%1$s%3$s.json";
-    private final String worldJson = "worlddata%1$s%2$s%1$s%3$s.json";
-
     public DataProviders(NucleusPlugin plugin) {
         this.plugin = plugin;
-    }
-
-    public DataProvider<ConfigurationNode> getUserFileDataProviders(UUID uuid, boolean create) {
-        // For now, just the Configurate one.
-        try {
-            Path p = getFile(this.userJson, uuid);
-            if (create || doesUserFileExist(uuid)) {
-                return new SimpleConfigurateDataProvider(path -> getGsonBuilder().setPath(path).build(), p, this.plugin.getLogger());
-            }
-        } catch (Exception e) {
-            // ignored
-        }
-
-        return null;
-    }
-
-    public boolean doesUserFileExist(UUID uuid) {
-        try {
-            return Files.exists(getFile(this.userJson, uuid));
-        } catch (Exception e) {
-            return false;
-        }
-    }
-
-    public DataProvider<ConfigurationNode> getWorldFileDataProvider(UUID uuid, boolean create) {
-        // For now, just the Configurate one.
-        try {
-            Path p = getFile(this.worldJson, uuid);
-            if (create || doesWorldFileExist(uuid)) {
-                return new SimpleConfigurateDataProvider(path -> getGsonBuilder().setPath(path).build(), p, this.plugin.getLogger());
-            }
-        } catch (Exception e) {
-            // ignored
-        }
-
-        return null;
-    }
-
-    public boolean doesWorldFileExist(UUID uuid) {
-        try {
-            return Files.exists(getFile(this.worldJson, uuid));
-        } catch (Exception e) {
-            return false;
-        }
     }
 
     public DataProvider.FileChanging<KitConfigDataNode> getKitsDataProvider() {
@@ -109,31 +60,6 @@ public class DataProviders {
         }
     }
 
-
-    public DataProvider.FileChanging<ConfigurationNode> getGeneralDataProvider() {
-        // For now, just the Configurate one.
-        try {
-            Supplier<Path> p = () -> this.plugin.getDataPath().resolve("general.json");
-            return new FileChangingSimpleConfigurateDataProvider(
-                    path -> new LazyConfigurationLoader<>(() -> getGsonBuilder().setPath(path).build()),
-                    p,
-                    this.plugin.getLogger());
-        } catch (Exception e) {
-            return null;
-        }
-    }
-
-    public DataProvider<Map<String, ItemDataNode>> getItemDataProvider() {
-        // For now, just the Configurate one.
-        try {
-            Path p = this.plugin.getConfigDirPath().resolve("items.conf");
-            return new ConfigurateDataProvider<>(this.ttmsi, path -> new LazyConfigurationLoader<>(() -> getHoconBuilder().setPath(path).build()), HashMap::new, p,
-
-                    this.plugin.getLogger());
-        } catch (Exception e) {
-            return null;
-        }
-    }
 
     public DataProvider.FileChanging<Map<String, String>> getNameBanDataProvider() {
         // For now, just the Configurate one.

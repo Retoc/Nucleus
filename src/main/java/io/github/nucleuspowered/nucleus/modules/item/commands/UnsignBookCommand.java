@@ -5,19 +5,22 @@
 package io.github.nucleuspowered.nucleus.modules.item.commands;
 
 import io.github.nucleuspowered.nucleus.internal.annotations.RequireExistenceOf;
-import io.github.nucleuspowered.nucleus.internal.annotations.command.Permissions;
-import io.github.nucleuspowered.nucleus.internal.annotations.command.RegisterCommand;
-import io.github.nucleuspowered.nucleus.internal.command.AbstractCommand;
-import io.github.nucleuspowered.nucleus.internal.command.ReturnMessageException;
-import io.github.nucleuspowered.nucleus.internal.permissions.SuggestedLevel;
+import io.github.nucleuspowered.nucleus.internal.command.ICommandContext;
+import io.github.nucleuspowered.nucleus.internal.command.ICommandExecutor;
+import io.github.nucleuspowered.nucleus.internal.command.ICommandResult;
+import io.github.nucleuspowered.nucleus.internal.command.annotation.Command;
+import io.github.nucleuspowered.nucleus.internal.command.annotation.CommandModifier;
+import io.github.nucleuspowered.nucleus.internal.command.requirements.CommandModifiers;
+import io.github.nucleuspowered.nucleus.modules.item.ItemPermissions;
+import io.github.nucleuspowered.nucleus.services.INucleusServiceCollection;
 import org.spongepowered.api.Sponge;
-import org.spongepowered.api.command.CommandResult;
+import org.spongepowered.api.command.CommandException;
 import org.spongepowered.api.command.CommandSource;
-import org.spongepowered.api.command.args.CommandContext;
+import org.spongepowered.api.command.args.CommandElement;
 import org.spongepowered.api.data.key.Keys;
 import org.spongepowered.api.data.manipulator.mutable.item.PlainPagedData;
 import org.spongepowered.api.data.type.HandTypes;
-import org.spongepowered.api.entity.living.player.Player;
+import org.spongepowered.api.entity.living.player.User;
 import org.spongepowered.api.item.ItemTypes;
 import org.spongepowered.api.item.inventory.ItemStack;
 import org.spongepowered.api.text.Text;
@@ -27,16 +30,36 @@ import org.spongepowered.plugin.meta.util.NonnullByDefault;
 import java.util.List;
 import java.util.Optional;
 
-@Permissions(suggestedLevel = SuggestedLevel.ADMIN, supportsOthers = true)
-@RegisterCommand({"unsignbook", "unsign"})
 @NonnullByDefault
 @RequireExistenceOf("org.spongepowered.api.data.manipulator.mutable.item.PlainPagedData") // not in 7.1
-public class UnsignBookCommand extends AbstractCommand.SimpleTargetOtherPlayer {
+@Command(
+        aliases = {"unsignbook", "unsign"},
+        basePermission = ItemPermissions.BASE_UNSIGNBOOK,
+        commandDescriptionKey = "unsignbox",
+        modifiers = {
+                @CommandModifier(value = CommandModifiers.HAS_COOLDOWN, exemptPermission = ItemPermissions.EXEMPT_COOLDOWN_UNSIGNBOOK),
+                @CommandModifier(value = CommandModifiers.HAS_WARMUP, exemptPermission = ItemPermissions.EXEMPT_WARMUP_UNSIGNBOOK),
+                @CommandModifier(value = CommandModifiers.HAS_COST, exemptPermission = ItemPermissions.EXEMPT_COST_UNSIGNBOOK)
+        }
+)
+public class UnsignBookCommand implements ICommandExecutor<CommandSource> {
 
-    @Override protected CommandResult executeWithPlayer(CommandSource source, Player target, CommandContext args, boolean isSelf)
-            throws Exception {
+    @Override
+    public CommandElement[] parameters(INucleusServiceCollection serviceCollection) {
+        return new CommandElement[] {
+                serviceCollection.commandElementSupplier()
+                    .createOnlyOtherUserPermissionElement(true, ItemPermissions.OTHERS_UNSIGNBOOK)
+        };
+    }
+
+    @Override
+    public ICommandResult execute(ICommandContext<? extends CommandSource> context) throws CommandException {
+        User target = context.getUserFromArgs();
+        boolean isSelf = context.is(target);
+
         // Very basic for now, unsign book in hand.
-        Optional<ItemStack> bookToUnsign = target.getItemInHand(HandTypes.MAIN_HAND).filter(item -> item.getType().equals(ItemTypes.WRITTEN_BOOK));
+        Optional<ItemStack> bookToUnsign =
+                target.getItemInHand(HandTypes.MAIN_HAND).filter(item -> item.getType().equals(ItemTypes.WRITTEN_BOOK));
         if (bookToUnsign.isPresent()) {
             ItemStack unsignedBook = ItemStack.builder()
                     .itemType(ItemTypes.WRITABLE_BOOK)
@@ -46,17 +69,17 @@ public class UnsignBookCommand extends AbstractCommand.SimpleTargetOtherPlayer {
             target.setItemInHand(HandTypes.MAIN_HAND, unsignedBook);
 
             if (isSelf) {
-                sendMessageTo(source, "command.unsignbook.success.self");
+                context.sendMessage("command.unsignbook.success.self");
             } else {
-                sendMessageTo(source, "command.unsignbook.success.other", target.getName());
+                context.sendMessage("command.unsignbook.success.other", target.getName());
             }
-            return CommandResult.affectedItems(bookToUnsign.get().getQuantity());
+            return context.successResult();
         }
 
         if (isSelf) {
-            throw ReturnMessageException.fromKey("command.unsignbook.notinhand.self");
+            return context.errorResult("command.unsignbook.notinhand.self");
         } else {
-            throw ReturnMessageException.fromKey("command.unsignbook.notinhand.other", target.getName());
+            return context.errorResult("command.unsignbook.notinhand.other", target.getName());
         }
     }
 
@@ -72,4 +95,6 @@ public class UnsignBookCommand extends AbstractCommand.SimpleTargetOtherPlayer {
     private PlainPagedData createData() {
         return Sponge.getDataManager().getManipulatorBuilder(PlainPagedData.class).get().create();
     }
+
+
 }

@@ -6,7 +6,6 @@ package io.github.nucleuspowered.nucleus.api.service;
 
 import com.google.common.base.Preconditions;
 import com.google.common.collect.Maps;
-import io.github.nucleuspowered.nucleus.api.exceptions.NucleusException;
 import io.github.nucleuspowered.nucleus.api.exceptions.PluginAlreadyRegisteredException;
 import io.github.nucleuspowered.nucleus.api.text.NucleusTextTemplate;
 import org.spongepowered.api.command.CommandSource;
@@ -124,6 +123,28 @@ public interface NucleusMessageTokenService {
     List<String> getPrimaryTokens();
 
     /**
+     * Allows users to register additional token delimiter formats. For example, if a token wanted to register {%id%} to run
+     * {{pl:blah:id}}, then they would need to run:
+     *
+     * <pre>
+     *     registerTokenFormat("{%", "%}", "pl:blah:$1")
+     * </pre>
+     * <p>
+     *     Note that the third argument contains $1. This method will replace $1 with the ID.
+     * </p>
+     * <p>
+     *     This will only apply to Ampersand formatted strings.
+     * </p>
+     *
+     * @param tokenStart The start delimiter of a token to register.
+     * @param tokenEnd The end delimiter of a token to register.
+     * @param replacement The form of the token identifier to use (without the {{,}} delimiters).
+     * @return <code>true</code> if successful.
+     * @throws IllegalArgumentException thrown if the delimiters are illegal.
+     */
+    boolean registerTokenFormat(String tokenStart, String tokenEnd, String replacement) throws IllegalArgumentException;
+
+    /**
      * Gets the result of a token's registered {@link TokenParser} on a {@link CommandSource}
      *
      * @param plugin The ID of the plugin that registered the token.
@@ -184,37 +205,6 @@ public interface NucleusMessageTokenService {
      * @return The token result, if it exists.
      */
     Optional<Text> parseToken(String token, CommandSource source, @Nullable Map<String, Object> variables);
-
-    /**
-     * Allows users to register additional token delimiter formats. For example, if a token wanted to register {%id%} to run
-     * {{pl:blah:id}}, then they would need to run:
-     *
-     * <pre>
-     *     registerTokenFormat("{%", "%}", "pl:blah:$1")
-     * </pre>
-     * <p>
-     *     Note that the third argument contains $1. This method will replace $1 with the ID.
-     * </p>
-     * <p>
-     *     This will only apply to Ampersand formatted strings.
-     * </p>
-     *
-     * @param tokenStart The start delimiter of a token to register.
-     * @param tokenEnd The end delimiter of a token to register.
-     * @param replacement The form of the token identifier to use (without the {{,}} delimiters).
-     * @return <code>true</code> if successful.
-     * @throws IllegalArgumentException thrown if the delimiters are illegal.
-     */
-    boolean registerTokenFormat(String tokenStart, String tokenEnd, String replacement) throws IllegalArgumentException;
-
-    /**
-     * Creates a {@link NucleusTextTemplate} from a string, which could be either Json or Ampersand formatted.
-     *
-     * @param string The string to register.
-     * @return The {@link NucleusTextTemplate} that can be parsed.
-     * @throws NucleusException thrown if the string could not be parsed.
-     */
-    NucleusTextTemplate createFromString(String string) throws NucleusException;
 
     /**
      * A parser for tokens directed at a plugin. Plugins can only register ONE of these.

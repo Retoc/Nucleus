@@ -4,21 +4,19 @@
  */
 package io.github.nucleuspowered.nucleus.modules.jail.commands;
 
-import io.github.nucleuspowered.nucleus.Nucleus;
 import io.github.nucleuspowered.nucleus.Util;
 import io.github.nucleuspowered.nucleus.api.nucleusdata.NamedLocation;
-import io.github.nucleuspowered.nucleus.internal.annotations.RunAsync;
-import io.github.nucleuspowered.nucleus.internal.annotations.command.NoModifiers;
-import io.github.nucleuspowered.nucleus.internal.annotations.command.Permissions;
-import io.github.nucleuspowered.nucleus.internal.annotations.command.RegisterCommand;
-import io.github.nucleuspowered.nucleus.internal.command.AbstractCommand;
-import io.github.nucleuspowered.nucleus.internal.messages.MessageProvider;
+import io.github.nucleuspowered.nucleus.internal.command.ICommandContext;
+import io.github.nucleuspowered.nucleus.internal.command.ICommandExecutor;
+import io.github.nucleuspowered.nucleus.internal.command.ICommandResult;
+import io.github.nucleuspowered.nucleus.internal.command.annotation.Command;
 import io.github.nucleuspowered.nucleus.modules.jail.JailParameters;
-import org.spongepowered.api.command.CommandResult;
+import io.github.nucleuspowered.nucleus.modules.jail.JailPermissions;
+import io.github.nucleuspowered.nucleus.services.INucleusServiceCollection;
+import io.github.nucleuspowered.nucleus.services.IUserCacheService;
+import org.spongepowered.api.command.CommandException;
 import org.spongepowered.api.command.CommandSource;
-import org.spongepowered.api.command.args.CommandContext;
 import org.spongepowered.api.command.args.CommandElement;
-import org.spongepowered.api.event.cause.Cause;
 import org.spongepowered.api.text.Text;
 import org.spongepowered.api.text.action.TextActions;
 import org.spongepowered.api.util.annotation.NonnullByDefault;
@@ -28,42 +26,54 @@ import java.util.Optional;
 import java.util.UUID;
 import java.util.stream.Collectors;
 
-@Permissions
-@RunAsync
-@NoModifiers
-@RegisterCommand("checkjailed")
 @NonnullByDefault
-public class CheckJailedCommand extends AbstractCommand<CommandSource> {
+@Command(
+        aliases = "checkjailed",
+        basePermission = JailPermissions.BASE_CHECKJAILED,
+        async = true,
+        commandDescriptionKey = "checkjailed"
+)
+public class CheckJailedCommand implements ICommandExecutor<CommandSource> {
 
-    @Override public CommandElement[] getArguments() {
+    @Override public CommandElement[] parameters(INucleusServiceCollection serviceCollection) {
         return new CommandElement[] {
                 JailParameters.OPTIONAL_JAIL
         };
     }
 
-    @Override protected CommandResult executeCommand(CommandSource src, CommandContext args, Cause cause) {
+    @Override public ICommandResult execute(ICommandContext<? extends CommandSource> context) throws CommandException {
         // Using the cache, tell us who is jailed.
-        MessageProvider provider = Nucleus.getNucleus().getMessageProvider();
-        Optional<NamedLocation> jail = args.getOne(JailParameters.JAIL_KEY);
-        List<UUID> usersInJail = jail.map(x -> Nucleus.getNucleus().getUserCacheService().getJailedIn(x.getName()))
-                .orElseGet(() -> Nucleus.getNucleus().getUserCacheService().getJailed());
-        String jailName = jail.map(NamedLocation::getName).orElseGet(() -> provider.getMessageWithFormat("standard.alljails"));
+        Optional<NamedLocation> jail = context.getOne(JailParameters.JAIL_KEY, NamedLocation.class);
+
+        //
+        IUserCacheService userCacheService = context.getServiceCollection().userCacheService();
+        List<UUID> usersInJail = jail.map(x -> userCacheService.getJailedIn(x.getName()))
+                .orElseGet(userCacheService::getJailed);
+        //
+
+        String jailName = jail.map(NamedLocation::getName).orElseGet(() -> context.getMessageString("standard.alljails"));
 
         if (usersInJail.isEmpty()) {
-            src.sendMessage(provider.getTextMessageWithFormat("command.checkjailed.none", jailName));
-            return CommandResult.success();
+            context.sendMessage("command.checkjailed.none", jailName);
+            return context.successResult();
         }
 
+        CommandSource src = context.getCommandSource();
         // Get the users in this jail, or all jails
         Util.getPaginationBuilder(src)
-            .title(provider.getTextMessageWithFormat("command.checkjailed.header", jailName))
+            .title(context.getMessage("command.checkjailed.header", jailName))
             .contents(usersInJail.stream().map(x -> {
-                Text name = Nucleus.getNucleus().getNameUtil().getName(x).orElseGet(() -> Text.of("unknown: ", x.toString()));
+                Text name;
+                        try {
+                            name = context.getDisplayName(x);
+                        } catch (IllegalArgumentException ex) {
+                            name = Text.of("unknown: ", x.toString());
+                        }
                 return name.toBuilder()
-                    .onHover(TextActions.showText(provider.getTextMessageWithFormat("command.checkjailed.hover")))
+                    .onHover(TextActions.showText(context.getMessage("command.checkjailed.hover")))
                     .onClick(TextActions.runCommand("/nucleus:checkjail " + x.toString()))
                     .build();
             }).collect(Collectors.toList())).sendTo(src);
-        return CommandResult.success();
+        return context.successResult();
     }
 }

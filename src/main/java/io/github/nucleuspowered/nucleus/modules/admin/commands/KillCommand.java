@@ -4,43 +4,50 @@
  */
 package io.github.nucleuspowered.nucleus.modules.admin.commands;
 
-import io.github.nucleuspowered.nucleus.Nucleus;
-import io.github.nucleuspowered.nucleus.internal.annotations.command.Permissions;
-import io.github.nucleuspowered.nucleus.internal.annotations.command.RegisterCommand;
-import io.github.nucleuspowered.nucleus.internal.command.AbstractCommand;
+import io.github.nucleuspowered.nucleus.internal.TypeTokens;
+import io.github.nucleuspowered.nucleus.internal.command.ICommandContext;
+import io.github.nucleuspowered.nucleus.internal.command.ICommandExecutor;
+import io.github.nucleuspowered.nucleus.internal.command.ICommandResult;
 import io.github.nucleuspowered.nucleus.internal.command.NucleusParameters;
-import io.github.nucleuspowered.nucleus.internal.docgen.annotations.EssentialsEquivalent;
-import org.spongepowered.api.command.CommandResult;
+import io.github.nucleuspowered.nucleus.internal.command.annotation.CommandModifier;
+import io.github.nucleuspowered.nucleus.internal.command.annotation.Command;
+import io.github.nucleuspowered.nucleus.internal.command.requirements.CommandModifiers;
+import io.github.nucleuspowered.nucleus.internal.command.annotation.EssentialsEquivalent;
+import io.github.nucleuspowered.nucleus.modules.admin.AdminPermissions;
+import io.github.nucleuspowered.nucleus.services.INucleusServiceCollection;
+import org.spongepowered.api.command.CommandException;
 import org.spongepowered.api.command.CommandSource;
-import org.spongepowered.api.command.args.CommandContext;
 import org.spongepowered.api.command.args.CommandElement;
 import org.spongepowered.api.data.DataTransactionResult;
 import org.spongepowered.api.data.key.Keys;
 import org.spongepowered.api.entity.Entity;
 import org.spongepowered.api.entity.living.Living;
 import org.spongepowered.api.entity.living.player.Player;
-import org.spongepowered.api.event.cause.Cause;
 import org.spongepowered.api.util.annotation.NonnullByDefault;
 
 import java.util.Collection;
 
-@Permissions(supportsSelectors = true)
-@RegisterCommand("kill")
+@Command(aliases = "kill", basePermission = AdminPermissions.BASE_KILL, commandDescriptionKey = "kill",
+    modifiers = {
+            @CommandModifier(value = CommandModifiers.HAS_WARMUP, exemptPermission = AdminPermissions.EXEMPT_WARMUP_KILL),
+            @CommandModifier(value = CommandModifiers.HAS_COOLDOWN, exemptPermission = AdminPermissions.EXEMPT_COOLDOWN_KILL),
+            @CommandModifier(value = CommandModifiers.HAS_COST, exemptPermission = AdminPermissions.EXEMPT_COST_KILL)
+    })
 @EssentialsEquivalent(value = { "kill", "remove", "butcher", "killall", "mobkill" },
         isExact = false, notes = "Nucleus supports killing entities using the Minecraft selectors.")
 @NonnullByDefault
-public class KillCommand extends AbstractCommand<CommandSource> {
+public class KillCommand implements ICommandExecutor<CommandSource> {
 
     @Override
-    public CommandElement[] getArguments() {
+    public CommandElement[] parameters(INucleusServiceCollection serviceCollection) {
         return new CommandElement[] {
                 NucleusParameters.MANY_ENTITY
         };
     }
 
     @Override
-    public CommandResult executeCommand(CommandSource src, CommandContext args, Cause cause) throws Exception {
-        Collection<Entity> entities = args.getAll(NucleusParameters.Keys.SUBJECT);
+    public ICommandResult execute(ICommandContext<? extends CommandSource> context) throws CommandException {
+        Collection<Entity> entities = context.getAll(NucleusParameters.Keys.SUBJECT, TypeTokens.ENTITY);
 
         int entityKillCount = 0;
         int playerKillCount = 0;
@@ -52,18 +59,17 @@ public class KillCommand extends AbstractCommand<CommandSource> {
             entityKillCount++;
 
             if (x instanceof Player) {
+                Player pl = (Player) x;
                 playerKillCount++;
-                src.sendMessage(Nucleus.getNucleus().getMessageProvider().getTextMessageWithFormat("command.kill.killed",
-                        Nucleus.getNucleus().getNameUtil().getSerialisedName((Player)x)));
-                ((Player)x).sendMessage(Nucleus.getNucleus().getMessageProvider().getTextMessageWithFormat("command.kill.killedby", src.getName()));
+                context.sendMessage("command.kill.killed", pl.getName());
+                context.sendMessageTo(pl, "command.kill.killedby", context.getCommandSource().getName());
             }
         }
 
         if (entityKillCount > playerKillCount) {
-            src.sendMessage(Nucleus.getNucleus().getMessageProvider().getTextMessageWithFormat("command.kill.overall", String.valueOf(entityKillCount),
-                    String.valueOf(playerKillCount)));
+            context.sendMessage("command.kill.overall", entityKillCount, playerKillCount);
         }
 
-        return CommandResult.success();
+        return context.successResult();
     }
 }

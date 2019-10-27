@@ -4,29 +4,26 @@
  */
 package io.github.nucleuspowered.nucleus.modules.world.commands;
 
-import io.github.nucleuspowered.nucleus.internal.annotations.command.Permissions;
-import io.github.nucleuspowered.nucleus.internal.annotations.command.RegisterCommand;
-import io.github.nucleuspowered.nucleus.internal.command.AbstractCommand;
-import io.github.nucleuspowered.nucleus.internal.permissions.SuggestedLevel;
-import org.spongepowered.api.command.CommandResult;
+import io.github.nucleuspowered.nucleus.internal.command.ICommandContext;
+import io.github.nucleuspowered.nucleus.internal.command.ICommandExecutor;
+import io.github.nucleuspowered.nucleus.internal.command.ICommandResult;
+import io.github.nucleuspowered.nucleus.internal.command.annotation.Command;
+import io.github.nucleuspowered.nucleus.modules.world.WorldPermissions;
+import org.spongepowered.api.command.CommandException;
 import org.spongepowered.api.command.CommandSource;
-import org.spongepowered.api.command.args.CommandContext;
-import org.spongepowered.api.event.cause.Cause;
 import org.spongepowered.api.util.annotation.NonnullByDefault;
 
-/**
- * Allows a user to warp to the specified warp.
- *
- * Command Usage: /world Permission: plugin.world.base
- *
- */
-@Permissions(suggestedLevel = SuggestedLevel.ADMIN)
-@RegisterCommand(value = "world", rootAliasRegister = { "nworld", "nucleusworld" }, hasExecutor = false)
 @NonnullByDefault
-public class WorldCommand extends AbstractCommand<CommandSource> {
+@Command(
+        aliases = { "world", "nworld", "nucleusworld" },
+        basePermission = WorldPermissions.BASE_WORLD,
+        commandDescriptionKey = "world",
+        hasExecutor = false,
+        prefixAliasesWithN = false
+)
+public class WorldCommand implements ICommandExecutor<CommandSource> {
 
-    @Override
-    public CommandResult executeCommand(CommandSource src, CommandContext args, Cause cause) {
-        return CommandResult.empty();
+    @Override public ICommandResult execute(ICommandContext<? extends CommandSource> context) throws CommandException {
+        return context.failResult();
     }
 }

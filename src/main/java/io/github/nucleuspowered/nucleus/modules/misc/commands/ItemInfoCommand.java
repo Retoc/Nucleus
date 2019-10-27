@@ -4,25 +4,20 @@
  */
 package io.github.nucleuspowered.nucleus.modules.misc.commands;
 
-import io.github.nucleuspowered.nucleus.Nucleus;
-import io.github.nucleuspowered.nucleus.argumentparsers.ItemAliasArgument;
-import io.github.nucleuspowered.nucleus.configurate.datatypes.ItemDataNode;
-import io.github.nucleuspowered.nucleus.dataservices.ItemDataService;
+import io.github.nucleuspowered.nucleus.Util;
+import io.github.nucleuspowered.nucleus.argumentparsers.ImprovedCatalogTypeArgument;
 import io.github.nucleuspowered.nucleus.internal.DataScanner;
-import io.github.nucleuspowered.nucleus.internal.EconHelper;
-import io.github.nucleuspowered.nucleus.internal.annotations.command.Permissions;
-import io.github.nucleuspowered.nucleus.internal.annotations.command.RegisterCommand;
-import io.github.nucleuspowered.nucleus.internal.command.AbstractCommand;
-import io.github.nucleuspowered.nucleus.internal.docgen.annotations.EssentialsEquivalent;
-import io.github.nucleuspowered.nucleus.internal.permissions.PermissionInformation;
-import io.github.nucleuspowered.nucleus.internal.permissions.SuggestedLevel;
-import io.github.nucleuspowered.nucleus.modules.servershop.ServerShopModule;
+import io.github.nucleuspowered.nucleus.internal.command.ICommandContext;
+import io.github.nucleuspowered.nucleus.internal.command.ICommandExecutor;
+import io.github.nucleuspowered.nucleus.internal.command.ICommandResult;
+import io.github.nucleuspowered.nucleus.internal.command.annotation.Command;
+import io.github.nucleuspowered.nucleus.internal.command.annotation.EssentialsEquivalent;
+import io.github.nucleuspowered.nucleus.modules.misc.MiscPermissions;
+import io.github.nucleuspowered.nucleus.services.INucleusServiceCollection;
 import org.spongepowered.api.CatalogType;
-import org.spongepowered.api.Sponge;
 import org.spongepowered.api.block.BlockState;
 import org.spongepowered.api.command.CommandException;
-import org.spongepowered.api.command.CommandResult;
-import org.spongepowered.api.command.args.CommandContext;
+import org.spongepowered.api.command.CommandSource;
 import org.spongepowered.api.command.args.CommandElement;
 import org.spongepowered.api.command.args.GenericArguments;
 import org.spongepowered.api.data.key.Key;
@@ -30,51 +25,34 @@ import org.spongepowered.api.data.key.Keys;
 import org.spongepowered.api.data.type.HandTypes;
 import org.spongepowered.api.data.value.BaseValue;
 import org.spongepowered.api.entity.living.player.Player;
-import org.spongepowered.api.event.cause.Cause;
 import org.spongepowered.api.item.ItemType;
 import org.spongepowered.api.item.inventory.ItemStack;
-import org.spongepowered.api.service.pagination.PaginationService;
 import org.spongepowered.api.text.Text;
 import org.spongepowered.api.text.format.TextColors;
 import org.spongepowered.api.util.annotation.NonnullByDefault;
 
 import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.Iterator;
 import java.util.List;
-import java.util.Map;
 import java.util.Optional;
 
-@Permissions
 @NonnullByDefault
-@RegisterCommand({"iteminfo", "itemdb"})
 @EssentialsEquivalent(value = {"itemdb", "itemno", "durability", "dura"}, isExact = false, notes = "Nucleus tries to provide much more info!")
-public class ItemInfoCommand extends AbstractCommand<Player> {
-
-    private final ItemDataService itemDataService = Nucleus.getNucleus().getItemDataService();
-    private EconHelper econHelper = Nucleus.getNucleus().getEconHelper();
+@Command(aliases = { "iteminfo", "itemdb" }, basePermission = MiscPermissions.BASE_ITEMINFO, commandDescriptionKey = "iteminfo")
+public class ItemInfoCommand implements ICommandExecutor<CommandSource> {
 
     private final String key = "key";
     private final Text comma = Text.of(TextColors.GREEN, ", ");
 
     @Override
-    public CommandElement[] getArguments() {
+    public CommandElement[] parameters(INucleusServiceCollection serviceCollection) {
         return new CommandElement[] {
-                GenericArguments.flags().permissionFlag(this.permissions.getPermissionWithSuffix("extended"), "e", "-extended")
-            .buildWith(GenericArguments.optional(new ItemAliasArgument(Text.of(this.key))))
+                GenericArguments.flags().permissionFlag(MiscPermissions.ITEMINFO_EXTENDED, "e", "-extended")
+                    .buildWith(GenericArguments.optional(new ImprovedCatalogTypeArgument(Text.of(this.key), ItemType.class)))
         };
     }
 
-    @Override
-    protected Map<String, PermissionInformation> permissionSuffixesToRegister() {
-        Map<String, PermissionInformation> m = new HashMap<>();
-        m.put("extended", PermissionInformation.getWithTranslation("permission.iteminfo.extended", SuggestedLevel.ADMIN));
-        return m;
-    }
-
-    @Override
-    public CommandResult executeCommand(Player player, CommandContext args, Cause cause) throws Exception {
-        Optional<CatalogType> catalogTypeOptional = args.getOne(this.key);
+    @Override public ICommandResult execute(ICommandContext<? extends CommandSource> context) throws CommandException {
+        Optional<CatalogType> catalogTypeOptional = context.getOne(this.key, CatalogType.class);
         ItemStack it;
         if (catalogTypeOptional.isPresent()) {
             CatalogType ct = catalogTypeOptional.get();
@@ -82,31 +60,26 @@ public class ItemInfoCommand extends AbstractCommand<Player> {
                 it = ((ItemType) ct).getTemplate().createStack();
             } else {
                 BlockState bs = ((BlockState) ct);
-                it = bs.getType().getItem().orElseThrow(() -> new CommandException(
-                        Nucleus.getNucleus().getMessageProvider().getTextMessageWithFormat("command.iteminfo.invalidblockstate"))).getTemplate().createStack();
+                it = bs.getType().getItem().orElseThrow(() -> context.createException("command.iteminfo.invalidblockstate")).getTemplate().createStack();
                 it.offer(Keys.ITEM_BLOCKSTATE, bs);
             }
-        } else if (player.getItemInHand(HandTypes.MAIN_HAND).isPresent()) {
-            it = player.getItemInHand(HandTypes.MAIN_HAND).get();
+        } else if (context.is(Player.class) && context.getIfPlayer().getItemInHand(HandTypes.MAIN_HAND).isPresent()) {
+            it = context.getIfPlayer().getItemInHand(HandTypes.MAIN_HAND).get();
         } else {
-            player.sendMessage(Nucleus.getNucleus().getMessageProvider().getTextMessageWithFormat("command.iteminfo.none"));
-            return CommandResult.empty();
+            return context.errorResult("command.iteminfo.none");
         }
 
         final List<Text> lt = new ArrayList<>();
-        String id = it.getType().getId().toLowerCase();
-        lt.add(Nucleus.getNucleus().getMessageProvider().getTextMessageWithFormat("command.iteminfo.id", it.getType().getId(), it.getTranslation().get()));
+        lt.add(context.getMessage("command.iteminfo.id", it.getType().getId(), it.getTranslation().get()));
 
         Optional<BlockState> obs = it.get(Keys.ITEM_BLOCKSTATE);
-        if (obs.isPresent()) {
-            lt.add(Nucleus.getNucleus().getMessageProvider().getTextMessageWithFormat("command.iteminfo.extendedid", obs.get().getId()));
-            id = obs.get().getId().toLowerCase();
-        }
+        obs.ifPresent(blockState -> lt.add(context.getMessage("command.iteminfo.extendedid", blockState.getId())));
 
-        if (args.hasAny("e") || args.hasAny("extended")) {
+        if (context.hasAny("e") || context.hasAny("extended")) {
             // For each key, see if the item supports it. If so, get and
             // print the value.
-            DataScanner.getInstance().getKeysForHolder(it).entrySet().stream().filter(x -> x.getValue() != null).filter(x -> {
+            DataScanner.getInstance(context.getServiceCollection().messageProvider())
+                    .getKeysForHolder(it).entrySet().stream().filter(x -> x.getValue() != null).filter(x -> {
                 // Work around a Sponge bug.
                 try {
                     return it.supports(x.getValue());
@@ -116,51 +89,17 @@ public class ItemInfoCommand extends AbstractCommand<Player> {
             }).forEach(x -> {
                 Key<? extends BaseValue<Object>> k = (Key<? extends BaseValue<Object>>) x.getValue();
                 if (it.get(k).isPresent()) {
-                    DataScanner.getText(player, "command.iteminfo.key", x.getKey(), it.get(k).get()).ifPresent(lt::add);
+                    DataScanner.getInstance(context.getServiceCollection().messageProvider())
+                            .getText(context.getCommandSourceUnchecked(),
+                                "command.iteminfo.key",
+                                x.getKey(),
+                                it.get(k).get()).ifPresent(lt::add);
                 }
             });
         }
 
-        ItemDataNode itemDataNode = this.itemDataService.getDataForItem(id);
-
-        // /buy and /sell prices
-        if (this.econHelper.economyServiceExists() && Nucleus.getNucleus().getModuleHolder().isModuleLoaded(ServerShopModule.ID)) {
-            boolean space = false;
-            double buyPrice = itemDataNode.getServerBuyPrice();
-            if (buyPrice >= 0) {
-                lt.add(Text.EMPTY);
-                lt.add(Nucleus.getNucleus().getMessageProvider().getTextMessageWithFormat("command.iteminfo.buyprice", this.econHelper.getCurrencySymbol(buyPrice)));
-                space = true;
-            }
-
-            double sellPrice = itemDataNode.getServerSellPrice();
-            if (sellPrice >= 0) {
-                if (!space) {
-                    lt.add(Text.EMPTY);
-                }
-
-                lt.add(Nucleus.getNucleus().getMessageProvider().getTextMessageWithFormat("command.iteminfo.sellprice", this.econHelper.getCurrencySymbol(sellPrice)));
-            }
-        }
-
-        List<String> aliases = itemDataNode.getAliases();
-        if (!aliases.isEmpty()) {
-            lt.add(Text.EMPTY);
-            lt.add(Nucleus.getNucleus().getMessageProvider().getTextMessageWithFormat("command.iteminfo.list.aliases"));
-
-            Text.Builder tb = Text.builder();
-            Iterator<String> iterator = aliases.iterator();
-            tb.append(Text.of(TextColors.YELLOW, iterator.next()));
-
-            while (iterator.hasNext()) {
-                tb.append(this.comma, Text.of(TextColors.YELLOW, iterator.next()));
-            }
-
-            lt.add(tb.build());
-        }
-
-        Sponge.getServiceManager().provideUnchecked(PaginationService.class).builder().contents(lt).padding(Text.of(TextColors.GREEN, "-"))
-                .title(Nucleus.getNucleus().getMessageProvider().getTextMessageWithFormat("command.iteminfo.list.header")).sendTo(player);
-        return CommandResult.success();
+        Util.getPaginationBuilder(context.getCommandSource()).contents(lt).padding(Text.of(TextColors.GREEN, "-"))
+                .title(context.getMessage("command.iteminfo.list.header")).sendTo(context.getCommandSource());
+        return context.successResult();
     }
 }

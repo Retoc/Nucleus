@@ -5,24 +5,20 @@
 package io.github.nucleuspowered.nucleus.modules.powertool.commands;
 
 import com.google.common.collect.Lists;
-import io.github.nucleuspowered.nucleus.Nucleus;
 import io.github.nucleuspowered.nucleus.Util;
-import io.github.nucleuspowered.nucleus.internal.annotations.RunAsync;
-import io.github.nucleuspowered.nucleus.internal.annotations.command.NoModifiers;
-import io.github.nucleuspowered.nucleus.internal.annotations.command.Permissions;
-import io.github.nucleuspowered.nucleus.internal.annotations.command.RegisterCommand;
-import io.github.nucleuspowered.nucleus.internal.command.AbstractCommand;
+import io.github.nucleuspowered.nucleus.internal.command.ICommandContext;
+import io.github.nucleuspowered.nucleus.internal.command.ICommandExecutor;
+import io.github.nucleuspowered.nucleus.internal.command.ICommandResult;
 import io.github.nucleuspowered.nucleus.internal.command.NucleusParameters;
-import io.github.nucleuspowered.nucleus.internal.command.ReturnMessageException;
-import io.github.nucleuspowered.nucleus.internal.docgen.annotations.EssentialsEquivalent;
-import io.github.nucleuspowered.nucleus.internal.messages.MessageProvider;
+import io.github.nucleuspowered.nucleus.internal.command.annotation.Command;
+import io.github.nucleuspowered.nucleus.internal.command.annotation.EssentialsEquivalent;
+import io.github.nucleuspowered.nucleus.modules.powertool.PowertoolPermissions;
 import io.github.nucleuspowered.nucleus.modules.powertool.services.PowertoolService;
-import org.spongepowered.api.command.CommandResult;
-import org.spongepowered.api.command.args.CommandContext;
+import io.github.nucleuspowered.nucleus.services.INucleusServiceCollection;
+import org.spongepowered.api.command.CommandException;
 import org.spongepowered.api.command.args.CommandElement;
 import org.spongepowered.api.data.type.HandTypes;
 import org.spongepowered.api.entity.living.player.Player;
-import org.spongepowered.api.event.cause.Cause;
 import org.spongepowered.api.item.ItemType;
 import org.spongepowered.api.item.inventory.ItemStack;
 import org.spongepowered.api.text.Text;
@@ -33,57 +29,57 @@ import java.util.List;
 import java.util.Optional;
 import java.util.stream.Collectors;
 
-@Permissions
-@RunAsync
-@NoModifiers
-@RegisterCommand({"powertool", "pt"})
 @EssentialsEquivalent({"powertool", "pt"})
 @NonnullByDefault
-public class PowertoolCommand extends AbstractCommand<Player> {
-
-    private final PowertoolService service = getServiceUnchecked(PowertoolService.class);
+@Command(
+        aliases = {"powertool", "pt"},
+        basePermission = PowertoolPermissions.BASE_POWERTOOL,
+        commandDescriptionKey = "powertool"
+)
+public class PowertoolCommand implements ICommandExecutor<Player> {
 
     @Override
-    public CommandElement[] getArguments() {
+    public CommandElement[] parameters(INucleusServiceCollection serviceCollection) {
         return new CommandElement[] {
                 NucleusParameters.OPTIONAL_COMMAND
         };
     }
 
-    @Override
-    public CommandResult executeCommand(Player src, CommandContext args, Cause cause) throws Exception {
+    @Override public ICommandResult execute(ICommandContext<? extends Player> context) throws CommandException {
+        Player src = context.getCommandSource();
         ItemStack itemStack = src.getItemInHand(HandTypes.MAIN_HAND)
-                .orElseThrow(() -> ReturnMessageException.fromKey("command.powertool.noitem"));
+                .orElseThrow(() -> context.createException("command.powertool.noitem"));
 
-        Optional<String> command = args.getOne(NucleusParameters.Keys.COMMAND);
-        return command.map(s -> setPowertool(src, itemStack.getType(), s))
-                .orElseGet(() -> viewPowertool(src, itemStack));
+        Optional<String> command = context.getOne(NucleusParameters.Keys.COMMAND, String.class);
+        return command
+                .map(s -> setPowertool(context, src, itemStack.getType(), s))
+                .orElseGet(() -> viewPowertool(context, src, itemStack));
     }
 
-    private CommandResult viewPowertool(Player src, ItemStack item) {
-        Optional<List<String>> cmds = this.service.getPowertoolForItem(src.getUniqueId(), item.getType());
-        MessageProvider mp = Nucleus.getNucleus().getMessageProvider();
+    private ICommandResult viewPowertool(ICommandContext<? extends Player> context, Player src, ItemStack item) {
+        Optional<List<String>> cmds = context.getServiceCollection().getServiceUnchecked(PowertoolService.class)
+                .getPowertoolForItem(src.getUniqueId(), item.getType());
         if (cmds.isPresent() && !cmds.get().isEmpty()) {
             Util.getPaginationBuilder(src)
                     .contents(cmds.get().stream().map(f -> Text.of(TextColors.YELLOW, f)).collect(Collectors.toList()))
-                    .title(mp.getTextMessageWithTextFormat("command.powertool.viewcmdstitle", Text.of(item), Text.of(item.getType().getId())))
+                    .title(context.getMessage("command.powertool.viewcmdstitle", Text.of(item), Text.of(item.getType().getId())))
                     .sendTo(src);
         } else {
-            src.sendMessage(mp.getTextMessageWithTextFormat("command.powertool.nocmds", Text.of(item)));
+            src.sendMessage(context.getMessage("command.powertool.nocmds", Text.of(item)));
         }
 
-        return CommandResult.success();
+        return context.successResult();
     }
 
-    private CommandResult setPowertool(Player src, ItemType item, String command) {
+    private ICommandResult setPowertool(ICommandContext<? extends Player> context, Player src, ItemType item, String command) {
         // For consistency, if a command starts with "/", remove it, but just
         // once. WorldEdit commands can be input using "//"
         if (command.startsWith("/")) {
             command = command.substring(1);
         }
 
-        this.service.setPowertool(src.getUniqueId(), item, Lists.newArrayList(command));
-        src.sendMessage(Nucleus.getNucleus().getMessageProvider().getTextMessageWithFormat("command.powertool.set", item.getId(), command));
-        return CommandResult.success();
+        context.getServiceCollection().getServiceUnchecked(PowertoolService.class).setPowertool(src.getUniqueId(), item, Lists.newArrayList(command));
+        context.sendMessage("command.powertool.set", item.getId(), command);
+        return context.successResult();
     }
 }

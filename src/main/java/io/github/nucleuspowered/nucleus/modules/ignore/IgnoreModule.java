@@ -4,9 +4,20 @@
  */
 package io.github.nucleuspowered.nucleus.modules.ignore;
 
-import io.github.nucleuspowered.nucleus.internal.qsml.module.StandardModule;
+import io.github.nucleuspowered.nucleus.quickstart.module.StandardModule;
+import io.github.nucleuspowered.nucleus.services.INucleusServiceCollection;
 import uk.co.drnaylor.quickstart.annotations.ModuleData;
+import uk.co.drnaylor.quickstart.holders.DiscoveryModuleHolder;
+
+import java.util.function.Supplier;
+
+import javax.inject.Inject;
 
 @ModuleData(id = "ignore", name = "Ignore")
 public class IgnoreModule extends StandardModule {
+
+    @Inject
+    public IgnoreModule(Supplier<DiscoveryModuleHolder<?, ?>> moduleHolder, INucleusServiceCollection collection) {
+        super(moduleHolder, collection);
+    }
 }

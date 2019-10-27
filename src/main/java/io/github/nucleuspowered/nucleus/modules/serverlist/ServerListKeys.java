@@ -5,7 +5,7 @@
 package io.github.nucleuspowered.nucleus.modules.serverlist;
 
 import com.google.common.reflect.TypeToken;
-import io.github.nucleuspowered.nucleus.storage.dataobjects.modular.IGeneralDataObject;
+import io.github.nucleuspowered.nucleus.services.impl.storage.dataobjects.modular.IGeneralDataObject;
 import io.github.nucleuspowered.storage.dataobjects.keyed.DataKey;
 
 import java.time.Instant;

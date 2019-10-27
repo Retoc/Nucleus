@@ -5,7 +5,7 @@
 package io.github.nucleuspowered.nucleus.modules.rtp.config;
 
 import com.google.common.collect.Lists;
-import io.github.nucleuspowered.nucleus.internal.qsml.NucleusConfigAdapter;
+import io.github.nucleuspowered.nucleus.quickstart.NucleusConfigAdapter;
 import ninja.leaping.configurate.ConfigurationNode;
 
 import java.util.List;

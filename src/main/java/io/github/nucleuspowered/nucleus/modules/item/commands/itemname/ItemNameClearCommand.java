@@ -4,34 +4,41 @@
  */
 package io.github.nucleuspowered.nucleus.modules.item.commands.itemname;
 
-import io.github.nucleuspowered.nucleus.Nucleus;
-import io.github.nucleuspowered.nucleus.internal.annotations.command.Permissions;
-import io.github.nucleuspowered.nucleus.internal.annotations.command.RegisterCommand;
-import io.github.nucleuspowered.nucleus.internal.command.AbstractCommand;
-import io.github.nucleuspowered.nucleus.internal.command.ReturnMessageException;
-import io.github.nucleuspowered.nucleus.internal.messages.MessageProvider;
-import org.spongepowered.api.command.CommandResult;
-import org.spongepowered.api.command.args.CommandContext;
+import io.github.nucleuspowered.nucleus.internal.command.ICommandContext;
+import io.github.nucleuspowered.nucleus.internal.command.ICommandExecutor;
+import io.github.nucleuspowered.nucleus.internal.command.ICommandResult;
+import io.github.nucleuspowered.nucleus.internal.command.annotation.Command;
+import io.github.nucleuspowered.nucleus.internal.command.annotation.CommandModifier;
+import io.github.nucleuspowered.nucleus.internal.command.requirements.CommandModifiers;
+import io.github.nucleuspowered.nucleus.modules.item.ItemPermissions;
+import org.spongepowered.api.command.CommandException;
 import org.spongepowered.api.data.key.Keys;
 import org.spongepowered.api.data.type.HandTypes;
 import org.spongepowered.api.entity.living.player.Player;
-import org.spongepowered.api.event.cause.Cause;
 import org.spongepowered.api.item.inventory.ItemStack;
 import org.spongepowered.api.text.Text;
 import org.spongepowered.api.util.annotation.NonnullByDefault;
 
 import java.util.Optional;
 
-@Permissions(prefix = "itemname")
-@RegisterCommand(value = "clear", subcommandOf = ItemNameCommand.class, rootAliasRegister = { "clearitemname", "resetitemname" })
 @NonnullByDefault
-public class ItemNameClearCommand extends AbstractCommand<Player> {
+@Command(
+        aliases = { "clear", "#clearitemname", "#resetitemname" },
+        basePermission = ItemPermissions.BASE_ITEMNAME_CLEAR,
+        commandDescriptionKey = "itemname.clear",
+        parentCommand = ItemNameCommand.class,
+        modifiers = {
+            @CommandModifier(value = CommandModifiers.HAS_COOLDOWN, exemptPermission = ItemPermissions.EXEMPT_COOLDOWN_ITEMNAME_CLEAR),
+            @CommandModifier(value = CommandModifiers.HAS_WARMUP, exemptPermission = ItemPermissions.EXEMPT_WARMUP_ITEMNAME_CLEAR),
+            @CommandModifier(value = CommandModifiers.HAS_COST, exemptPermission = ItemPermissions.EXEMPT_COST_ITEMNAME_CLEAR)
+        }
+)
+public class ItemNameClearCommand implements ICommandExecutor<Player> {
 
-    @Override
-    public CommandResult executeCommand(Player src, CommandContext args, Cause cause) throws Exception {
-        MessageProvider provider = Nucleus.getNucleus().getMessageProvider();
+    @Override public ICommandResult execute(ICommandContext<? extends Player> context) throws CommandException {
+        Player src = context.getIfPlayer();
         if (!src.getItemInHand(HandTypes.MAIN_HAND).isPresent()) {
-            throw ReturnMessageException.fromKey("command.itemname.clear.noitem");
+            return context.errorResult("command.itemname.clear.noitem");
         }
 
         ItemStack stack = src.getItemInHand(HandTypes.MAIN_HAND).get();
@@ -39,15 +46,15 @@ public class ItemNameClearCommand extends AbstractCommand<Player> {
 
         if (!data.isPresent()) {
             // No display name.
-            throw ReturnMessageException.fromKey("command.lore.clear.none");
+            return context.errorResult("command.lore.clear.none");
         }
 
         if (stack.remove(Keys.DISPLAY_NAME).isSuccessful()) {
             src.setItemInHand(HandTypes.MAIN_HAND, stack);
-            src.sendMessage(provider.getTextMessageWithFormat("command.itemname.clear.success"));
-            return CommandResult.success();
+            context.sendMessage("command.itemname.clear.success");
+            return context.successResult();
         }
 
-        throw ReturnMessageException.fromKey("command.itemname.clear.fail");
+        return context.errorResult("command.itemname.clear.fail");
     }
 }

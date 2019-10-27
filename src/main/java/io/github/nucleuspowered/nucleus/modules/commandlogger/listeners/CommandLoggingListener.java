@@ -5,13 +5,14 @@
 package io.github.nucleuspowered.nucleus.modules.commandlogger.listeners;
 
 import com.google.common.collect.ImmutableSet;
-import io.github.nucleuspowered.nucleus.Nucleus;
 import io.github.nucleuspowered.nucleus.internal.interfaces.ListenerBase;
 import io.github.nucleuspowered.nucleus.internal.interfaces.Reloadable;
 import io.github.nucleuspowered.nucleus.modules.commandlogger.config.CommandLoggerConfig;
-import io.github.nucleuspowered.nucleus.modules.commandlogger.config.CommandLoggerConfigAdapter;
 import io.github.nucleuspowered.nucleus.modules.commandlogger.services.CommandLoggerHandler;
+import io.github.nucleuspowered.nucleus.services.IMessageProviderService;
+import io.github.nucleuspowered.nucleus.services.INucleusServiceCollection;
 import io.github.nucleuspowered.nucleus.util.CommandNameCache;
+import org.slf4j.Logger;
 import org.spongepowered.api.command.CommandSource;
 import org.spongepowered.api.command.source.CommandBlockSource;
 import org.spongepowered.api.command.source.ConsoleSource;
@@ -26,11 +27,23 @@ import java.io.IOException;
 import java.util.HashSet;
 import java.util.Set;
 
+import javax.inject.Inject;
+
 public class CommandLoggingListener implements Reloadable, ListenerBase {
 
-    private final CommandLoggerHandler handler = Nucleus.getNucleus().getInternalServiceManager().getServiceUnchecked(CommandLoggerHandler.class);
-    private CommandLoggerConfig c = new CommandLoggerConfig();
+    private final CommandLoggerHandler handler;
+    private final IMessageProviderService messageProvider;
+    private CommandLoggerConfig c;
     private Set<String> commandsToFilter = new HashSet<>();
+    private Logger logger;
+
+    @Inject
+    public CommandLoggingListener(INucleusServiceCollection serviceCollection) {
+        this.handler = serviceCollection.getServiceUnchecked(CommandLoggerHandler.class);
+        this.c = serviceCollection.moduleDataProvider().getModuleConfig(CommandLoggerConfig.class);
+        this.messageProvider = serviceCollection.messageProvider();
+        this.logger = serviceCollection.logger();
+    }
 
     @Listener(order = Order.LAST)
     public void onCommand(SendCommandEvent event, @First CommandSource source) {
@@ -57,16 +70,10 @@ public class CommandLoggingListener implements Reloadable, ListenerBase {
 
         // If whitelist, and we have the command, or if not blacklist, and we do not have the command.
         if (this.c.isWhitelist() == !commands.isEmpty()) {
-            String message = Nucleus.getNucleus().getMessageProvider().getMessageWithFormat("commandlog.message", source.getName(), event.getCommand(), event.getArguments());
-            Nucleus.getNucleus().getLogger().info(message);
+            String message = this.messageProvider.getMessageString("commandlog.message", source.getName(), event.getCommand(), event.getArguments());
+            this.logger.info(message);
             this.handler.queueEntry(message);
         }
-    }
-
-    @Override
-    public void onReload() {
-        this.c = Nucleus.getNucleus().getInternalServiceManager().getServiceUnchecked(CommandLoggerConfigAdapter.class).getNodeOrDefault();
-        this.commandsToFilter = this.c.getCommandsToFilter().stream().map(String::toLowerCase).collect(ImmutableSet.toImmutableSet());
     }
 
     @Listener
@@ -76,5 +83,10 @@ public class CommandLoggingListener implements Reloadable, ListenerBase {
         } catch (IOException e) {
             e.printStackTrace();
         }
+    }
+
+    @Override public void onReload(INucleusServiceCollection serviceCollection) {
+        this.c = serviceCollection.moduleDataProvider().getModuleConfig(CommandLoggerConfig.class);
+        this.commandsToFilter = this.c.getCommandsToFilter().stream().map(String::toLowerCase).collect(ImmutableSet.toImmutableSet());
     }
 }

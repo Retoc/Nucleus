@@ -6,17 +6,16 @@ package io.github.nucleuspowered.nucleus.modules.misc.commands;
 
 import com.flowpowered.math.vector.Vector3d;
 import com.flowpowered.math.vector.Vector3i;
-import io.github.nucleuspowered.nucleus.Nucleus;
 import io.github.nucleuspowered.nucleus.Util;
 import io.github.nucleuspowered.nucleus.internal.DataScanner;
-import io.github.nucleuspowered.nucleus.internal.annotations.command.Permissions;
-import io.github.nucleuspowered.nucleus.internal.annotations.command.RegisterCommand;
-import io.github.nucleuspowered.nucleus.internal.command.AbstractCommand;
-import io.github.nucleuspowered.nucleus.internal.permissions.PermissionInformation;
-import io.github.nucleuspowered.nucleus.internal.permissions.SuggestedLevel;
+import io.github.nucleuspowered.nucleus.internal.command.ICommandContext;
+import io.github.nucleuspowered.nucleus.internal.command.ICommandExecutor;
+import io.github.nucleuspowered.nucleus.internal.command.ICommandResult;
+import io.github.nucleuspowered.nucleus.internal.command.annotation.Command;
+import io.github.nucleuspowered.nucleus.modules.misc.MiscPermissions;
+import io.github.nucleuspowered.nucleus.services.INucleusServiceCollection;
 import org.spongepowered.api.Sponge;
-import org.spongepowered.api.command.CommandResult;
-import org.spongepowered.api.command.args.CommandContext;
+import org.spongepowered.api.command.CommandException;
 import org.spongepowered.api.command.args.CommandElement;
 import org.spongepowered.api.command.args.GenericArguments;
 import org.spongepowered.api.data.key.Key;
@@ -24,7 +23,6 @@ import org.spongepowered.api.data.value.BaseValue;
 import org.spongepowered.api.entity.Entity;
 import org.spongepowered.api.entity.EntityType;
 import org.spongepowered.api.entity.living.player.Player;
-import org.spongepowered.api.event.cause.Cause;
 import org.spongepowered.api.service.pagination.PaginationService;
 import org.spongepowered.api.text.Text;
 import org.spongepowered.api.text.format.TextColors;
@@ -36,33 +34,26 @@ import org.spongepowered.api.world.World;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Comparator;
-import java.util.HashMap;
 import java.util.List;
-import java.util.Map;
 import java.util.Optional;
 import java.util.stream.Collectors;
 
-@Permissions
-@RegisterCommand({"entityinfo"})
 @NonnullByDefault
-public class EntityInfoCommand extends AbstractCommand<Player> {
+@Command(aliases = "entityinfo", basePermission = MiscPermissions.BASE_ENTITYINFO, commandDescriptionKey = "entityinfo")
+public class EntityInfoCommand implements ICommandExecutor<Player> {
 
     @Override
-    public CommandElement[] getArguments() {
-        return new CommandElement[] {GenericArguments.flags().permissionFlag(this.permissions.getPermissionWithSuffix("extended"), "e", "-extended")
-                .buildWith(GenericArguments.none())};
+    public CommandElement[] parameters(INucleusServiceCollection serviceCollection) {
+        return new CommandElement[] {
+                GenericArguments.flags()
+                        .permissionFlag(MiscPermissions.ENTITYINFO_EXTENDED, "e", "-extended")
+                        .buildWith(GenericArguments.none())
+        };
     }
 
-    @Override
-    protected Map<String, PermissionInformation> permissionSuffixesToRegister() {
-        Map<String, PermissionInformation> m = new HashMap<>();
-        m.put("extended", PermissionInformation.getWithTranslation("permission.entityinfo.extended", SuggestedLevel.ADMIN));
-        return m;
-    }
-
-    @Override
-    public CommandResult executeCommand(Player player, CommandContext args, Cause cause) {
+    @Override public ICommandResult execute(ICommandContext<? extends Player> context) throws CommandException {
         // Get all the entities in the world.
+        Player player = context.getIfPlayer();
         Vector3i playerPos = player.getLocation().getBlockPosition();
         Collection<Entity> entities = player.getWorld().getEntities().stream()
             .filter(x -> x.getLocation().getBlockPosition().distanceSquared(playerPos) < 121) // 11 blocks.
@@ -97,12 +88,13 @@ public class EntityInfoCommand extends AbstractCommand<Player> {
                 EntityType type = entity.getType();
 
                 List<Text> lt = new ArrayList<>();
-                lt.add(Nucleus.getNucleus().getMessageProvider().getTextMessageWithFormat("command.entityinfo.id", type.getId(), Util.getTranslatableIfPresent(type)));
-                lt.add(Nucleus.getNucleus().getMessageProvider().getTextMessageWithFormat("command.entityinfo.uuid", entity.getUniqueId().toString()));
+                lt.add(context.getMessage("command.entityinfo.id", type.getId(), Util.getTranslatableIfPresent(type)));
+                lt.add(context.getMessage("command.entityinfo.uuid", entity.getUniqueId().toString()));
 
-                if (args.hasAny("e") || args.hasAny("extended")) {
+                if (context.hasAny("e") || context.hasAny("extended")) {
                     // For each key, see if the entity supports it. If so, get and print the value.
-                    DataScanner.getInstance().getKeysForHolder(entity).entrySet().stream().filter(x -> x.getValue() != null).filter(x -> {
+                    DataScanner.getInstance(context.getServiceCollection().messageProvider())
+                            .getKeysForHolder(entity).entrySet().stream().filter(x -> x.getValue() != null).filter(x -> {
                         // Work around a Sponge bug.
                         try {
                             return entity.supports(x.getValue());
@@ -112,21 +104,21 @@ public class EntityInfoCommand extends AbstractCommand<Player> {
                     }).forEach(x -> {
                         Key<? extends BaseValue<Object>> k = (Key<? extends BaseValue<Object>>) x.getValue();
                         if (entity.get(k).isPresent()) {
-                            DataScanner.getText(player, "command.entityinfo.key", x.getKey(), entity.get(k).get()).ifPresent(lt::add);
+                            DataScanner.getInstance(context.getServiceCollection().messageProvider())
+                                    .getText(player, "command.entityinfo.key", x.getKey(), entity.get(k).get()).ifPresent(lt::add);
                         }
                     });
                 }
 
                 Sponge.getServiceManager().provideUnchecked(PaginationService.class).builder().contents(lt).padding(Text.of(TextColors.GREEN, "-"))
-                    .title(Nucleus.getNucleus().getMessageProvider().getTextMessageWithFormat("command.entityinfo.list.header", String.valueOf(brh.getBlockX()),
+                    .title(context.getMessage("command.entityinfo.list.header", String.valueOf(brh.getBlockX()),
                         String.valueOf(brh.getBlockY()), String.valueOf(brh.getBlockZ())))
                     .sendTo(player);
 
-                return CommandResult.success();
+                return context.successResult();
             }
         }
 
-        player.sendMessage(Nucleus.getNucleus().getMessageProvider().getTextMessageWithFormat("command.entityinfo.none"));
-        return CommandResult.empty();
+        return context.errorResult("command.entityinfo.none");
     }
 }
